@@ -1,0 +1,62 @@
+# Operating systems
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# Editors and IDEs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Node.js / TypeScript
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+.vite/
+.parcel-cache/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Rust / Tauri
+target/
+**/*.rs.bk
+
+# Tests and generated fixtures
+test-results/
+playwright-report/
+fixtures/generated/
+benchmarks/results/
+
+# Local application state and disposable caches
+.cache/
+.tmp/
+tmp/
+logs/
+*.log
+
+# Generated packages and release artifacts
+artifacts/
+release/
+*.dmg
+*.msi
+*.AppImage
+*.deb
+*.rpm
+*.zip
