@@ -26,3 +26,4 @@
 | [ADR-011](011-sidecar-edit-and-catalog-consistency.md) | Sidecar 编辑、并发控制与目录一致性 | Accepted |
 | [ADR-012](012-query-language-and-index-semantics.md) | 查询语言与内存索引语义 | Accepted |
 | [ADR-013](013-thumbnail-pipeline-and-cache-layout.md) | 缩略图管线、并发与缓存布局 | Accepted |
+| [ADR-014](014-desktop-ui-state-and-api-boundary.md) | 桌面 UI 瞬态状态、Tauri API 与开发预览边界 | Accepted |
