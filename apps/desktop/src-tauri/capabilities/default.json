@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Minimum capability set for the Material Eagle main window",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Format, test, and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EAGLE_GIT_COMMIT: ${{ github.sha }}
+      RUST_BACKTRACE: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            wget
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
+
+      - name: Install JavaScript dependencies
+        run: |
+          npm ci --prefix apps/desktop
+          npm ci --prefix integrations/obsidian-bridge
+
+      - name: Run P1-01 quality gate
+        run: npm run ci

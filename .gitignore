@@ -39,6 +39,7 @@ pnpm-debug.log*
 # Rust / Tauri
 target/
 **/*.rs.bk
+apps/desktop/src-tauri/gen/
 
 # Tests and generated fixtures
 test-results/

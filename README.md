@@ -4,11 +4,12 @@
 
 ## 当前状态
 
-阶段 0 已通过全部技术与 Obsidian 实机验收，项目可以进入阶段 1 端到端 MVP。开发阶段、交付物和验收规范见：
+阶段 0 已通过全部技术与 Obsidian 实机验收。阶段 1 已启动，P1-01 工程骨架与持续集成已完成本地验收。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
 - [阶段 0 验收报告](docs/reports/phase-0-acceptance.md)
+- [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [架构决策记录](specs/adr/README.md)
 
 ## 核心原则
@@ -20,7 +21,7 @@
 - Vault 内素材使用标准 Obsidian 引用；
 - Vault 外素材通过受限的稳定 ID 协议与 Obsidian 联动。
 
-## 计划中的仓库结构
+## 仓库结构
 
 ```text
 apps/desktop/                    桌面应用
@@ -33,7 +34,7 @@ tests/                           集成和端到端测试
 docs/                            项目文档
 ```
 
-目录会随着阶段 0 和阶段 1 的技术决策逐步创建，不提前提交空目录。
+目录随开发阶段按需创建，不提交无实际内容的空目录。桌面端当前采用 Tauri 2、Rust、React、TypeScript 与 Vite。
 
 ## Git 工作流
 
@@ -46,7 +47,19 @@ docs/                            项目文档
 
 完整协作规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-## 阶段 0 本地验证
+## 本地质量门禁
+
+Node.js 版本由 `.nvmrc` 固定为 24 LTS。安装各 JavaScript 工作区依赖后，在仓库根目录运行：
+
+```bash
+npm ci --prefix apps/desktop
+npm ci --prefix integrations/obsidian-bridge
+npm run ci
+```
+
+`npm run ci` 依次执行格式检查、Rust/TypeScript 静态检查、全部单元测试、S 数据集跨模块测试、Tauri 桌面端构建和 Obsidian 插件构建。
+
+## 阶段 0 原型单独验证
 
 Rust 核心原型：
 

@@ -1,0 +1,27 @@
+[package]
+name = "material-eagle-desktop"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lib]
+name = "material_eagle_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+asset-core = { path = "../../../crates/asset-core" }
+asset-filesystem = { path = "../../../crates/filesystem" }
+asset-index = { path = "../../../crates/index" }
+metadata = { path = "../../../crates/metadata" }
+serde.workspace = true
+tauri.workspace = true
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
+[lints]
+workspace = true

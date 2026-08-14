@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Material Eagle</title>
+  <rect width="512" height="512" rx="112" fill="#2f452d" />
+  <path
+    d="M112 152c0-22 18-40 40-40h208c22 0 40 18 40 40v208c0 22-18 40-40 40H152c-22 0-40-18-40-40V152Z"
+    fill="#eef0df"
+  />
+  <path d="M160 176h192v44H160zM160 244h136v44H160zM160 312h84v44h-84z" fill="#2f452d" />
+  <path d="m310 270 64 30-64 30 16-30-16-30Z" fill="#a9c77f" />
+</svg>

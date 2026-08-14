@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "apps/desktop/src-tauri",
   "crates/asset-core",
   "crates/filesystem",
   "crates/index",
@@ -29,6 +30,8 @@ serde_yaml_ng = "0.10"
 sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"
+tauri = "2.11.5"
+tauri-build = "2.6.3"
 uuid = { version = "1", features = ["serde", "v7"] }
 walkdir = "2"
 

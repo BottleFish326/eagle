@@ -1,0 +1,16 @@
+{
+  "name": "material-eagle-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "format:check": "cargo fmt --all --check && npm --prefix apps/desktop run format:check",
+    "check": "cargo clippy --workspace --all-targets -- -D warnings && npm --prefix apps/desktop run check && npm --prefix integrations/obsidian-bridge run check",
+    "test": "cargo test --workspace --all-targets && npm --prefix apps/desktop test && npm --prefix integrations/obsidian-bridge test && node tools/verify-s-fixture.mjs",
+    "build": "npm --prefix apps/desktop run tauri:build && npm --prefix integrations/obsidian-bridge run build",
+    "ci": "npm run format:check && npm run check && npm test && npm run build"
+  },
+  "license": "MIT"
+}
