@@ -16,6 +16,21 @@ import type {
   BatchMetadataEdit,
   BatchMetadataEditResult,
 } from "./metadata-editor";
+import type {
+  AddObsidianVaultInput,
+  ObsidianVault,
+  ObsidianVaultStatus,
+  ResolveVaultReferencesInput,
+  ResolveVaultReferencesResult,
+  UpdateObsidianVaultInput,
+} from "./obsidian-vaults";
+import {
+  addObsidianVault,
+  listObsidianVaults,
+  removeObsidianVault,
+  resolveObsidianVaultReferences,
+  updateObsidianVault,
+} from "./obsidian-vaults";
 import { editAssetMetadata } from "./metadata-editor";
 import type { LibraryScanEvent } from "./scanner";
 import { cancelLibraryScan, startLibraryScan } from "./scanner";
@@ -45,6 +60,15 @@ export interface DesktopApi {
   requestThumbnail(input: ThumbnailRequest): Promise<ThumbnailOutcome>;
   readThumbnail(cacheKey: string): Promise<ArrayBuffer>;
   clearThumbnailCache(): Promise<CacheClearReport>;
+  listObsidianVaults(): Promise<ObsidianVaultStatus[]>;
+  addObsidianVault(input: AddObsidianVaultInput): Promise<ObsidianVaultStatus>;
+  updateObsidianVault(
+    input: UpdateObsidianVaultInput,
+  ): Promise<ObsidianVaultStatus>;
+  removeObsidianVault(id: string): Promise<ObsidianVault>;
+  resolveObsidianVaultReferences(
+    input: ResolveVaultReferencesInput,
+  ): Promise<ResolveVaultReferencesResult>;
 }
 
 export const tauriDesktopApi: DesktopApi = {
@@ -59,6 +83,11 @@ export const tauriDesktopApi: DesktopApi = {
   requestThumbnail,
   readThumbnail,
   clearThumbnailCache,
+  listObsidianVaults,
+  addObsidianVault,
+  updateObsidianVault,
+  removeObsidianVault,
+  resolveObsidianVaultReferences,
 };
 
 export function isTauriRuntime(): boolean {

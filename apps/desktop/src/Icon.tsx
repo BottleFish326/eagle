@@ -7,6 +7,7 @@ export type IconName =
   | "grid"
   | "image"
   | "library"
+  | "link"
   | "minus"
   | "plus"
   | "refresh"
@@ -69,6 +70,13 @@ const paths: Record<IconName, React.ReactNode> = {
       <path d="M4 4h5v16H4z" />
       <path d="M9 4h5v16H9" />
       <path d="m14.5 5.5 4-1 3.5 14-4 1z" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="m10.5 13.5 3-3" />
+      <path d="M7.4 15.6 5.8 17.2a3.4 3.4 0 0 0 4.8 4.8l3.1-3.1a3.4 3.4 0 0 0 0-4.8" />
+      <path d="m16.6 8.4 1.6-1.6A3.4 3.4 0 0 0 13.4 2l-3.1 3.1a3.4 3.4 0 0 0 0 4.8" />
     </>
   ),
   minus: <path d="M5 12h14" />,

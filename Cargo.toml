@@ -5,6 +5,7 @@ members = [
   "crates/catalog",
   "crates/filesystem",
   "crates/index",
+  "crates/link-resolver",
   "crates/metadata",
   "crates/preview",
   "tools/eagle-p0",

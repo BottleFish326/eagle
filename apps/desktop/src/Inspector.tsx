@@ -2,16 +2,31 @@ import { useEffect, useState } from "react";
 
 import { Icon } from "./Icon";
 import type { MetadataPatch } from "./metadata-editor";
+import {
+  type ObsidianVaultStatus,
+  referenceFailureLabel,
+  type VaultReference,
+  type VaultReferenceFailure,
+} from "./obsidian-vaults";
 import type { AssetRecord } from "./scanner";
 import { formatBytes, issueDetails, issueLabel } from "./ui-model";
 
 export function Inspector({
   assets,
   busy,
+  obsidian,
   onEdit,
 }: {
   assets: readonly AssetRecord[];
   busy: boolean;
+  obsidian: {
+    vault?: ObsidianVaultStatus;
+    reference?: VaultReference;
+    failure?: VaultReferenceFailure;
+    pending: boolean;
+    onCopy: () => Promise<void>;
+    onConfigure: () => void;
+  };
   onEdit: (patch: MetadataPatch) => Promise<void>;
 }) {
   const asset = assets.length === 1 ? assets[0] : undefined;
@@ -127,6 +142,60 @@ export function Inspector({
           </div>
         </div>
       ) : null}
+
+      <div className="inspector-section obsidian-reference">
+        <span className="field-label">Obsidian 引用</span>
+        {obsidian.vault === undefined ? (
+          <>
+            <p>配置目标 Vault 后，可复制或拖拽标准内部引用。</p>
+            <button
+              className="wide-action"
+              onClick={obsidian.onConfigure}
+              type="button"
+            >
+              <Icon name="link" size={15} /> 配置 Vault
+            </button>
+          </>
+        ) : obsidian.pending ? (
+          <p aria-live="polite">正在核对 Vault 相对路径…</p>
+        ) : obsidian.reference ? (
+          <>
+            <div className="vault-reference-heading">
+              <span>{obsidian.vault.name}</span>
+              <small>Vault 内</small>
+            </div>
+            <code title={obsidian.reference.relativePath}>
+              {obsidian.reference.markdown}
+            </code>
+            <button
+              className="wide-action wide-action--accent"
+              onClick={() => void obsidian.onCopy()}
+              type="button"
+            >
+              <Icon name="link" size={15} /> 复制 Obsidian 引用
+            </button>
+            <p>也可直接将网格卡片拖入 Obsidian 编辑器。</p>
+          </>
+        ) : (
+          <>
+            <div className="vault-reference-heading">
+              <span>{obsidian.vault.name}</span>
+              <small>不可引用</small>
+            </div>
+            <p className="obsidian-reference-error">
+              {referenceFailureLabel(obsidian.failure) ??
+                "当前素材无法生成 Vault 内引用"}
+            </p>
+            <button
+              className="text-action"
+              onClick={obsidian.onConfigure}
+              type="button"
+            >
+              更换目标 Vault
+            </button>
+          </>
+        )}
+      </div>
 
       <div className="inspector-section">
         <span className="field-label">评分与收藏</span>

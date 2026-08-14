@@ -12,6 +12,12 @@ import { Icon } from "./Icon";
 import { Inspector } from "./Inspector";
 import type { LibraryRootStatus } from "./library-roots";
 import type { MetadataPatch } from "./metadata-editor";
+import {
+  copyVaultReference,
+  type ObsidianVaultStatus,
+  type VaultReference,
+  type VaultReferenceFailure,
+} from "./obsidian-vaults";
 import { RootManager } from "./RootManager";
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
 import {
@@ -24,6 +30,7 @@ import {
   type TagFilterState,
   upsertAssets,
 } from "./ui-model";
+import { VaultManager } from "./VaultManager";
 
 const defaultApi = isTauriRuntime() ? tauriDesktopApi : createDemoDesktopApi();
 
@@ -47,6 +54,8 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const search = useRef<HTMLInputElement>(null);
   const [buildInfo, setBuildInfo] = useState<BuildInfo>();
   const [roots, setRoots] = useState<LibraryRootStatus[]>([]);
+  const [vaults, setVaults] = useState<ObsidianVaultStatus[]>([]);
+  const [activeVaultId, setActiveVaultId] = useState<string>();
   const [assets, setAssets] = useState<Map<string, AssetRecord>>(
     () => new Map(),
   );
@@ -59,7 +68,16 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const [queryPending, setQueryPending] = useState(false);
   const [scans, setScans] = useState<Record<string, ScanUiState>>({});
   const [rootManagerOpen, setRootManagerOpen] = useState(false);
+  const [vaultManagerOpen, setVaultManagerOpen] = useState(false);
   const [rootBusy, setRootBusy] = useState(false);
+  const [vaultBusy, setVaultBusy] = useState(false);
+  const [vaultReferences, setVaultReferences] = useState<
+    Map<string, VaultReference>
+  >(() => new Map());
+  const [vaultReferenceFailures, setVaultReferenceFailures] = useState<
+    Map<string, VaultReferenceFailure>
+  >(() => new Map());
+  const [vaultReferencesPending, setVaultReferencesPending] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [booting, setBooting] = useState(true);
   const [notice, setNotice] = useState<Notice>();
@@ -137,6 +155,26 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
           message: `素材根目录读取失败：${errorMessage(error)}`,
         });
       });
+    void api
+      .listObsidianVaults()
+      .then((value) => {
+        if (!active) return;
+        setVaults(value);
+        setActiveVaultId((current) =>
+          current && value.some((vault) => vault.id === current)
+            ? current
+            : value.find(
+                (vault) => vault.enabled && vault.accessStatus === "available",
+              )?.id,
+        );
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setNotice({
+          tone: "error",
+          message: `Obsidian Vault 配置读取失败：${errorMessage(error)}`,
+        });
+      });
     return () => {
       active = false;
     };
@@ -199,6 +237,59 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const inaccessibleRoots = roots.filter(
     (root) => root.enabled && root.accessStatus !== "available",
   );
+  const activeVault = vaults.find((vault) => vault.id === activeVaultId);
+
+  useEffect(() => {
+    let active = true;
+    if (activeVaultId === undefined || visibleKeys.length === 0) {
+      setVaultReferences(new Map());
+      setVaultReferenceFailures(new Map());
+      setVaultReferencesPending(false);
+      return () => {
+        active = false;
+      };
+    }
+    const timer = window.setTimeout(() => {
+      setVaultReferencesPending(true);
+      void api
+        .resolveObsidianVaultReferences({
+          vaultId: activeVaultId,
+          assetKeys: visibleKeys,
+        })
+        .then((result) => {
+          if (!active) return;
+          setVaultReferences(
+            new Map(
+              result.resolved.map((reference) => [
+                reference.assetKey,
+                reference,
+              ]),
+            ),
+          );
+          setVaultReferenceFailures(
+            new Map(
+              result.failures.map((failure) => [failure.assetKey, failure]),
+            ),
+          );
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          setVaultReferences(new Map());
+          setVaultReferenceFailures(new Map());
+          setNotice({
+            tone: "error",
+            message: `Obsidian 引用解析失败：${errorMessage(error)}`,
+          });
+        })
+        .finally(() => {
+          if (active) setVaultReferencesPending(false);
+        });
+    }, 80);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [activeVaultId, api, visibleKeys]);
 
   useEffect(() => {
     setSelected(
@@ -226,13 +317,14 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         event.preventDefault();
         search.current?.focus();
       } else if (event.key === "Escape") {
-        if (rootManagerOpen) setRootManagerOpen(false);
+        if (vaultManagerOpen) setVaultManagerOpen(false);
+        else if (rootManagerOpen) setRootManagerOpen(false);
         else if (!editing) setSelected(new Set());
       }
     };
     window.addEventListener("keydown", handleGlobalKey);
     return () => window.removeEventListener("keydown", handleGlobalKey);
-  }, [rootManagerOpen]);
+  }, [rootManagerOpen, vaultManagerOpen]);
 
   const selectAsset = (key: string, intent: AssetSelectionIntent) => {
     setSelected((current) => {
@@ -381,6 +473,131 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       );
   };
 
+  const openVaultManager = () => {
+    setVaultManagerOpen(true);
+    void api
+      .listObsidianVaults()
+      .then((value) => {
+        setVaults(value);
+        setActiveVaultId((current) =>
+          current && value.some((vault) => vault.id === current)
+            ? current
+            : value.find(
+                (vault) => vault.enabled && vault.accessStatus === "available",
+              )?.id,
+        );
+      })
+      .catch((error: unknown) =>
+        setNotice({
+          tone: "error",
+          message: `Vault 状态刷新失败：${errorMessage(error)}`,
+        }),
+      );
+  };
+
+  const addVault = async (path: string, name: string) => {
+    setVaultBusy(true);
+    try {
+      const vault = await api.addObsidianVault({ path, name });
+      setVaults((current) => [...current, vault]);
+      setActiveVaultId(vault.id);
+      setNotice({
+        tone: "info",
+        message: `已添加 ${vault.name} 并设为 Obsidian 目标 Vault`,
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `添加 Vault 失败：${errorMessage(error)}`,
+      });
+      throw error;
+    } finally {
+      setVaultBusy(false);
+    }
+  };
+
+  const toggleVault = async (vault: ObsidianVaultStatus) => {
+    setVaultBusy(true);
+    try {
+      const updated = await api.updateObsidianVault({
+        id: vault.id,
+        enabled: !vault.enabled,
+      });
+      const next = vaults.map((candidate) =>
+        candidate.id === vault.id ? updated : candidate,
+      );
+      setVaults(next);
+      if (!updated.enabled && activeVaultId === updated.id) {
+        setActiveVaultId(
+          next.find(
+            (candidate) =>
+              candidate.enabled && candidate.accessStatus === "available",
+          )?.id,
+        );
+      } else if (
+        updated.enabled &&
+        updated.accessStatus === "available" &&
+        activeVaultId === undefined
+      ) {
+        setActiveVaultId(updated.id);
+      }
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `更新 Vault 失败：${errorMessage(error)}`,
+      });
+    } finally {
+      setVaultBusy(false);
+    }
+  };
+
+  const removeVault = async (vault: ObsidianVaultStatus) => {
+    setVaultBusy(true);
+    try {
+      await api.removeObsidianVault(vault.id);
+      const next = vaults.filter((candidate) => candidate.id !== vault.id);
+      setVaults(next);
+      if (activeVaultId === vault.id) {
+        setActiveVaultId(
+          next.find(
+            (candidate) =>
+              candidate.enabled && candidate.accessStatus === "available",
+          )?.id,
+        );
+      }
+      setNotice({
+        tone: "info",
+        message: `已移除 ${vault.name} 的授权配置，Vault 文件保持不变`,
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `移除 Vault 失败：${errorMessage(error)}`,
+      });
+      throw error;
+    } finally {
+      setVaultBusy(false);
+    }
+  };
+
+  const copySelectedVaultReference = async () => {
+    const asset = selectedAssets.length === 1 ? selectedAssets[0] : undefined;
+    const reference = asset ? vaultReferences.get(asset.key) : undefined;
+    if (reference === undefined) return;
+    try {
+      await copyVaultReference(reference);
+      setNotice({
+        tone: "info",
+        message: `已复制 ${reference.markdown}`,
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `复制 Obsidian 引用失败：${errorMessage(error)}`,
+      });
+    }
+  };
+
   const cancelScans = async () => {
     await Promise.all(
       activeScans.flatMap(([rootId, scan]) =>
@@ -425,15 +642,26 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
           <kbd>/</kbd>
         </div>
 
-        <button
-          className="library-button"
-          onClick={openRootManager}
-          type="button"
-        >
-          <Icon name="library" size={16} />
-          <span>{roots.length} 个素材位置</span>
-          <Icon name="chevron" size={13} />
-        </button>
+        <div className="topbar-actions">
+          <button
+            className="library-button vault-button"
+            onClick={openVaultManager}
+            type="button"
+          >
+            <Icon name="link" size={16} />
+            <span>{activeVault?.name ?? "配置 Vault"}</span>
+            <Icon name="chevron" size={13} />
+          </button>
+          <button
+            className="library-button"
+            onClick={openRootManager}
+            type="button"
+          >
+            <Icon name="library" size={16} />
+            <span>{roots.length} 个素材位置</span>
+            <Icon name="chevron" size={13} />
+          </button>
+        </div>
       </header>
 
       <div className="workspace" id="library">
@@ -693,6 +921,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
               assets={visibleAssets}
               onSelect={selectAsset}
               selected={selected}
+              vaultReferences={vaultReferences}
             />
           )}
         </main>
@@ -700,6 +929,20 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         <Inspector
           assets={selectedAssets}
           busy={editBusy}
+          obsidian={{
+            vault: activeVault,
+            reference:
+              selectedAssets.length === 1
+                ? vaultReferences.get(selectedAssets[0].key)
+                : undefined,
+            failure:
+              selectedAssets.length === 1
+                ? vaultReferenceFailures.get(selectedAssets[0].key)
+                : undefined,
+            pending: vaultReferencesPending,
+            onCopy: copySelectedVaultReference,
+            onConfigure: openVaultManager,
+          }}
           onEdit={editSelection}
         />
       </div>
@@ -713,6 +956,17 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         onToggle={toggleRoot}
         open={rootManagerOpen}
         roots={roots}
+      />
+      <VaultManager
+        activeVaultId={activeVaultId}
+        busy={vaultBusy}
+        onAdd={addVault}
+        onClose={() => setVaultManagerOpen(false)}
+        onRemove={removeVault}
+        onSelect={setActiveVaultId}
+        onToggle={toggleVault}
+        open={vaultManagerOpen}
+        vaults={vaults}
       />
     </div>
   );

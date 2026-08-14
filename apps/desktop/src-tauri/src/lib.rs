@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -11,10 +11,14 @@ use asset_filesystem::{
     scan_root_incremental,
 };
 use asset_index::QueryParseError;
+use asset_link_resolver::{
+    AddVaultRoot, UpdateVaultRoot, VaultError, VaultManager, VaultReference, VaultRoot,
+    VaultRootStatus,
+};
 use asset_preview::{
     CacheClearReport, PreviewError, ThumbnailOutcome, ThumbnailRequest, ThumbnailService,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{Manager, State, ipc::Channel, ipc::Response};
 use uuid::Uuid;
 
@@ -78,6 +82,49 @@ enum ThumbnailCommandError {
     Internal {
         message: String,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolveVaultReferencesInput {
+    vault_id: Uuid,
+    asset_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolvedVaultReference {
+    asset_key: String,
+    #[serde(flatten)]
+    reference: VaultReference,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum VaultReferenceFailureKind {
+    AssetNotFound,
+    VaultNotFound,
+    VaultDisabled,
+    VaultUnavailable,
+    AssetUnavailable,
+    OutsideVault,
+    UnsafeWikilink,
+    Internal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultReferenceFailure {
+    asset_key: String,
+    kind: VaultReferenceFailureKind,
+    message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolveVaultReferencesResult {
+    resolved: Vec<ResolvedVaultReference>,
+    failures: Vec<VaultReferenceFailure>,
 }
 
 impl From<PreviewError> for ThumbnailCommandError {
@@ -191,6 +238,124 @@ fn remove_library_root(
         .map_err(|_| "library root manager lock is poisoned".to_owned())?
         .remove_root(id)
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn list_obsidian_vaults(
+    state: State<'_, Mutex<VaultManager>>,
+) -> Result<Vec<VaultRootStatus>, String> {
+    let manager = state
+        .lock()
+        .map_err(|_| "Obsidian Vault manager lock is poisoned".to_owned())?;
+    Ok(manager.vaults())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn add_obsidian_vault(
+    input: AddVaultRoot,
+    state: State<'_, Mutex<VaultManager>>,
+) -> Result<VaultRootStatus, String> {
+    state
+        .lock()
+        .map_err(|_| "Obsidian Vault manager lock is poisoned".to_owned())?
+        .add_vault(input)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn update_obsidian_vault(
+    input: UpdateVaultRoot,
+    state: State<'_, Mutex<VaultManager>>,
+) -> Result<VaultRootStatus, String> {
+    state
+        .lock()
+        .map_err(|_| "Obsidian Vault manager lock is poisoned".to_owned())?
+        .update_vault(input)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn remove_obsidian_vault(
+    id: Uuid,
+    state: State<'_, Mutex<VaultManager>>,
+) -> Result<VaultRoot, String> {
+    state
+        .lock()
+        .map_err(|_| "Obsidian Vault manager lock is poisoned".to_owned())?
+        .remove_vault(id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn resolve_obsidian_vault_references(
+    input: ResolveVaultReferencesInput,
+    vaults: State<'_, Mutex<VaultManager>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+) -> Result<ResolveVaultReferencesResult, String> {
+    let mut seen = BTreeSet::new();
+    let requested: Vec<_> = input
+        .asset_keys
+        .into_iter()
+        .filter(|key| seen.insert(key.clone()))
+        .collect();
+    let records = {
+        let catalog = catalog
+            .lock()
+            .map_err(|_| "asset catalog lock is poisoned".to_owned())?;
+        requested
+            .into_iter()
+            .map(|key| {
+                let path = catalog.get(&key).map(|record| record.path.clone());
+                (key, path)
+            })
+            .collect::<Vec<_>>()
+    };
+    let vaults = vaults
+        .lock()
+        .map_err(|_| "Obsidian Vault manager lock is poisoned".to_owned())?;
+    let mut resolved = Vec::new();
+    let mut failures = Vec::new();
+    for (asset_key, path) in records {
+        let Some(path) = path else {
+            failures.push(VaultReferenceFailure {
+                asset_key,
+                kind: VaultReferenceFailureKind::AssetNotFound,
+                message: "asset is not present in the in-memory catalog".into(),
+            });
+            continue;
+        };
+        match vaults.resolve_reference(input.vault_id, &path) {
+            Ok(reference) => resolved.push(ResolvedVaultReference {
+                asset_key,
+                reference,
+            }),
+            Err(error) => failures.push(VaultReferenceFailure {
+                asset_key,
+                kind: vault_failure_kind(&error),
+                message: error.to_string(),
+            }),
+        }
+    }
+    Ok(ResolveVaultReferencesResult { resolved, failures })
+}
+
+fn vault_failure_kind(error: &VaultError) -> VaultReferenceFailureKind {
+    match error {
+        VaultError::NotFound(_) => VaultReferenceFailureKind::VaultNotFound,
+        VaultError::Disabled(_) => VaultReferenceFailureKind::VaultDisabled,
+        VaultError::InaccessibleVault { .. } => VaultReferenceFailureKind::VaultUnavailable,
+        VaultError::Canonicalize { kind: "asset", .. } => {
+            VaultReferenceFailureKind::AssetUnavailable
+        }
+        VaultError::OutsideVault { .. } => VaultReferenceFailureKind::OutsideVault,
+        VaultError::UnsafeWikilink { .. } => VaultReferenceFailureKind::UnsafeWikilink,
+        _ => VaultReferenceFailureKind::Internal,
+    }
 }
 
 #[tauri::command]
@@ -385,10 +550,14 @@ async fn clear_thumbnail_cache(
 /// Panics when Tauri cannot initialize or run the application event loop.
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let config_path = app.path().app_config_dir()?.join("library-roots.yml");
             let roots = LibraryRootManager::open(config_path)?;
             app.manage(Mutex::new(roots));
+            let vault_config_path = app.path().app_config_dir()?.join("obsidian-vaults.yml");
+            let vaults = VaultManager::open(vault_config_path)?;
+            app.manage(Mutex::new(vaults));
             app.manage(Arc::new(ScanCoordinator::default()));
             app.manage(Arc::new(Mutex::new(AssetCatalog::default())));
             let cache_directory = app.path().app_cache_dir()?;
@@ -401,6 +570,11 @@ pub fn run() {
             add_library_root,
             update_library_root,
             remove_library_root,
+            list_obsidian_vaults,
+            add_obsidian_vault,
+            update_obsidian_vault,
+            remove_obsidian_vault,
+            resolve_obsidian_vault_references,
             start_library_scan,
             cancel_library_scan,
             edit_asset_metadata,
@@ -421,7 +595,7 @@ mod tests {
 
     use super::{
         LibraryScanEvent, QueryAssetsError, ScanCancellation, ScanCoordinator,
-        ThumbnailCommandError, build_info,
+        ThumbnailCommandError, VaultReferenceFailureKind, build_info, vault_failure_kind,
     };
 
     #[test]
@@ -489,5 +663,27 @@ mod tests {
 
         assert_eq!(value["kind"], "asset-not-found");
         assert_eq!(value["assetKey"], "/assets/missing.png");
+    }
+
+    #[test]
+    fn vault_reference_errors_have_stable_user_facing_kinds() {
+        let outside = asset_link_resolver::VaultError::OutsideVault {
+            vault: "/vault".into(),
+            asset: "/other/image.png".into(),
+        };
+        let missing_asset = asset_link_resolver::VaultError::Canonicalize {
+            kind: "asset",
+            path: "/missing.png".into(),
+            source: std::io::Error::new(std::io::ErrorKind::NotFound, "missing"),
+        };
+
+        assert_eq!(
+            vault_failure_kind(&outside),
+            VaultReferenceFailureKind::OutsideVault
+        );
+        assert_eq!(
+            vault_failure_kind(&missing_asset),
+            VaultReferenceFailureKind::AssetUnavailable
+        );
     }
 }

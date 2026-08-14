@@ -27,3 +27,4 @@
 | [ADR-012](012-query-language-and-index-semantics.md) | 查询语言与内存索引语义 | Accepted |
 | [ADR-013](013-thumbnail-pipeline-and-cache-layout.md) | 缩略图管线、并发与缓存布局 | Accepted |
 | [ADR-014](014-desktop-ui-state-and-api-boundary.md) | 桌面 UI 瞬态状态、Tauri API 与开发预览边界 | Accepted |
+| [ADR-015](015-obsidian-vault-configuration-and-native-reference.md) | Obsidian Vault 配置、路径解析、复制与拖放边界 | Accepted |

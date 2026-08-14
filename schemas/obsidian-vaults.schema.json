@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/obsidian-vaults.schema.json",
+  "title": "Material Eagle Obsidian Vault Configuration",
+  "type": "object",
+  "required": ["schema", "vaults"],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "vaults": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/vault"
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "vault": {
+      "type": "object",
+      "required": ["id", "path", "name", "enabled"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

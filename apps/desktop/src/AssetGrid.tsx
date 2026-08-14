@@ -1,9 +1,13 @@
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { DragEvent, KeyboardEvent, MouseEvent } from "react";
 import { useRef } from "react";
 
 import { AssetThumbnail } from "./AssetThumbnail";
 import type { DesktopApi } from "./desktop-api";
 import { Icon } from "./Icon";
+import {
+  type VaultReference,
+  writeVaultReferenceDragData,
+} from "./obsidian-vaults";
 import type { AssetRecord } from "./scanner";
 import { issueLabel, nextGridIndex } from "./ui-model";
 
@@ -16,11 +20,13 @@ export function AssetGrid({
   api,
   assets,
   selected,
+  vaultReferences,
   onSelect,
 }: {
   api: DesktopApi;
   assets: readonly AssetRecord[];
   selected: ReadonlySet<string>;
+  vaultReferences: ReadonlyMap<string, VaultReference>;
   onSelect: (key: string, intent: AssetSelectionIntent) => void;
 }) {
   const grid = useRef<HTMLDivElement>(null);
@@ -55,6 +61,7 @@ export function AssetGrid({
       {assets.map((asset) => {
         const isSelected = selected.has(asset.key);
         const issue = asset.issues[0];
+        const vaultReference = vaultReferences.get(asset.key);
         return (
           <article className="asset-grid-item" key={asset.key} role="listitem">
             <button
@@ -62,6 +69,17 @@ export function AssetGrid({
               aria-pressed={isSelected}
               className={`asset-card${isSelected ? " is-selected" : ""}`}
               data-asset-card
+              draggable={vaultReference !== undefined}
+              onDragStart={(event) => {
+                if (vaultReference === undefined) {
+                  event.preventDefault();
+                  return;
+                }
+                prepareVaultDrag(event, vaultReference);
+                if (!isSelected) {
+                  onSelect(asset.key, { range: false, toggle: false });
+                }
+              }}
               onClick={(event) => onSelect(asset.key, selectionIntent(event))}
               type="button"
             >
@@ -79,6 +97,15 @@ export function AssetGrid({
                   <Icon name="alert" size={12} />
                 </span>
               ) : null}
+              {vaultReference ? (
+                <span
+                  aria-label={`可拖入 ${vaultReference.vaultName}`}
+                  className="asset-card-obsidian"
+                  title={`拖入 Obsidian：${vaultReference.markdown}`}
+                >
+                  <Icon name="link" size={12} />
+                </span>
+              ) : null}
               <span className="asset-card-copy">
                 <strong>{asset.fileName}</strong>
                 <small>
@@ -93,6 +120,13 @@ export function AssetGrid({
       })}
     </div>
   );
+}
+
+function prepareVaultDrag(
+  event: DragEvent<HTMLButtonElement>,
+  reference: VaultReference,
+): void {
+  writeVaultReferenceDragData(event.dataTransfer, reference);
 }
 
 function selectionIntent(

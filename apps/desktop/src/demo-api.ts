@@ -2,15 +2,21 @@ import type { AssetQuery, QueryAssetsResult } from "./asset-query";
 import type { DesktopApi } from "./desktop-api";
 import type { LibraryRootStatus } from "./library-roots";
 import type { BatchMetadataEditResult } from "./metadata-editor";
+import type {
+  ObsidianVaultStatus,
+  ResolveVaultReferencesResult,
+} from "./obsidian-vaults";
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
 import type { ThumbnailOutcome } from "./thumbnail";
 import { matchesDemoExpression } from "./ui-model";
 
 const DEMO_ROOT_ID = "0198a9b2-43c0-7cb0-a733-6dc58f829814";
+const DEMO_VAULT_ID = "0198a9b2-43c0-7cb0-a733-6dc58f829815";
 
 export function createDemoDesktopApi(): DesktopApi {
   let roots: LibraryRootStatus[] = [demoRoot()];
   let assets = demoAssets();
+  let vaults: ObsidianVaultStatus[] = [demoVault()];
   const previewKeys = new Map<string, string>();
   const timers = new Map<string, number[]>();
 
@@ -204,6 +210,99 @@ export function createDemoDesktopApi(): DesktopApi {
       previewKeys.clear();
       return { removedFiles, removedBytes: removedFiles * 4096 };
     },
+    async listObsidianVaults() {
+      return structuredClone(vaults);
+    },
+    async addObsidianVault(input) {
+      const vault: ObsidianVaultStatus = {
+        id: demoUuid(vaults.length + 70),
+        path: input.path,
+        name: input.name,
+        enabled: true,
+        accessStatus: "available",
+      };
+      vaults = [...vaults, vault];
+      return structuredClone(vault);
+    },
+    async updateObsidianVault(input) {
+      const current = vaults.find((vault) => vault.id === input.id);
+      if (current === undefined) throw new Error("Vault 不存在");
+      const updated: ObsidianVaultStatus = {
+        ...current,
+        name: input.name ?? current.name,
+        enabled: input.enabled ?? current.enabled,
+      };
+      vaults = vaults.map((vault) =>
+        vault.id === updated.id ? updated : vault,
+      );
+      return structuredClone(updated);
+    },
+    async removeObsidianVault(id) {
+      const current = vaults.find((vault) => vault.id === id);
+      if (current === undefined) throw new Error("Vault 不存在");
+      vaults = vaults.filter((vault) => vault.id !== id);
+      return structuredClone(current);
+    },
+    async resolveObsidianVaultReferences(input) {
+      const vault = vaults.find((candidate) => candidate.id === input.vaultId);
+      if (vault === undefined) throw new Error("Vault 不存在");
+      const result: ResolveVaultReferencesResult = {
+        resolved: [],
+        failures: [],
+      };
+      for (const assetKey of [...new Set(input.assetKeys)]) {
+        const asset = assets.find((candidate) => candidate.key === assetKey);
+        if (asset === undefined) {
+          result.failures.push({
+            assetKey,
+            kind: "asset-not-found",
+            message: "素材不存在",
+          });
+          continue;
+        }
+        const prefix = `${vault.path.replace(/\/$/u, "")}/`;
+        if (!vault.enabled || vault.accessStatus !== "available") {
+          result.failures.push({
+            assetKey,
+            kind: vault.enabled ? "vault-unavailable" : "vault-disabled",
+            message: "Vault 当前不可用",
+          });
+          continue;
+        }
+        if (!asset.path.startsWith(prefix)) {
+          result.failures.push({
+            assetKey,
+            kind: "outside-vault",
+            message: "素材位于 Vault 外",
+          });
+          continue;
+        }
+        const relativePath = asset.path.slice(prefix.length);
+        result.resolved.push({
+          assetKey,
+          vaultId: vault.id,
+          vaultName: vault.name,
+          assetPath: asset.path,
+          relativePath,
+          urlEncodedPath: relativePath
+            .split("/")
+            .map((component) => encodeURIComponent(component))
+            .join("/"),
+          markdown: `![[${relativePath}]]`,
+        });
+      }
+      return structuredClone(result);
+    },
+  };
+}
+
+function demoVault(): ObsidianVaultStatus {
+  return {
+    id: DEMO_VAULT_ID,
+    path: "/Users/demo/Pictures/Design Archive",
+    name: "Design Notes",
+    enabled: true,
+    accessStatus: "available",
   };
 }
 
