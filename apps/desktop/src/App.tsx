@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AssetGrid, type AssetSelectionIntent } from "./AssetGrid";
+import {
+  copyLocalPath,
+  type ApplicationConfig,
+  type DerivedStateResetReport,
+  type DiagnosticExportReport,
+  type RuntimeRecoveryStatus,
+  type SavedTagFilterState,
+} from "./application-runtime";
 import { type BuildInfo, loadBuildInfo } from "./build-info";
 import { createDemoDesktopApi } from "./demo-api";
 import {
@@ -19,6 +27,7 @@ import {
   type VaultReferenceFailure,
 } from "./obsidian-vaults";
 import { RootManager } from "./RootManager";
+import { SettingsManager } from "./SettingsManager";
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
 import {
   composeAssetQuery,
@@ -69,8 +78,11 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const [scans, setScans] = useState<Record<string, ScanUiState>>({});
   const [rootManagerOpen, setRootManagerOpen] = useState(false);
   const [vaultManagerOpen, setVaultManagerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [rootBusy, setRootBusy] = useState(false);
   const [vaultBusy, setVaultBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [diagnosticBusy, setDiagnosticBusy] = useState(false);
   const [vaultReferences, setVaultReferences] = useState<
     Map<string, VaultReference>
   >(() => new Map());
@@ -79,6 +91,13 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   >(() => new Map());
   const [vaultReferencesPending, setVaultReferencesPending] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
+  const [applicationConfig, setApplicationConfig] =
+    useState<ApplicationConfig>();
+  const [recoveryStatus, setRecoveryStatus] = useState<RuntimeRecoveryStatus>();
+  const [resetReport, setResetReport] = useState<DerivedStateResetReport>();
+  const [diagnosticReport, setDiagnosticReport] =
+    useState<DiagnosticExportReport>();
+  const [preferencesReady, setPreferencesReady] = useState(false);
   const [booting, setBooting] = useState(true);
   const [notice, setNotice] = useState<Notice>();
 
@@ -136,13 +155,33 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     void loadBuildInfo().then((value) => {
       if (active) setBuildInfo(value);
     });
-    void api
-      .listLibraryRoots()
-      .then((value) => {
+    void Promise.all([
+      api.getApplicationConfig(),
+      api.listLibraryRoots(),
+      api.listObsidianVaults(),
+      api.getRuntimeRecoveryStatus(),
+    ])
+      .then(([config, nextRoots, nextVaults, recovery]) => {
         if (!active) return;
-        setRoots(value);
+        const preferredVault = nextVaults.find(
+          (vault) =>
+            vault.id === config.ui.activeVaultId &&
+            vault.enabled &&
+            vault.accessStatus === "available",
+        );
+        const fallbackVault = nextVaults.find(
+          (vault) => vault.enabled && vault.accessStatus === "available",
+        );
+        setApplicationConfig(config);
+        setExpression(config.ui.query);
+        setTagFilters(config.ui.tagFilters);
+        setActiveVaultId(preferredVault?.id ?? fallbackVault?.id);
+        setRoots(nextRoots);
+        setVaults(nextVaults);
+        setRecoveryStatus(recovery);
+        setPreferencesReady(true);
         setBooting(false);
-        for (const root of value) {
+        for (const root of nextRoots) {
           if (root.enabled && root.accessStatus === "available")
             void runScan(root);
         }
@@ -152,33 +191,46 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         setBooting(false);
         setNotice({
           tone: "error",
-          message: `素材根目录读取失败：${errorMessage(error)}`,
-        });
-      });
-    void api
-      .listObsidianVaults()
-      .then((value) => {
-        if (!active) return;
-        setVaults(value);
-        setActiveVaultId((current) =>
-          current && value.some((vault) => vault.id === current)
-            ? current
-            : value.find(
-                (vault) => vault.enabled && vault.accessStatus === "available",
-              )?.id,
-        );
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setNotice({
-          tone: "error",
-          message: `Obsidian Vault 配置读取失败：${errorMessage(error)}`,
+          message: `应用启动状态读取失败：${errorMessage(error)}`,
         });
       });
     return () => {
       active = false;
     };
   }, [api, runScan]);
+
+  useEffect(() => {
+    if (!preferencesReady) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      const savedTagFilters = Object.fromEntries(
+        Object.entries(tagFilters).filter(
+          (entry): entry is [string, SavedTagFilterState] =>
+            entry[1] === "include" || entry[1] === "exclude",
+        ),
+      );
+      void api
+        .updateApplicationConfig({
+          query: expression,
+          tagFilters: savedTagFilters,
+          activeVaultId: activeVaultId ?? null,
+        })
+        .then((config) => {
+          if (active) setApplicationConfig(config);
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          setNotice({
+            tone: "error",
+            message: `视图偏好保存失败：${errorMessage(error)}`,
+          });
+        });
+    }, 500);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [activeVaultId, api, expression, preferencesReady, tagFilters]);
 
   const effectiveQuery = useMemo(
     () => composeAssetQuery(expression, tagFilters),
@@ -238,6 +290,25 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     (root) => root.enabled && root.accessStatus !== "available",
   );
   const activeVault = vaults.find((vault) => vault.id === activeVaultId);
+  const displayedApplicationConfig = useMemo<ApplicationConfig | undefined>(
+    () =>
+      applicationConfig
+        ? {
+            ...applicationConfig,
+            ui: {
+              query: expression,
+              tagFilters: Object.fromEntries(
+                Object.entries(tagFilters).filter(
+                  (entry): entry is [string, SavedTagFilterState] =>
+                    entry[1] === "include" || entry[1] === "exclude",
+                ),
+              ),
+              activeVaultId: activeVaultId ?? null,
+            },
+          }
+        : undefined,
+    [activeVaultId, applicationConfig, expression, tagFilters],
+  );
 
   useEffect(() => {
     let active = true;
@@ -317,14 +388,15 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         event.preventDefault();
         search.current?.focus();
       } else if (event.key === "Escape") {
-        if (vaultManagerOpen) setVaultManagerOpen(false);
+        if (settingsOpen) setSettingsOpen(false);
+        else if (vaultManagerOpen) setVaultManagerOpen(false);
         else if (rootManagerOpen) setRootManagerOpen(false);
         else if (!editing) setSelected(new Set());
       }
     };
     window.addEventListener("keydown", handleGlobalKey);
     return () => window.removeEventListener("keydown", handleGlobalKey);
-  }, [rootManagerOpen, vaultManagerOpen]);
+  }, [rootManagerOpen, settingsOpen, vaultManagerOpen]);
 
   const selectAsset = (key: string, intent: AssetSelectionIntent) => {
     setSelected((current) => {
@@ -495,6 +567,86 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       );
   };
 
+  const openSettingsManager = () => {
+    setSettingsOpen(true);
+    void api
+      .getRuntimeRecoveryStatus()
+      .then(setRecoveryStatus)
+      .catch((error: unknown) =>
+        setNotice({
+          tone: "error",
+          message: `恢复状态刷新失败：${errorMessage(error)}`,
+        }),
+      );
+  };
+
+  const resetSavedView = () => {
+    setExpression("");
+    setTagFilters({});
+    setNotice({ tone: "info", message: "已清除保存的查询与 Tag 条件" });
+  };
+
+  const rebuildDerivedState = async () => {
+    if (activeScans.length > 0) return;
+    setResetBusy(true);
+    try {
+      const report = await api.resetDerivedState();
+      setResetReport(report);
+      setAssets(new Map());
+      setVisibleKeys([]);
+      setSelected(new Set());
+      setSelectionAnchor(undefined);
+      setScans({});
+      const availableRoots = roots.filter(
+        (root) => root.enabled && root.accessStatus === "available",
+      );
+      await Promise.all(availableRoots.map(runScan));
+      setNotice({
+        tone: "info",
+        message: `已清理 ${report.cache.removedFiles} 个缓存文件，并从 ${availableRoots.length} 个素材位置开始重建`,
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `派生数据重建失败：${errorMessage(error)}`,
+      });
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
+  const createDiagnosticExport = async () => {
+    setDiagnosticBusy(true);
+    try {
+      const report = await api.exportDiagnostics();
+      setDiagnosticReport(report);
+      setNotice({
+        tone: "info",
+        message: `诊断日志已导出，共 ${report.eventCount} 条事件`,
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `诊断日志导出失败：${errorMessage(error)}`,
+      });
+    } finally {
+      setDiagnosticBusy(false);
+    }
+  };
+
+  const copyDiagnosticPath = async () => {
+    if (diagnosticReport === undefined) return;
+    try {
+      await copyLocalPath(diagnosticReport.path);
+      setNotice({ tone: "info", message: "诊断日志路径已复制" });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `复制诊断日志路径失败：${errorMessage(error)}`,
+      });
+    }
+  };
+
   const addVault = async (path: string, name: string) => {
     setVaultBusy(true);
     try {
@@ -660,6 +812,14 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
             <Icon name="library" size={16} />
             <span>{roots.length} 个素材位置</span>
             <Icon name="chevron" size={13} />
+          </button>
+          <button
+            aria-label="应用设置与恢复"
+            className="icon-button topbar-settings"
+            onClick={openSettingsManager}
+            type="button"
+          >
+            <Icon name="settings" size={16} />
           </button>
         </div>
       </header>
@@ -967,6 +1127,21 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         onToggle={toggleVault}
         open={vaultManagerOpen}
         vaults={vaults}
+      />
+      <SettingsManager
+        config={displayedApplicationConfig}
+        diagnosticBusy={diagnosticBusy}
+        diagnosticReport={diagnosticReport}
+        onClose={() => setSettingsOpen(false)}
+        onCopyDiagnosticPath={copyDiagnosticPath}
+        onExportDiagnostics={createDiagnosticExport}
+        onResetDerived={rebuildDerivedState}
+        onResetView={resetSavedView}
+        open={settingsOpen}
+        recovery={recoveryStatus}
+        resetBusy={resetBusy}
+        resetReport={resetReport}
+        scanActive={activeScans.length > 0}
       />
     </div>
   );

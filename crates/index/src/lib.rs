@@ -50,6 +50,14 @@ impl AssetIndex {
         Some(record)
     }
 
+    pub fn clear(&mut self) {
+        self.records.clear();
+        self.tags.clear();
+        self.kinds.clear();
+        self.extensions.clear();
+        self.favorites.clear();
+    }
+
     #[must_use]
     pub fn get(&self, key: &str) -> Option<&AssetRecord> {
         self.records.get(key)
@@ -246,6 +254,27 @@ mod tests {
 
         assert!(index.query(&old).is_empty());
         assert_eq!(index.query(&new), BTreeSet::from(["a".into()]));
+    }
+
+    #[test]
+    fn clear_removes_records_and_all_postings() {
+        let mut index = AssetIndex::from_records([
+            record("a", &["ui/icon"], true),
+            record("b", &["color/blue"], false),
+        ]);
+
+        index.clear();
+
+        assert!(index.is_empty());
+        assert!(index.query(&AssetQuery::default()).is_empty());
+        assert!(
+            index
+                .query(&AssetQuery {
+                    all_tags: BTreeSet::from(["ui/icon".into()]),
+                    ..AssetQuery::default()
+                })
+                .is_empty()
+        );
     }
 
     #[test]

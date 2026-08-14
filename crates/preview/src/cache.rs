@@ -1,11 +1,15 @@
-use std::fs::{self, File};
+#[cfg(unix)]
+use std::fs::File;
+use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{RwLock, RwLockReadGuard};
 
 use tempfile::NamedTempFile;
 
-use crate::{CacheClearReport, PreviewError};
+use crate::{
+    CacheClearReport, CacheStartupDisposition, CacheStartupReport, CacheStats, PreviewError,
+};
 
 const CACHE_DIRECTORY: &str = "thumbnails-v1";
 const CACHE_MARKER: &str = ".material-eagle-thumbnail-cache";
@@ -19,7 +23,7 @@ pub(crate) struct ThumbnailCache {
 }
 
 impl ThumbnailCache {
-    pub(crate) fn open(base: &Path) -> Result<Self, PreviewError> {
+    pub(crate) fn open(base: &Path) -> Result<(Self, CacheStartupReport), PreviewError> {
         fs::create_dir_all(base).map_err(|source| PreviewError::CacheIo {
             path: base.to_path_buf(),
             source,
@@ -31,23 +35,30 @@ impl ThumbnailCache {
                 source,
             })?;
         let root = base.join(CACHE_DIRECTORY);
-        if root
-            .symlink_metadata()
-            .is_ok_and(|metadata| metadata.file_type().is_symlink())
-        {
-            return Err(PreviewError::UnsafeCacheRoot(root));
-        }
+        let existed = match root.symlink_metadata() {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+                return Err(PreviewError::UnsafeCacheRoot(root));
+            }
+            Ok(_) => true,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => false,
+            Err(source) => {
+                return Err(PreviewError::CacheIo { path: root, source });
+            }
+        };
         fs::create_dir_all(&root).map_err(|source| PreviewError::CacheIo {
             path: root.clone(),
             source,
         })?;
         verify_root(&base, &root)?;
-        initialize_marker(&root)?;
-        Ok(Self {
-            base,
-            root,
-            gate: RwLock::new(()),
-        })
+        let startup = prepare_cache_root(&base, &root, existed)?;
+        Ok((
+            Self {
+                base,
+                root,
+                gate: RwLock::new(()),
+            },
+            startup,
+        ))
     }
 
     pub(crate) fn read_guard(&self) -> Result<RwLockReadGuard<'_, ()>, PreviewError> {
@@ -132,16 +143,20 @@ impl ThumbnailCache {
         verify_root(&self.base, &self.root)?;
         verify_marker(&self.root)?;
         let report = measure_cache(&self.root)?;
-        fs::remove_dir_all(&self.root).map_err(|source| PreviewError::CacheIo {
-            path: self.root.clone(),
-            source,
-        })?;
-        fs::create_dir_all(&self.root).map_err(|source| PreviewError::CacheIo {
-            path: self.root.clone(),
-            source,
-        })?;
-        initialize_marker(&self.root)?;
+        reset_cache_root(&self.base, &self.root)?;
         Ok(report)
+    }
+
+    pub(crate) fn stats(&self) -> Result<CacheStats, PreviewError> {
+        let _guard = self.read_guard()?;
+        verify_root(&self.base, &self.root)?;
+        verify_marker(&self.root)?;
+        let report = measure_cache(&self.root)?;
+        Ok(CacheStats {
+            layout_version: crate::THUMBNAIL_CACHE_LAYOUT_VERSION,
+            file_count: report.removed_files,
+            byte_count: report.removed_bytes,
+        })
     }
 
     fn path_for(&self, key: &str) -> Result<PathBuf, PreviewError> {
@@ -237,13 +252,110 @@ fn verify_root(base: &Path, root: &Path) -> Result<(), PreviewError> {
 
 fn initialize_marker(root: &Path) -> Result<(), PreviewError> {
     let marker = root.join(CACHE_MARKER);
-    if marker.exists() {
-        return verify_marker(root);
+    match fs::symlink_metadata(&marker) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            return Err(PreviewError::UnsafeCacheRoot(marker));
+        }
+        Ok(_) => return verify_marker(root),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
+        Err(source) => {
+            return Err(PreviewError::CacheIo {
+                path: marker,
+                source,
+            });
+        }
     }
-    fs::write(&marker, CACHE_MARKER_CONTENT).map_err(|source| PreviewError::CacheIo {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&marker)
+        .map_err(|source| PreviewError::CacheIo {
+            path: marker.clone(),
+            source,
+        })?;
+    file.write_all(CACHE_MARKER_CONTENT.as_bytes())
+        .and_then(|()| file.sync_all())
+        .map_err(|source| PreviewError::CacheIo {
+            path: marker,
+            source,
+        })?;
+    sync_directory(root)
+}
+
+fn prepare_cache_root(
+    base: &Path,
+    root: &Path,
+    existed: bool,
+) -> Result<CacheStartupReport, PreviewError> {
+    if !existed {
+        initialize_marker(root)?;
+        return Ok(CacheStartupReport {
+            disposition: CacheStartupDisposition::Created,
+            removed_files: 0,
+            removed_bytes: 0,
+        });
+    }
+    let marker = root.join(CACHE_MARKER);
+    let marker_metadata = match fs::symlink_metadata(&marker) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            return Err(PreviewError::UnsafeCacheRoot(marker));
+        }
+        Ok(metadata) => Some(metadata),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => None,
+        Err(source) => {
+            return Err(PreviewError::CacheIo {
+                path: marker,
+                source,
+            });
+        }
+    };
+    if marker_metadata.is_none() {
+        let report = measure_cache(root)?;
+        let disposition = if report.removed_files == 0 {
+            CacheStartupDisposition::Created
+        } else {
+            CacheStartupDisposition::RebuiltMissingMarker
+        };
+        reset_cache_root(base, root)?;
+        return Ok(CacheStartupReport {
+            disposition,
+            removed_files: report.removed_files,
+            removed_bytes: report.removed_bytes,
+        });
+    }
+    let contents = fs::read_to_string(&marker).map_err(|source| PreviewError::CacheIo {
         path: marker,
         source,
+    })?;
+    if contents == CACHE_MARKER_CONTENT {
+        return Ok(CacheStartupReport {
+            disposition: CacheStartupDisposition::Reused,
+            removed_files: 0,
+            removed_bytes: 0,
+        });
+    }
+    let report = measure_cache(root)?;
+    reset_cache_root(base, root)?;
+    Ok(CacheStartupReport {
+        disposition: CacheStartupDisposition::RebuiltIncompatible,
+        removed_files: report.removed_files,
+        removed_bytes: report.removed_bytes,
     })
+}
+
+fn reset_cache_root(base: &Path, root: &Path) -> Result<(), PreviewError> {
+    verify_root(base, root)?;
+    fs::remove_dir_all(root).map_err(|source| PreviewError::CacheIo {
+        path: root.to_path_buf(),
+        source,
+    })?;
+    fs::create_dir_all(root).map_err(|source| PreviewError::CacheIo {
+        path: root.to_path_buf(),
+        source,
+    })?;
+    verify_root(base, root)?;
+    initialize_marker(root)?;
+    sync_directory(base)
 }
 
 fn verify_marker(root: &Path) -> Result<(), PreviewError> {

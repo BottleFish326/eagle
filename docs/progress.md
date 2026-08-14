@@ -7,7 +7,7 @@
 | 阶段 | 状态 | 说明 |
 |---|---|---|
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
-| 阶段 1：端到端 MVP | In progress | P1-01 至 P1-08 已完成本地验收，准备进入 P1-09 |
+| 阶段 1：端到端 MVP | In progress | P1-01 至 P1-09 已完成本地工作项验收；等待 M 数据集 30 分钟资源曲线与最终退出复核 |
 | 阶段 2：可靠性与恢复 | Not started | 等待阶段 1 退出 |
 | 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出 |
@@ -38,7 +38,7 @@
 | P1-06 缩略图管线 | Completed locally | 四格式解码、GIF 首帧、视口按需生成、并发限流、版本化缓存、损坏占位和安全清理通过；见 `reports/p1-06-acceptance.md` |
 | P1-07 桌面端最小 UI | Completed locally | 根目录管理、增量扁平网格、三态 Tag、查询、检查器、多选批量编辑、错误状态和键盘可访问性通过；见 `reports/p1-07-acceptance.md` |
 | P1-08 Obsidian Vault 内引用 | Completed locally | 多 Vault 原子配置、真实路径边界、标准 WikiLink、复制与文本拖放、同名目录消歧通过；见 `reports/p1-08-acceptance.md` |
-| P1-09 应用配置与可恢复性 | Ready | 下一开发项 |
+| P1-09 应用配置与可恢复性 | Completed locally | 可读 YAML 偏好、原子持久化、缓存版本自动重建、安全显式重建、脱敏诊断导出和用户数据说明通过；见 `reports/p1-09-acceptance.md` |
 
 > 当前仓库未配置 Git 远程地址，因此 GitHub Actions 的首次托管运行仍待远程仓库建立后确认；工作流所执行的同一组命令已在本机通过。
 
@@ -58,6 +58,8 @@
 - React 只维护扫描批次产生的瞬态素材视图；正式查询、Sidecar 写入和缩略图读取继续通过 Tauri 调用 Rust，浏览器演示适配器不读写用户文件。
 - Vault 授权使用独立可读 YAML 原子持久化；Rust 只对目录中的真实素材生成完整 Vault 相对 WikiLink，符号链接逃逸与保留字符显式失败。
 - Obsidian 引用复制只申请系统剪贴板文本写入权限；网格拖放传递标准 Markdown 文本，不传递文件 URL 或复制素材。
+- 应用偏好使用独立 `application.yml` 原子持久化，只保存查询、Tag 三态和当前 Vault；素材记录与查询结果仍为可重建运行期状态。
+- 缓存重建命令不接受路径参数，只重置固定且带版本标记的 `thumbnails-v1`；诊断导出只包含计数、状态、短路径指纹和有界事件。
 
 ## 当前性能证据
 
@@ -67,6 +69,7 @@
 - [P1-06 缩略图管线验收报告](reports/p1-06-acceptance.md)
 - [P1-07 桌面端最小 UI 验收报告](reports/p1-07-acceptance.md)
 - [P1-08 Obsidian Vault 内引用验收报告](reports/p1-08-acceptance.md)
+- [P1-09 应用配置与可恢复性验收报告](reports/p1-09-acceptance.md)
 - [平台差异记录](../specs/platform-notes.md)
 - 参考环境：Apple M4、16 GiB、APFS SSD、macOS 26.5.2；
 - L 数据集：100,000 个素材、20,000 个 sidecar；

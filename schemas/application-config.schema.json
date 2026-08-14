@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/application-config.schema.json",
+  "title": "Material Eagle Application Configuration",
+  "type": "object",
+  "required": ["schema", "ui"],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "ui": {
+      "$ref": "#/$defs/uiPreferences"
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "uiPreferences": {
+      "type": "object",
+      "required": ["query", "tagFilters", "activeVaultId"],
+      "properties": {
+        "query": {
+          "type": "string",
+          "maxLength": 4096,
+          "pattern": "^[^\\r\\n]*$"
+        },
+        "tagFilters": {
+          "type": "object",
+          "maxProperties": 512,
+          "additionalProperties": {
+            "enum": ["include", "exclude"]
+          }
+        },
+        "activeVaultId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

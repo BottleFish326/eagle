@@ -16,6 +16,7 @@ mod decoder;
 mod limiter;
 
 pub const THUMBNAIL_DECODER_VERSION: &str = "image-0.25.9-triangle-png-v1";
+pub const THUMBNAIL_CACHE_LAYOUT_VERSION: u32 = 1;
 pub const MIN_THUMBNAIL_EDGE: u32 = 16;
 pub const MAX_THUMBNAIL_EDGE: u32 = 2_048;
 
@@ -74,6 +75,42 @@ pub struct CacheClearReport {
     pub removed_bytes: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CacheStartupDisposition {
+    Created,
+    Reused,
+    RebuiltMissingMarker,
+    RebuiltIncompatible,
+}
+
+impl std::fmt::Display for CacheStartupDisposition {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Created => "created",
+            Self::Reused => "reused",
+            Self::RebuiltMissingMarker => "rebuilt-missing-marker",
+            Self::RebuiltIncompatible => "rebuilt-incompatible",
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheStartupReport {
+    pub disposition: CacheStartupDisposition,
+    pub removed_files: u64,
+    pub removed_bytes: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheStats {
+    pub layout_version: u32,
+    pub file_count: u64,
+    pub byte_count: u64,
+}
+
 #[derive(Debug, Error)]
 pub enum PreviewError {
     #[error(
@@ -102,6 +139,7 @@ pub enum PreviewError {
 pub struct ThumbnailService {
     cache: ThumbnailCache,
     limiter: DecodeLimiter,
+    startup: CacheStartupReport,
 }
 
 impl ThumbnailService {
@@ -115,9 +153,11 @@ impl ThumbnailService {
         if !(1..=32).contains(&max_concurrent) {
             return Err(PreviewError::InvalidConcurrency(max_concurrent));
         }
+        let (cache, startup) = ThumbnailCache::open(base_cache_directory)?;
         Ok(Self {
-            cache: ThumbnailCache::open(base_cache_directory)?,
+            cache,
             limiter: DecodeLimiter::new(max_concurrent),
+            startup,
         })
     }
 
@@ -227,6 +267,20 @@ impl ThumbnailService {
     pub fn clear(&self) -> Result<CacheClearReport, PreviewError> {
         self.cache.clear()
     }
+
+    #[must_use]
+    pub const fn startup_report(&self) -> CacheStartupReport {
+        self.startup
+    }
+
+    /// Measures the current derived cache without reading or modifying any source asset.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PreviewError`] if the cache boundary or marker is no longer safe.
+    pub fn cache_stats(&self) -> Result<CacheStats, PreviewError> {
+        self.cache.stats()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,7 +386,10 @@ mod tests {
     use metadata::{digest_file, sidecar_path_for};
     use tempfile::tempdir;
 
-    use super::{DecodeLimiter, ThumbnailOutcome, ThumbnailPlaceholderReason, ThumbnailService};
+    use super::{
+        CacheStartupDisposition, DecodeLimiter, ThumbnailOutcome, ThumbnailPlaceholderReason,
+        ThumbnailService,
+    };
 
     #[test]
     fn lazily_decodes_four_formats_and_preserves_originals() {
@@ -468,6 +525,74 @@ mod tests {
         assert_eq!(first.cache_key, rebuilt.cache_key);
         assert!(!rebuilt.cache_hit);
         assert_eq!(digest_file(&asset).expect("asset digest after"), digest);
+    }
+
+    #[test]
+    fn incompatible_cache_marker_is_automatically_discarded_on_startup() {
+        let directory = tempdir().expect("tempdir");
+        let cache = directory.path().join("cache");
+        let service = ThumbnailService::open(&cache, 1).expect("service");
+        let root = service.cache.root().to_path_buf();
+        drop(service);
+        fs::write(
+            root.join(".material-eagle-thumbnail-cache"),
+            "material-eagle-thumbnail-cache-v0\n",
+        )
+        .expect("old marker");
+        fs::create_dir(root.join("aa")).expect("old shard");
+        fs::write(root.join("aa/old.png"), b"obsolete").expect("old entry");
+
+        let reopened = ThumbnailService::open(&cache, 1).expect("compatible rebuild");
+
+        assert_eq!(
+            reopened.startup_report().disposition,
+            CacheStartupDisposition::RebuiltIncompatible
+        );
+        assert_eq!(reopened.startup_report().removed_files, 1);
+        assert_eq!(reopened.cache_stats().expect("stats").file_count, 0);
+        assert!(!root.join("aa/old.png").exists());
+    }
+
+    #[test]
+    fn nonempty_cache_without_a_marker_is_rebuilt_on_startup() {
+        let directory = tempdir().expect("tempdir");
+        let cache = directory.path().join("cache");
+        let service = ThumbnailService::open(&cache, 1).expect("service");
+        let root = service.cache.root().to_path_buf();
+        drop(service);
+        fs::remove_file(root.join(".material-eagle-thumbnail-cache")).expect("remove marker");
+        fs::write(root.join("orphan.bin"), b"obsolete").expect("orphan");
+
+        let reopened = ThumbnailService::open(&cache, 1).expect("missing marker rebuild");
+
+        assert_eq!(
+            reopened.startup_report().disposition,
+            CacheStartupDisposition::RebuiltMissingMarker
+        );
+        assert_eq!(reopened.startup_report().removed_files, 1);
+        assert!(!root.join("orphan.bin").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cache_marker_symlinks_are_rejected_without_writing_the_target() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempdir().expect("tempdir");
+        let cache = directory.path().join("cache");
+        let external = directory.path().join("external-marker");
+        fs::write(&external, b"private").expect("external marker target");
+        let service = ThumbnailService::open(&cache, 1).expect("service");
+        let root = service.cache.root().to_path_buf();
+        drop(service);
+        fs::remove_file(root.join(".material-eagle-thumbnail-cache")).expect("remove marker");
+        symlink(&external, root.join(".material-eagle-thumbnail-cache"))
+            .expect("malicious marker symlink");
+
+        let error = ThumbnailService::open(&cache, 1).expect_err("marker symlink must fail");
+
+        assert!(matches!(error, super::PreviewError::UnsafeCacheRoot(_)));
+        assert_eq!(fs::read(&external).expect("external target"), b"private");
     }
 
     #[cfg(unix)]

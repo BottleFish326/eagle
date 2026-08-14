@@ -1,4 +1,8 @@
 import type { AssetQuery, QueryAssetsResult } from "./asset-query";
+import type {
+  ApplicationConfig,
+  RuntimeRecoveryStatus,
+} from "./application-runtime";
 import type { DesktopApi } from "./desktop-api";
 import type { LibraryRootStatus } from "./library-roots";
 import type { BatchMetadataEditResult } from "./metadata-editor";
@@ -17,10 +21,55 @@ export function createDemoDesktopApi(): DesktopApi {
   let roots: LibraryRootStatus[] = [demoRoot()];
   let assets = demoAssets();
   let vaults: ObsidianVaultStatus[] = [demoVault()];
+  let applicationConfig: ApplicationConfig = {
+    schema: 1,
+    ui: { query: "", tagFilters: {}, activeVaultId: DEMO_VAULT_ID },
+  };
+  const recoveryStatus: RuntimeRecoveryStatus = {
+    paths: {
+      configDirectory: "/Users/demo/Library/Application Support/Material Eagle",
+      cacheDirectory: "/Users/demo/Library/Caches/Material Eagle",
+      logDirectory: "/Users/demo/Library/Logs/Material Eagle",
+    },
+    cacheStartup: {
+      disposition: "reused",
+      removedFiles: 0,
+      removedBytes: 0,
+    },
+  };
   const previewKeys = new Map<string, string>();
   const timers = new Map<string, number[]>();
 
   return {
+    async getApplicationConfig() {
+      return structuredClone(applicationConfig);
+    },
+    async updateApplicationConfig(input) {
+      applicationConfig = {
+        schema: 1,
+        ui: structuredClone(input),
+      };
+      return structuredClone(applicationConfig);
+    },
+    async getRuntimeRecoveryStatus() {
+      return structuredClone(recoveryStatus);
+    },
+    async resetDerivedState() {
+      const removedFiles = previewKeys.size;
+      previewKeys.clear();
+      return {
+        cache: { removedFiles, removedBytes: removedFiles * 4096 },
+        catalogAssetsRemoved: assets.length,
+      };
+    },
+    async exportDiagnostics() {
+      return {
+        path: "/Users/demo/Library/Logs/Material Eagle/diagnostics/material-eagle-diagnostic-demo.json",
+        generatedAt: new Date().toISOString(),
+        eventCount: 6,
+        sizeBytes: 2048,
+      };
+    },
     async listLibraryRoots() {
       return structuredClone(roots);
     },

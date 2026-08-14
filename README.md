@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段 0 已通过全部技术与 Obsidian 实机验收。阶段 1 已启动，P1-01 至 P1-08 已完成本地验收，当前具备工程骨架、素材根管理、可取消增量扫描、具备并发保护的 Sidecar 批量编辑、布尔 Tag 查询、按视口请求的版本化缩略图管线、可操作的扁平素材桌面界面，以及 Obsidian Vault 内标准引用复制与拖放。开发阶段、交付物和验收规范见：
+阶段 0 已通过全部技术与 Obsidian 实机验收。阶段 1 的 P1-01 至 P1-09 已完成本地工作项验收，当前具备工程骨架、素材根管理、可取消增量扫描、具备并发保护的 Sidecar 批量编辑、布尔 Tag 查询、按视口请求的版本化缩略图管线、可操作的扁平素材桌面界面、Obsidian Vault 内标准引用，以及可读配置、安全缓存重建和脱敏诊断导出。阶段 1 最终退出仍需完成 M 数据集 30 分钟资源曲线与综合复核。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
@@ -17,10 +17,13 @@
 - [P1-06 验收报告](docs/reports/p1-06-acceptance.md)
 - [P1-07 验收报告](docs/reports/p1-07-acceptance.md)
 - [P1-08 验收报告](docs/reports/p1-08-acceptance.md)
+- [P1-09 验收报告](docs/reports/p1-09-acceptance.md)
 - [桌面端 MVP 操作说明](docs/ui-operation-guide.md)
+- [用户数据、缓存与恢复说明](docs/user-data-and-recovery.md)
 - [素材查询语言](specs/query-language.md)
 - [缩略图协议](specs/thumbnail-protocol.md)
 - [Obsidian Vault 内引用协议](specs/obsidian-vault-reference-protocol.md)
+- [应用配置与恢复协议](specs/application-recovery-protocol.md)
 - [架构决策记录](specs/adr/README.md)
 
 ## 核心原则

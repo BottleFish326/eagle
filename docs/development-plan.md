@@ -99,6 +99,7 @@ crates/metadata/                 Sidecar、原生元数据与版本迁移
 crates/index/                    内存倒排索引与查询执行
 crates/preview/                  缩略图和媒体预览
 crates/link-resolver/            稳定 ID、Vault 路径和引用解析
+crates/app-config/               可读应用偏好、诊断与恢复状态
 integrations/obsidian-bridge/    Obsidian 桌面插件
 schemas/                         Sidecar 与库配置 Schema
 fixtures/                        固定测试素材

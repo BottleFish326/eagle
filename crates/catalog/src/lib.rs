@@ -78,6 +78,20 @@ impl AssetCatalog {
     }
 
     #[must_use]
+    pub fn len(&self) -> usize {
+        self.index.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.index.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.index.clear();
+    }
+
+    #[must_use]
     pub fn get(&self, key: &str) -> Option<&AssetRecord> {
         self.index.get(key)
     }

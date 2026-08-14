@@ -1,6 +1,20 @@
 import type { QueryAssetsInput, QueryAssetsResult } from "./asset-query";
 import { queryAssets } from "./asset-query";
 import type {
+  ApplicationConfig,
+  DerivedStateResetReport,
+  DiagnosticExportReport,
+  RuntimeRecoveryStatus,
+  UiPreferences,
+} from "./application-runtime";
+import {
+  exportDiagnostics,
+  getApplicationConfig,
+  getRuntimeRecoveryStatus,
+  resetDerivedState,
+  updateApplicationConfig,
+} from "./application-runtime";
+import type {
   AddLibraryRootInput,
   LibraryRoot,
   LibraryRootStatus,
@@ -46,6 +60,11 @@ import {
 } from "./thumbnail";
 
 export interface DesktopApi {
+  getApplicationConfig(): Promise<ApplicationConfig>;
+  updateApplicationConfig(input: UiPreferences): Promise<ApplicationConfig>;
+  getRuntimeRecoveryStatus(): Promise<RuntimeRecoveryStatus>;
+  resetDerivedState(): Promise<DerivedStateResetReport>;
+  exportDiagnostics(): Promise<DiagnosticExportReport>;
   listLibraryRoots(): Promise<LibraryRootStatus[]>;
   addLibraryRoot(input: AddLibraryRootInput): Promise<LibraryRootStatus>;
   updateLibraryRoot(input: UpdateLibraryRootInput): Promise<LibraryRootStatus>;
@@ -72,6 +91,11 @@ export interface DesktopApi {
 }
 
 export const tauriDesktopApi: DesktopApi = {
+  getApplicationConfig,
+  updateApplicationConfig,
+  getRuntimeRecoveryStatus,
+  resetDerivedState,
+  exportDiagnostics,
   listLibraryRoots,
   addLibraryRoot,
   updateLibraryRoot,
