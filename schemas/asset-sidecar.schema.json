@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eagle.local/schemas/asset-sidecar.schema.json",
+  "title": "Asset sidecar",
+  "description": "User-authored metadata stored next to an asset file.",
+  "type": "object",
+  "required": ["schema", "id", "tags", "updatedAt"],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "rating": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "default": 0
+    },
+    "favorite": {
+      "type": "boolean",
+      "default": false
+    },
+    "note": {
+      "type": "string",
+      "maxLength": 10000,
+      "default": ""
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "fingerprint": {
+      "type": "object",
+      "required": ["algorithm", "value", "size"],
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": true
+}

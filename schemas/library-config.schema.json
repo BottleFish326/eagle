@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eagle.local/schemas/library-config.schema.json",
+  "title": "Material library root configuration",
+  "type": "object",
+  "required": ["schema", "id", "name", "scan"],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "scan": {
+      "type": "object",
+      "required": ["recursive", "followSymlinks", "ignore"],
+      "properties": {
+        "recursive": {
+          "type": "boolean",
+          "default": true
+        },
+        "followSymlinks": {
+          "const": false
+        },
+        "ignore": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

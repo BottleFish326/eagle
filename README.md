@@ -7,6 +7,8 @@
 项目处于架构与开发准备阶段。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
+- [开发进度](docs/progress.md)
+- [架构决策记录](specs/adr/README.md)
 
 ## 核心原则
 
