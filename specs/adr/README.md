@@ -22,3 +22,4 @@
 | [ADR-007](007-filesystem-boundaries.md) | 符号链接、网络盘与同步目录 | Accepted |
 | [ADR-008](008-external-asset-rendering-security.md) | Vault 外素材渲染安全边界 | Accepted |
 | [ADR-009](009-library-root-configuration.md) | 素材库根目录配置与授权状态 | Accepted |
+| [ADR-010](010-asset-record-and-scan-protocol.md) | 统一素材模型、字段优先级与增量扫描协议 | Accepted |

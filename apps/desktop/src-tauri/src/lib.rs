@@ -1,10 +1,14 @@
-use std::sync::Mutex;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use asset_filesystem::{
-    AddLibraryRoot, LibraryRoot, LibraryRootManager, LibraryRootStatus, UpdateLibraryRoot,
+    AddLibraryRoot, LibraryRoot, LibraryRootManager, LibraryRootStatus, RootAccessStatus,
+    ScanBatch, ScanCancellation, ScanOptions, ScanSummary, UpdateLibraryRoot,
+    scan_root_incremental,
 };
 use serde::Serialize;
-use tauri::{Manager, State};
+use tauri::{Manager, State, ipc::Channel};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -15,6 +19,65 @@ struct BuildInfo {
     build_target: &'static str,
     build_profile: &'static str,
     rustc_version: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    tag = "event",
+    content = "data"
+)]
+enum LibraryScanEvent {
+    Started {
+        scan_id: Uuid,
+        root_id: Uuid,
+        root: PathBuf,
+    },
+    Batch {
+        scan_id: Uuid,
+        batch: ScanBatch,
+    },
+    Finished {
+        scan_id: Uuid,
+        summary: ScanSummary,
+    },
+    Failed {
+        scan_id: Uuid,
+        message: String,
+    },
+}
+
+#[derive(Default)]
+struct ScanCoordinator {
+    active: Mutex<HashMap<Uuid, ScanCancellation>>,
+}
+
+impl ScanCoordinator {
+    fn register(&self, scan_id: Uuid, cancellation: ScanCancellation) -> Result<(), String> {
+        self.active
+            .lock()
+            .map_err(|_| "scan coordinator lock is poisoned".to_owned())?
+            .insert(scan_id, cancellation);
+        Ok(())
+    }
+
+    fn cancel(&self, scan_id: Uuid) -> Result<bool, String> {
+        let active = self
+            .active
+            .lock()
+            .map_err(|_| "scan coordinator lock is poisoned".to_owned())?;
+        Ok(active.get(&scan_id).is_some_and(|token| {
+            token.cancel();
+            true
+        }))
+    }
+
+    fn finish(&self, scan_id: Uuid) {
+        if let Ok(mut active) = self.active.lock() {
+            active.remove(&scan_id);
+        }
+    }
 }
 
 #[tauri::command]
@@ -78,6 +141,100 @@ fn remove_library_root(
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn start_library_scan(
+    root_id: Uuid,
+    on_event: Channel<LibraryScanEvent>,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    scans: State<'_, Arc<ScanCoordinator>>,
+) -> Result<Uuid, String> {
+    let root_status = roots
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .roots()
+        .into_iter()
+        .find(|root| root.root.id == root_id)
+        .ok_or_else(|| format!("library root was not found: {root_id}"))?;
+    if !root_status.root.enabled {
+        return Err(format!("library root is disabled: {root_id}"));
+    }
+    if root_status.access_status != RootAccessStatus::Available {
+        return Err(format!(
+            "library root is not available ({}): {}",
+            root_status.access_status,
+            root_status.root.path.display()
+        ));
+    }
+
+    let scan_id = Uuid::now_v7();
+    let cancellation = ScanCancellation::new();
+    scans.register(scan_id, cancellation.clone())?;
+    let coordinator = Arc::clone(scans.inner());
+    let root = root_status.root;
+    let thread_name = format!("library-scan-{}", &scan_id.to_string()[..8]);
+    let spawn_result = std::thread::Builder::new()
+        .name(thread_name)
+        .spawn(move || {
+            if on_event
+                .send(LibraryScanEvent::Started {
+                    scan_id,
+                    root_id: root.id,
+                    root: root.path.clone(),
+                })
+                .is_err()
+            {
+                cancellation.cancel();
+            }
+            let options = ScanOptions {
+                recursive: root.scan.recursive,
+                ignore_hidden: true,
+                ignore: root.scan.ignore,
+                ..ScanOptions::default()
+            };
+            let result = scan_root_incremental(
+                Some(root.id),
+                &root.path,
+                &options,
+                &cancellation,
+                |batch| {
+                    if on_event
+                        .send(LibraryScanEvent::Batch { scan_id, batch })
+                        .is_err()
+                    {
+                        cancellation.cancel();
+                    }
+                },
+            );
+            match result {
+                Ok(summary) => {
+                    let _ = on_event.send(LibraryScanEvent::Finished { scan_id, summary });
+                }
+                Err(error) => {
+                    let _ = on_event.send(LibraryScanEvent::Failed {
+                        scan_id,
+                        message: error.to_string(),
+                    });
+                }
+            }
+            coordinator.finish(scan_id);
+        });
+    if let Err(error) = spawn_result {
+        scans.finish(scan_id);
+        return Err(format!("failed to start library scan thread: {error}"));
+    }
+    Ok(scan_id)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn cancel_library_scan(
+    scan_id: Uuid,
+    scans: State<'_, Arc<ScanCoordinator>>,
+) -> Result<bool, String> {
+    scans.cancel(scan_id)
+}
+
 /// Starts the desktop shell and blocks until its final window closes.
 ///
 /// # Panics
@@ -89,6 +246,7 @@ pub fn run() {
             let config_path = app.path().app_config_dir()?.join("library-roots.yml");
             let roots = LibraryRootManager::open(config_path)?;
             app.manage(Mutex::new(roots));
+            app.manage(Arc::new(ScanCoordinator::default()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -96,7 +254,9 @@ pub fn run() {
             list_library_roots,
             add_library_root,
             update_library_root,
-            remove_library_root
+            remove_library_root,
+            start_library_scan,
+            cancel_library_scan
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Material Eagle desktop application");
@@ -104,7 +264,9 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::build_info;
+    use uuid::Uuid;
+
+    use super::{LibraryScanEvent, ScanCancellation, ScanCoordinator, build_info};
 
     #[test]
     fn build_information_is_traceable() {
@@ -113,5 +275,34 @@ mod tests {
         assert!(!info.git_commit.is_empty());
         assert!(!info.build_target.is_empty());
         assert!(!info.rustc_version.is_empty());
+    }
+
+    #[test]
+    fn scan_coordinator_cancels_and_releases_registered_scans() {
+        let coordinator = ScanCoordinator::default();
+        let scan_id = Uuid::now_v7();
+        let cancellation = ScanCancellation::new();
+        coordinator
+            .register(scan_id, cancellation.clone())
+            .expect("register scan");
+
+        assert!(coordinator.cancel(scan_id).expect("cancel scan"));
+        assert!(cancellation.is_cancelled());
+        coordinator.finish(scan_id);
+        assert!(!coordinator.cancel(scan_id).expect("cancel finished scan"));
+    }
+
+    #[test]
+    fn scan_events_use_the_frontend_wire_shape() {
+        let scan_id = Uuid::now_v7();
+        let event = serde_json::to_value(LibraryScanEvent::Failed {
+            scan_id,
+            message: "invalid root".into(),
+        })
+        .expect("serialize scan event");
+
+        assert_eq!(event["event"], "failed");
+        assert_eq!(event["data"]["scanId"], scan_id.to_string());
+        assert_eq!(event["data"]["message"], "invalid root");
     }
 }

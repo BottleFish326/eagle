@@ -1,0 +1,809 @@
+use std::fs::{self, File};
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+use asset_core::{AssetDimensions, AssetIssue, AssetRecord, NativeImageMetadata, SidecarState};
+use exif::{In, Tag, Value};
+use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
+use metadata::{read_sidecar, sidecar_path_for};
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use uuid::Uuid;
+use walkdir::WalkDir;
+
+#[derive(Debug, Clone)]
+pub struct ScanOptions {
+    pub recursive: bool,
+    pub ignore_hidden: bool,
+    pub ignore: Vec<String>,
+    pub batch_size: usize,
+}
+
+impl Default for ScanOptions {
+    fn default() -> Self {
+        Self {
+            recursive: true,
+            ignore_hidden: true,
+            ignore: Vec::new(),
+            batch_size: 64,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanProblem {
+    pub path: PathBuf,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanReport {
+    pub root: PathBuf,
+    pub assets: Vec<AssetRecord>,
+    pub problems: Vec<ScanProblem>,
+    pub visited_files: usize,
+    pub elapsed_ms: u128,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanBatch {
+    pub sequence: usize,
+    pub assets: Vec<AssetRecord>,
+    pub problems: Vec<ScanProblem>,
+    pub visited_files: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ScanCompletion {
+    Completed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanSummary {
+    pub root_id: Option<Uuid>,
+    pub root: PathBuf,
+    pub completion: ScanCompletion,
+    pub visited_files: usize,
+    pub asset_count: usize,
+    pub problem_count: usize,
+    pub elapsed_ms: u128,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ScanCancellation {
+    cancelled: Arc<AtomicBool>,
+}
+
+impl ScanCancellation {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum FilesystemError {
+    #[error("scan root does not exist or is not a directory: {0}")]
+    InvalidRoot(PathBuf),
+    #[error("cannot canonicalize scan root {path}: {source}")]
+    Canonicalize {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("scan batch size must be greater than zero")]
+    InvalidBatchSize,
+    #[error("invalid ignore rule {rule}: {message}")]
+    InvalidIgnoreRule { rule: String, message: String },
+    #[error("file watcher error: {0}")]
+    Watch(#[from] notify::Error),
+}
+
+/// Scans one authorized root and returns a complete compatibility report.
+///
+/// # Errors
+///
+/// Returns [`FilesystemError`] when the root or scan options are invalid.
+pub fn scan_root(root: &Path, options: &ScanOptions) -> Result<ScanReport, FilesystemError> {
+    let cancellation = ScanCancellation::new();
+    let mut assets = Vec::new();
+    let mut problems = Vec::new();
+    let summary = scan_root_incremental(None, root, options, &cancellation, |batch| {
+        assets.extend(batch.assets);
+        problems.extend(batch.problems);
+    })?;
+    assets.sort_by(|left, right| left.key.cmp(&right.key));
+    Ok(ScanReport {
+        root: summary.root,
+        assets,
+        problems,
+        visited_files: summary.visited_files,
+        elapsed_ms: summary.elapsed_ms,
+    })
+}
+
+/// Scans an authorized root incrementally, emitting bounded ordered batches.
+///
+/// Cancellation is cooperative and is observed between traversal entries and batches.
+/// A cancelled scan emits all fully parsed batches produced before cancellation.
+///
+/// # Errors
+///
+/// Returns [`FilesystemError`] when the root, batch size, or ignore rules are invalid.
+pub fn scan_root_incremental<F>(
+    root_id: Option<Uuid>,
+    root: &Path,
+    options: &ScanOptions,
+    cancellation: &ScanCancellation,
+    mut emit: F,
+) -> Result<ScanSummary, FilesystemError>
+where
+    F: FnMut(ScanBatch),
+{
+    if options.batch_size == 0 {
+        return Err(FilesystemError::InvalidBatchSize);
+    }
+    if !root.is_dir() {
+        return Err(FilesystemError::InvalidRoot(root.to_path_buf()));
+    }
+    let root = root
+        .canonicalize()
+        .map_err(|source| FilesystemError::Canonicalize {
+            path: root.to_path_buf(),
+            source,
+        })?;
+    let ignore = compile_ignore_rules(&options.ignore)?;
+    let started = Instant::now();
+    let mut sequence = 0;
+    let mut visited_files = 0;
+    let mut asset_count = 0;
+    let mut problem_count = 0;
+    let mut paths = Vec::with_capacity(options.batch_size);
+    let mut pending_problems = Vec::new();
+
+    let mut walker = WalkDir::new(&root).follow_links(false);
+    if !options.recursive {
+        walker = walker.max_depth(1);
+    }
+
+    let entries = walker.into_iter().filter_entry(|entry| {
+        should_visit_entry(entry.path(), entry.depth(), &root, options, &ignore)
+    });
+    for entry in entries {
+        if cancellation.is_cancelled() {
+            break;
+        }
+        match entry {
+            Ok(entry) if entry.file_type().is_file() => {
+                let path = entry.into_path();
+                if !is_metadata_file(&path) {
+                    visited_files += 1;
+                    paths.push(path);
+                }
+            }
+            Ok(_) => {}
+            Err(error) => pending_problems.push(ScanProblem {
+                path: error.path().map_or_else(|| root.clone(), Path::to_path_buf),
+                message: error.to_string(),
+            }),
+        }
+
+        if paths.len() >= options.batch_size || pending_problems.len() >= options.batch_size {
+            let batch = parse_batch(
+                sequence,
+                root_id,
+                &root,
+                &mut paths,
+                &mut pending_problems,
+                cancellation,
+            );
+            asset_count += batch.assets.len();
+            problem_count += batch.problems.len();
+            emit(batch);
+            sequence += 1;
+        }
+    }
+
+    if !paths.is_empty() || !pending_problems.is_empty() {
+        let batch = parse_batch(
+            sequence,
+            root_id,
+            &root,
+            &mut paths,
+            &mut pending_problems,
+            cancellation,
+        );
+        asset_count += batch.assets.len();
+        problem_count += batch.problems.len();
+        emit(batch);
+    }
+
+    Ok(ScanSummary {
+        root_id,
+        root,
+        completion: if cancellation.is_cancelled() {
+            ScanCompletion::Cancelled
+        } else {
+            ScanCompletion::Completed
+        },
+        visited_files,
+        asset_count,
+        problem_count,
+        elapsed_ms: started.elapsed().as_millis(),
+    })
+}
+
+fn parse_batch(
+    sequence: usize,
+    root_id: Option<Uuid>,
+    root: &Path,
+    paths: &mut Vec<PathBuf>,
+    problems: &mut Vec<ScanProblem>,
+    cancellation: &ScanCancellation,
+) -> ScanBatch {
+    let batch_paths = std::mem::take(paths);
+    let assets = batch_paths
+        .par_iter()
+        .filter_map(|path| {
+            if cancellation.is_cancelled() {
+                None
+            } else {
+                parse_asset(root_id, root, path)
+            }
+        })
+        .collect::<Vec<_>>();
+    ScanBatch {
+        sequence,
+        assets,
+        problems: std::mem::take(problems),
+        visited_files: batch_paths.len(),
+    }
+}
+
+fn parse_asset(root_id: Option<Uuid>, root: &Path, path: &Path) -> Option<AssetRecord> {
+    let mime = detect_mime(path);
+    if !is_supported_mvp_image(&mime) {
+        return None;
+    }
+
+    let canonical = match path.canonicalize() {
+        Ok(canonical) => canonical,
+        Err(error) => {
+            return Some(unavailable_asset(
+                root_id,
+                root,
+                path,
+                mime,
+                error.to_string(),
+            ));
+        }
+    };
+    let file_metadata = match fs::metadata(&canonical) {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            return Some(unavailable_asset(
+                root_id,
+                root,
+                &canonical,
+                mime,
+                error.to_string(),
+            ));
+        }
+    };
+    let modified_unix_ms = file_metadata
+        .modified()
+        .ok()
+        .and_then(system_time_to_unix_ms)
+        .unwrap_or(0);
+    let key = canonical.to_string_lossy().into_owned();
+    let mut asset = AssetRecord::untagged(
+        key,
+        canonical.clone(),
+        mime,
+        file_metadata.len(),
+        modified_unix_ms,
+    );
+    asset.root_id = root_id;
+    asset.relative_path = relative_path(root, &canonical);
+    asset.created_unix_ms = file_metadata
+        .created()
+        .ok()
+        .and_then(system_time_to_unix_ms);
+    asset.modified_unix_ms = file_metadata
+        .modified()
+        .ok()
+        .and_then(system_time_to_unix_ms);
+    asset.file_read_only = Some(file_metadata.permissions().readonly());
+
+    match imagesize::size(&canonical) {
+        Ok(size) => match (u32::try_from(size.width), u32::try_from(size.height)) {
+            (Ok(width), Ok(height)) => {
+                asset.dimensions = Some(AssetDimensions { width, height });
+            }
+            _ => asset.issues.push(AssetIssue::InvalidImageMetadata(
+                "image dimensions exceed the supported range".into(),
+            )),
+        },
+        Err(error) => asset
+            .issues
+            .push(AssetIssue::InvalidImageMetadata(error.to_string())),
+    }
+
+    if matches!(
+        asset.mime.as_str(),
+        "image/jpeg" | "image/png" | "image/webp"
+    ) {
+        match read_native_image_metadata(&canonical) {
+            Ok(metadata) => asset.native_metadata = metadata,
+            Err(exif::Error::NotFound(_) | exif::Error::NotSupported(_)) => {}
+            Err(error) => asset
+                .issues
+                .push(AssetIssue::InvalidNativeMetadata(error.to_string())),
+        }
+    }
+
+    let sidecar_path = sidecar_path_for(&canonical);
+    if sidecar_path.is_file() {
+        asset.sidecar_path = Some(sidecar_path.clone());
+        match read_sidecar(&sidecar_path) {
+            Ok((sidecar, digest)) => {
+                // File-derived fields remain authoritative. Sidecars only provide user metadata.
+                asset.sidecar_state = Some(SidecarState {
+                    schema: sidecar.schema,
+                    digest,
+                    updated_at: sidecar.updated_at.clone(),
+                });
+                asset.id = Some(sidecar.id);
+                asset.tags = sidecar.tags;
+                asset.rating = sidecar.rating;
+                asset.favorite = sidecar.favorite;
+                asset.note = sidecar.note;
+                asset.aliases = sidecar.aliases;
+            }
+            Err(error) => asset
+                .issues
+                .push(AssetIssue::InvalidSidecar(error.to_string())),
+        }
+    }
+    Some(asset)
+}
+
+fn unavailable_asset(
+    root_id: Option<Uuid>,
+    root: &Path,
+    path: &Path,
+    mime: String,
+    message: String,
+) -> AssetRecord {
+    let mut asset = AssetRecord::untagged(
+        path.to_string_lossy().into_owned(),
+        path.to_path_buf(),
+        mime,
+        0,
+        0,
+    );
+    asset.root_id = root_id;
+    asset.relative_path = relative_path(root, path);
+    asset.size = None;
+    asset.modified_unix_ms = None;
+    asset.issues.push(AssetIssue::UnreadableFile(message));
+    asset
+}
+
+fn read_native_image_metadata(path: &Path) -> Result<Option<NativeImageMetadata>, exif::Error> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let exif = exif::Reader::new().read_from_container(&mut reader)?;
+    let metadata = NativeImageMetadata {
+        orientation: exif
+            .get_field(Tag::Orientation, In::PRIMARY)
+            .and_then(|field| field.value.get_uint(0)),
+        captured_at: exif_text(&exif, Tag::DateTimeOriginal)
+            .or_else(|| exif_text(&exif, Tag::DateTimeDigitized))
+            .or_else(|| exif_text(&exif, Tag::DateTime)),
+        camera_make: exif_text(&exif, Tag::Make),
+        camera_model: exif_text(&exif, Tag::Model),
+        lens_model: exif_text(&exif, Tag::LensModel),
+        software: exif_text(&exif, Tag::Software),
+        artist: exif_text(&exif, Tag::Artist),
+        copyright: exif_text(&exif, Tag::Copyright),
+    };
+    Ok((!metadata.is_empty()).then_some(metadata))
+}
+
+fn exif_text(exif: &exif::Exif, tag: Tag) -> Option<String> {
+    let field = exif.get_field(tag, In::PRIMARY)?;
+    let Value::Ascii(values) = &field.value else {
+        return None;
+    };
+    let value = values.first()?;
+    let value = String::from_utf8_lossy(value)
+        .trim_matches(['\0', ' '])
+        .to_owned();
+    (!value.is_empty()).then_some(value)
+}
+
+fn detect_mime(path: &Path) -> String {
+    if let Ok(Some(kind)) = infer::get_from_path(path) {
+        return kind.mime_type().to_owned();
+    }
+    let extension = path
+        .extension()
+        .map(|extension| extension.to_string_lossy().to_ascii_lowercase());
+    match extension.as_deref() {
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        _ => "application/octet-stream",
+    }
+    .to_owned()
+}
+
+fn is_supported_mvp_image(mime: &str) -> bool {
+    matches!(
+        mime,
+        "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+    )
+}
+
+fn compile_ignore_rules(rules: &[String]) -> Result<GlobSet, FilesystemError> {
+    let mut builder = GlobSetBuilder::new();
+    for rule in rules {
+        let glob = GlobBuilder::new(rule)
+            .literal_separator(true)
+            .build()
+            .map_err(|error| FilesystemError::InvalidIgnoreRule {
+                rule: rule.clone(),
+                message: error.to_string(),
+            })?;
+        builder.add(glob);
+    }
+    builder
+        .build()
+        .map_err(|error| FilesystemError::InvalidIgnoreRule {
+            rule: rules.join(", "),
+            message: error.to_string(),
+        })
+}
+
+fn should_visit_entry(
+    path: &Path,
+    depth: usize,
+    root: &Path,
+    options: &ScanOptions,
+    ignore: &GlobSet,
+) -> bool {
+    if depth == 0 {
+        return true;
+    }
+    if options.ignore_hidden
+        && path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+    {
+        return false;
+    }
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    !ignore.is_match(relative)
+}
+
+fn relative_path(root: &Path, path: &Path) -> PathBuf {
+    path.strip_prefix(root)
+        .map_or_else(|_| path.to_path_buf(), Path::to_path_buf)
+}
+
+fn is_metadata_file(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+    name.ends_with(".asset.yml") || name == ".asset-library.yml"
+}
+
+fn system_time_to_unix_ms(time: SystemTime) -> Option<i64> {
+    time.duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| i64::try_from(duration.as_millis()).unwrap_or(i64::MAX))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::io::Cursor;
+
+    use asset_core::AssetIssue;
+    use exif::{Field, In, Tag, Value as ExifValue};
+    use metadata::{AssetSidecar, ExpectedVersion, sidecar_path_for, write_sidecar_atomic};
+    use serde_yaml_ng::Value;
+    use tempfile::tempdir;
+    use uuid::Uuid;
+
+    use super::{
+        FilesystemError, ScanCancellation, ScanCompletion, ScanOptions, scan_root,
+        scan_root_incremental,
+    };
+
+    const PNG: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0xb5,
+        0x1c, 0x0c, 0x02, 0x00, 0x00, 0x00, 0x0b, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0x64,
+        0xf8, 0x0f, 0x00, 0x01, 0x05, 0x01, 0x01, 0x27, 0x18, 0xe3, 0x66, 0x00, 0x00, 0x00, 0x00,
+        0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+
+    #[test]
+    fn reads_file_fields_and_merges_only_user_sidecar_metadata() {
+        let directory = tempdir().expect("tempdir");
+        let image = directory.path().join("logo.png");
+        fs::write(&image, PNG).expect("write png");
+        let mut sidecar = AssetSidecar::new();
+        sidecar.tags.insert("ui/icon".into());
+        sidecar
+            .extra
+            .insert("mime".into(), Value::String("text/plain".into()));
+        write_sidecar_atomic(
+            &sidecar_path_for(&image),
+            &sidecar,
+            &ExpectedVersion::Missing,
+        )
+        .expect("write sidecar");
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan");
+        assert_eq!(report.assets.len(), 1);
+        let asset = &report.assets[0];
+        assert_eq!(asset.id, Some(sidecar.id));
+        assert_eq!(
+            asset
+                .sidecar_state
+                .as_ref()
+                .expect("sidecar state")
+                .digest
+                .len(),
+            64
+        );
+        assert!(asset.tags.contains("ui/icon"));
+        assert_eq!(asset.mime, "image/png");
+        assert_eq!(asset.relative_path, std::path::Path::new("logo.png"));
+        assert_eq!(asset.dimensions.expect("dimensions").width, 1);
+        assert_eq!(asset.dimensions.expect("dimensions").height, 1);
+        assert_eq!(asset.size, Some(PNG.len() as u64));
+        assert!(asset.modified_unix_ms.is_some());
+        assert!(asset.issues.is_empty());
+    }
+
+    #[test]
+    fn reads_dimensions_for_all_phase_one_image_formats() {
+        let directory = tempdir().expect("tempdir");
+        let fixtures = [
+            ("sample.png", PNG.to_vec(), "image/png", (1, 1)),
+            ("sample.jpg", jpeg_header(2, 3), "image/jpeg", (2, 3)),
+            ("sample.gif", gif_header(4, 5), "image/gif", (4, 5)),
+            ("sample.webp", webp_header(6, 7), "image/webp", (6, 7)),
+        ];
+        for (name, bytes, _, _) in &fixtures {
+            fs::write(directory.path().join(name), bytes).expect("write image fixture");
+        }
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan formats");
+        assert_eq!(report.assets.len(), fixtures.len());
+        for (name, _, mime, dimensions) in fixtures {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .expect("asset by name");
+            assert_eq!(asset.mime, mime);
+            let actual = asset
+                .dimensions
+                .unwrap_or_else(|| panic!("missing dimensions for {name}: {:?}", asset.issues));
+            assert_eq!((actual.width, actual.height), dimensions);
+        }
+    }
+
+    #[test]
+    fn reads_selected_exif_fields_without_modifying_the_image() {
+        let directory = tempdir().expect("tempdir");
+        let image = directory.path().join("camera.jpg");
+        let bytes = jpeg_with_exif();
+        fs::write(&image, &bytes).expect("write exif jpeg");
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan exif jpeg");
+        let asset = &report.assets[0];
+        let native = asset.native_metadata.as_ref().expect("native metadata");
+        assert_eq!(native.orientation, Some(6));
+        assert_eq!(native.camera_make.as_deref(), Some("Material Camera"));
+        assert_eq!(native.captured_at.as_deref(), Some("2026:08:14 10:20:30"));
+        assert_eq!(fs::read(&image).expect("read image after scan"), bytes);
+    }
+
+    #[test]
+    fn keeps_damaged_images_and_sidecars_visible_as_asset_issues() {
+        let directory = tempdir().expect("tempdir");
+        let damaged = directory.path().join("damaged.png");
+        let healthy = directory.path().join("healthy.png");
+        fs::write(&damaged, []).expect("write damaged image");
+        fs::write(&healthy, PNG).expect("write healthy image");
+        fs::write(sidecar_path_for(&healthy), "not: [valid").expect("write broken sidecar");
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan");
+        assert_eq!(report.assets.len(), 2);
+        assert!(report.problems.is_empty());
+        assert!(report.assets.iter().any(|asset| {
+            asset.file_name == "damaged.png"
+                && asset
+                    .issues
+                    .iter()
+                    .any(|issue| matches!(issue, AssetIssue::InvalidImageMetadata(_)))
+        }));
+        assert!(report.assets.iter().any(|asset| {
+            asset.file_name == "healthy.png"
+                && asset
+                    .issues
+                    .iter()
+                    .any(|issue| matches!(issue, AssetIssue::InvalidSidecar(_)))
+        }));
+    }
+
+    #[test]
+    fn emits_incremental_batches_and_honors_cancellation() {
+        let directory = tempdir().expect("tempdir");
+        for index in 0..10 {
+            fs::write(directory.path().join(format!("{index}.png")), PNG).expect("write png");
+        }
+        let options = ScanOptions {
+            batch_size: 2,
+            ..ScanOptions::default()
+        };
+        let cancellation = ScanCancellation::new();
+        let callback_token = cancellation.clone();
+        let mut batches = Vec::new();
+        let summary = scan_root_incremental(
+            Some(Uuid::now_v7()),
+            directory.path(),
+            &options,
+            &cancellation,
+            |batch| {
+                batches.push(batch);
+                callback_token.cancel();
+            },
+        )
+        .expect("incremental scan");
+
+        assert_eq!(summary.completion, ScanCompletion::Cancelled);
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].sequence, 0);
+        assert_eq!(batches[0].assets.len(), 2);
+        assert_eq!(summary.asset_count, 2);
+    }
+
+    #[test]
+    fn applies_ignore_rules_and_rejects_invalid_patterns() {
+        let directory = tempdir().expect("tempdir");
+        fs::create_dir(directory.path().join("temp")).expect("create ignored directory");
+        fs::write(directory.path().join("keep.png"), PNG).expect("write kept image");
+        fs::write(directory.path().join("temp/skip.png"), PNG).expect("write ignored image");
+        let options = ScanOptions {
+            ignore: vec!["temp/**".into()],
+            ..ScanOptions::default()
+        };
+        let report = scan_root(directory.path(), &options).expect("scan with ignore rule");
+        assert_eq!(report.assets.len(), 1);
+        assert_eq!(report.assets[0].file_name, "keep.png");
+
+        let error = scan_root(
+            directory.path(),
+            &ScanOptions {
+                ignore: vec!["[broken".into()],
+                ..ScanOptions::default()
+            },
+        )
+        .expect_err("invalid glob must fail");
+        assert!(matches!(error, FilesystemError::InvalidIgnoreRule { .. }));
+    }
+
+    fn jpeg_header(width: u16, height: u16) -> Vec<u8> {
+        let [height_high, height_low] = height.to_be_bytes();
+        let [width_high, width_low] = width.to_be_bytes();
+        vec![
+            0xff,
+            0xd8,
+            0xff,
+            0xc0,
+            0x00,
+            0x0b,
+            0x08,
+            height_high,
+            height_low,
+            width_high,
+            width_low,
+            0x01,
+            0x01,
+            0x11,
+            0x00,
+            0xff,
+            0xd9,
+        ]
+    }
+
+    fn gif_header(width: u16, height: u16) -> Vec<u8> {
+        let [width_low, width_high] = width.to_le_bytes();
+        let [height_low, height_high] = height.to_le_bytes();
+        vec![
+            b'G',
+            b'I',
+            b'F',
+            b'8',
+            b'9',
+            b'a',
+            width_low,
+            width_high,
+            height_low,
+            height_high,
+            0,
+            0,
+            0,
+        ]
+    }
+
+    fn webp_header(width: u32, height: u32) -> Vec<u8> {
+        let width = (width - 1).to_le_bytes();
+        let height = (height - 1).to_le_bytes();
+        vec![
+            b'R', b'I', b'F', b'F', 22, 0, 0, 0, b'W', b'E', b'B', b'P', b'V', b'P', b'8', b'X',
+            10, 0, 0, 0, 0, 0, 0, 0, width[0], width[1], width[2], height[0], height[1], height[2],
+        ]
+    }
+
+    fn jpeg_with_exif() -> Vec<u8> {
+        let fields = [
+            Field {
+                tag: Tag::Orientation,
+                ifd_num: In::PRIMARY,
+                value: ExifValue::Short(vec![6]),
+            },
+            Field {
+                tag: Tag::Make,
+                ifd_num: In::PRIMARY,
+                value: ExifValue::Ascii(vec![b"Material Camera\0".to_vec()]),
+            },
+            Field {
+                tag: Tag::DateTimeOriginal,
+                ifd_num: In::PRIMARY,
+                value: ExifValue::Ascii(vec![b"2026:08:14 10:20:30\0".to_vec()]),
+            },
+        ];
+        let mut writer = exif::experimental::Writer::new();
+        for field in &fields {
+            writer.push_field(field);
+        }
+        let mut tiff = Cursor::new(Vec::new());
+        writer.write(&mut tiff, false).expect("write exif block");
+        let tiff = tiff.into_inner();
+        let app1_length = u16::try_from(tiff.len() + 8).expect("app1 length");
+        let mut jpeg = vec![0xff, 0xd8, 0xff, 0xe1];
+        jpeg.extend(app1_length.to_be_bytes());
+        jpeg.extend(b"Exif\0\0");
+        jpeg.extend(tiff);
+        jpeg.extend(jpeg_header(8, 9).into_iter().skip(2));
+        jpeg
+    }
+}

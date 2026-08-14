@@ -33,6 +33,24 @@ try {
   const report = JSON.parse(scan);
   assert(report.assets.length === manifest.count, `scan returned ${report.assets.length} assets`);
   assert(report.problems.length === 0, `scan reported ${report.problems.length} problems`);
+  const assetsWithDimensions = report.assets.filter((asset) => asset.dimensions !== null).length;
+  const damagedImages = report.assets.filter((asset) =>
+    asset.issues.some((issue) => issue.type === 'invalid-image-metadata'),
+  ).length;
+  assert(
+    assetsWithDimensions === manifest.count - 1,
+    `expected ${manifest.count - 1} dimension records, got ${assetsWithDimensions}`,
+  );
+  assert(damagedImages === 1, `expected one isolated damaged image, got ${damagedImages}`);
+  assert(
+    report.assets.every(
+      (asset) =>
+        typeof asset.relativePath === 'string' &&
+        typeof asset.size === 'number' &&
+        typeof asset.modifiedUnixMs === 'number',
+    ),
+    'formal AssetRecord fields are incomplete',
+  );
   assert((await sha256(sample)) === sampleDigestBefore, 'scan modified an original asset');
   assert(
     files.every((file) => !/\.(?:db|sqlite|sqlite3)$/iu.test(file)),
@@ -40,7 +58,7 @@ try {
   );
 
   console.log(
-    `S dataset accepted: assets=${report.assets.length} sidecars=${manifest.sidecarCount} problems=0 assetDigestUnchanged=true`,
+    `S dataset accepted: assets=${report.assets.length} sidecars=${manifest.sidecarCount} dimensions=${assetsWithDimensions} isolatedDamagedImages=${damagedImages} problems=0 scanMs=${report.elapsedMs} assetDigestUnchanged=true`,
   );
 } finally {
   try {

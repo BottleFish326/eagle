@@ -8,7 +8,10 @@ version.workspace = true
 [dependencies]
 asset-core = { path = "../asset-core" }
 metadata = { path = "../metadata" }
+globset.workspace = true
+imagesize.workspace = true
 infer.workspace = true
+kamadak-exif.workspace = true
 notify.workspace = true
 rayon.workspace = true
 serde.workspace = true

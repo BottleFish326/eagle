@@ -36,8 +36,52 @@ impl AssetKind {
 pub enum AssetIssue {
     InvalidSidecar(String),
     UnreadableFile(String),
+    InvalidImageMetadata(String),
+    InvalidNativeMetadata(String),
     MissingAsset,
     UnsupportedFormat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetDimensions {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SidecarState {
+    pub schema: u32,
+    pub digest: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeImageMetadata {
+    pub orientation: Option<u32>,
+    pub captured_at: Option<String>,
+    pub camera_make: Option<String>,
+    pub camera_model: Option<String>,
+    pub lens_model: Option<String>,
+    pub software: Option<String>,
+    pub artist: Option<String>,
+    pub copyright: Option<String>,
+}
+
+impl NativeImageMetadata {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.orientation.is_none()
+            && self.captured_at.is_none()
+            && self.camera_make.is_none()
+            && self.camera_model.is_none()
+            && self.lens_model.is_none()
+            && self.software.is_none()
+            && self.artist.is_none()
+            && self.copyright.is_none()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,14 +89,21 @@ pub enum AssetIssue {
 pub struct AssetRecord {
     pub key: String,
     pub id: Option<Uuid>,
+    pub root_id: Option<Uuid>,
     pub path: PathBuf,
+    pub relative_path: PathBuf,
     pub sidecar_path: Option<PathBuf>,
+    pub sidecar_state: Option<SidecarState>,
     pub file_name: String,
     pub extension: Option<String>,
     pub mime: String,
     pub kind: AssetKind,
-    pub size: u64,
-    pub modified_unix_ms: i64,
+    pub size: Option<u64>,
+    pub created_unix_ms: Option<i64>,
+    pub modified_unix_ms: Option<i64>,
+    pub file_read_only: Option<bool>,
+    pub dimensions: Option<AssetDimensions>,
+    pub native_metadata: Option<NativeImageMetadata>,
     pub tags: BTreeSet<String>,
     pub rating: u8,
     pub favorite: bool,
@@ -81,14 +132,21 @@ impl AssetRecord {
         Self {
             key,
             id: None,
+            root_id: None,
+            relative_path: path.clone(),
             path,
             sidecar_path: None,
+            sidecar_state: None,
             file_name,
             extension,
             mime,
             kind,
-            size,
-            modified_unix_ms,
+            size: Some(size),
+            created_unix_ms: None,
+            modified_unix_ms: Some(modified_unix_ms),
+            file_read_only: None,
+            dimensions: None,
+            native_metadata: None,
             tags: BTreeSet::new(),
             rating: 0,
             favorite: false,
