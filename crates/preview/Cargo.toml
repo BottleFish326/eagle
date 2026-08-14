@@ -1,0 +1,21 @@
+[package]
+name = "asset-preview"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+asset-core = { path = "../asset-core" }
+image.workspace = true
+serde.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+metadata = { path = "../metadata" }
+serde_json.workspace = true
+
+[lints]
+workspace = true

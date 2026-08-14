@@ -11,8 +11,11 @@ use asset_filesystem::{
     scan_root_incremental,
 };
 use asset_index::QueryParseError;
+use asset_preview::{
+    CacheClearReport, PreviewError, ThumbnailOutcome, ThumbnailRequest, ThumbnailService,
+};
 use serde::Serialize;
-use tauri::{Manager, State, ipc::Channel};
+use tauri::{Manager, State, ipc::Channel, ipc::Response};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -57,6 +60,44 @@ enum LibraryScanEvent {
 enum QueryAssetsError {
     Parse { error: QueryParseError },
     Internal { message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case", tag = "kind")]
+enum ThumbnailCommandError {
+    AssetNotFound {
+        #[serde(rename = "assetKey")]
+        asset_key: String,
+    },
+    InvalidRequest {
+        message: String,
+    },
+    Cache {
+        message: String,
+    },
+    Internal {
+        message: String,
+    },
+}
+
+impl From<PreviewError> for ThumbnailCommandError {
+    fn from(error: PreviewError) -> Self {
+        match error {
+            PreviewError::InvalidMaxEdge(_) | PreviewError::InvalidCacheKey(_) => {
+                Self::InvalidRequest {
+                    message: error.to_string(),
+                }
+            }
+            PreviewError::UnsafeCacheRoot(_)
+            | PreviewError::CacheIo { .. }
+            | PreviewError::MissingCacheEntry(_) => Self::Cache {
+                message: error.to_string(),
+            },
+            PreviewError::InvalidConcurrency(_) | PreviewError::PoisonedLock(_) => Self::Internal {
+                message: error.to_string(),
+            },
+        }
+    }
 }
 
 #[derive(Default)]
@@ -281,6 +322,62 @@ fn query_assets(
         .map_err(|error| QueryAssetsError::Parse { error })
 }
 
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+async fn request_thumbnail(
+    input: ThumbnailRequest,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    previews: State<'_, Arc<ThumbnailService>>,
+) -> Result<ThumbnailOutcome, ThumbnailCommandError> {
+    let record = catalog
+        .lock()
+        .map_err(|_| ThumbnailCommandError::Internal {
+            message: "asset catalog lock is poisoned".into(),
+        })?
+        .get(&input.asset_key)
+        .cloned()
+        .ok_or_else(|| ThumbnailCommandError::AssetNotFound {
+            asset_key: input.asset_key.clone(),
+        })?;
+    let previews = Arc::clone(previews.inner());
+    tauri::async_runtime::spawn_blocking(move || previews.request(&record, input.max_edge))
+        .await
+        .map_err(|error| ThumbnailCommandError::Internal {
+            message: format!("thumbnail task failed: {error}"),
+        })?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+async fn read_thumbnail(
+    cache_key: String,
+    previews: State<'_, Arc<ThumbnailService>>,
+) -> Result<Response, ThumbnailCommandError> {
+    let previews = Arc::clone(previews.inner());
+    let bytes = tauri::async_runtime::spawn_blocking(move || previews.read(&cache_key))
+        .await
+        .map_err(|error| ThumbnailCommandError::Internal {
+            message: format!("thumbnail read task failed: {error}"),
+        })?
+        .map_err(ThumbnailCommandError::from)?;
+    Ok(Response::new(bytes))
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+async fn clear_thumbnail_cache(
+    previews: State<'_, Arc<ThumbnailService>>,
+) -> Result<CacheClearReport, ThumbnailCommandError> {
+    let previews = Arc::clone(previews.inner());
+    tauri::async_runtime::spawn_blocking(move || previews.clear())
+        .await
+        .map_err(|error| ThumbnailCommandError::Internal {
+            message: format!("thumbnail cache clear task failed: {error}"),
+        })?
+        .map_err(Into::into)
+}
+
 /// Starts the desktop shell and blocks until its final window closes.
 ///
 /// # Panics
@@ -294,6 +391,8 @@ pub fn run() {
             app.manage(Mutex::new(roots));
             app.manage(Arc::new(ScanCoordinator::default()));
             app.manage(Arc::new(Mutex::new(AssetCatalog::default())));
+            let cache_directory = app.path().app_cache_dir()?;
+            app.manage(Arc::new(ThumbnailService::open(&cache_directory, 4)?));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -305,7 +404,10 @@ pub fn run() {
             start_library_scan,
             cancel_library_scan,
             edit_asset_metadata,
-            query_assets
+            query_assets,
+            request_thumbnail,
+            read_thumbnail,
+            clear_thumbnail_cache
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Material Eagle desktop application");
@@ -318,7 +420,8 @@ mod tests {
     use asset_index::{QueryParseError, QueryParseErrorKind};
 
     use super::{
-        LibraryScanEvent, QueryAssetsError, ScanCancellation, ScanCoordinator, build_info,
+        LibraryScanEvent, QueryAssetsError, ScanCancellation, ScanCoordinator,
+        ThumbnailCommandError, build_info,
     };
 
     #[test]
@@ -375,5 +478,16 @@ mod tests {
         assert_eq!(value["error"]["kind"], "unknown-filter");
         assert_eq!(value["error"]["offset"], 4);
         assert_eq!(value["error"]["token"], "kind:image");
+    }
+
+    #[test]
+    fn thumbnail_errors_use_a_structured_frontend_wire_shape() {
+        let value = serde_json::to_value(ThumbnailCommandError::AssetNotFound {
+            asset_key: "/assets/missing.png".into(),
+        })
+        .expect("serialize thumbnail error");
+
+        assert_eq!(value["kind"], "asset-not-found");
+        assert_eq!(value["assetKey"], "/assets/missing.png");
     }
 }

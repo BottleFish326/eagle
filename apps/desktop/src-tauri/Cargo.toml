@@ -17,6 +17,7 @@ asset-catalog = { path = "../../../crates/catalog" }
 asset-core = { path = "../../../crates/asset-core" }
 asset-filesystem = { path = "../../../crates/filesystem" }
 asset-index = { path = "../../../crates/index" }
+asset-preview = { path = "../../../crates/preview" }
 metadata = { path = "../../../crates/metadata" }
 serde.workspace = true
 tauri.workspace = true
