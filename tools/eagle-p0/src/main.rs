@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use asset_core::AssetKind;
 use asset_filesystem::{FsChangeKind, ScanOptions, WatchSession, scan_root};
-use asset_index::{AssetIndex, AssetQuery};
+use asset_index::{AssetIndex, AssetQuery, parse_query};
 use clap::{Parser, Subcommand, ValueEnum};
 use metadata::{
     AssetSidecar, ExpectedVersion, SidecarError, digest_file, read_sidecar, sidecar_path_for,
@@ -38,6 +38,10 @@ enum Command {
         kind: Option<KindArg>,
         #[arg(long)]
         favorite: Option<bool>,
+    },
+    Search {
+        root: PathBuf,
+        expression: String,
     },
     Tag {
         asset: PathBuf,
@@ -101,12 +105,21 @@ fn main() -> Result<()> {
             &root,
             &AssetQuery {
                 all_tags: all_tags.into_iter().collect(),
-                any_tags: any_tags.into_iter().collect(),
+                any_tag_groups: if any_tags.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![any_tags.into_iter().collect()]
+                },
                 excluded_tags: excluded_tags.into_iter().collect(),
-                kind: kind.map(Into::into),
+                kinds: kind.map(Into::into).into_iter().collect(),
                 favorite,
+                ..AssetQuery::default()
             },
         ),
+        Command::Search { root, expression } => {
+            let query = parse_query(&expression).context("invalid query expression")?;
+            run_query(&root, &query)
+        }
         Command::Tag {
             asset,
             tags,
@@ -235,11 +248,8 @@ fn run_benchmark(root: &std::path::Path, iterations: usize) -> Result<()> {
     let report = scan_root(root, &ScanOptions::default()).context("scan failed")?;
     let scan_elapsed = scan_started.elapsed();
     let index = AssetIndex::from_records(report.assets);
-    let query = AssetQuery {
-        all_tags: BTreeSet::from(["group/even".into()]),
-        excluded_tags: BTreeSet::from(["state/draft".into()]),
-        ..AssetQuery::default()
-    };
+    let query = parse_query("group/* any:(group/even|group/odd) -state/draft type:image ext:png")
+        .context("parse benchmark query")?;
     let query_matches = index.query(&query).len();
     let mut samples = Vec::with_capacity(iterations);
     for _ in 0..iterations {

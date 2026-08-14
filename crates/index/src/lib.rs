@@ -2,20 +2,16 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use asset_core::{AssetKind, AssetRecord};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AssetQuery {
-    pub all_tags: BTreeSet<String>,
-    pub any_tags: BTreeSet<String>,
-    pub excluded_tags: BTreeSet<String>,
-    pub kind: Option<AssetKind>,
-    pub favorite: Option<bool>,
-}
+mod query;
+
+pub use query::{AssetQuery, QueryParseError, QueryParseErrorKind, parse_query};
 
 #[derive(Debug, Default)]
 pub struct AssetIndex {
     records: HashMap<String, AssetRecord>,
     tags: HashMap<String, HashSet<String>>,
     kinds: HashMap<AssetKind, HashSet<String>>,
+    extensions: HashMap<String, HashSet<String>>,
     favorites: HashMap<bool, HashSet<String>>,
 }
 
@@ -68,9 +64,8 @@ impl AssetIndex {
             result.retain(|key| required.contains(key));
         }
 
-        if !query.any_tags.is_empty() {
-            let any_keys = query
-                .any_tags
+        for group in &query.any_tag_groups {
+            let any_keys = group
                 .iter()
                 .flat_map(|tag| self.keys_for_tag_expression(tag))
                 .collect::<HashSet<_>>();
@@ -82,9 +77,24 @@ impl AssetIndex {
             result.retain(|key| !excluded.contains(key));
         }
 
-        if let Some(kind) = query.kind {
-            let keys = self.kinds.get(&kind);
-            result.retain(|key| keys.is_some_and(|set| set.contains(key)));
+        if !query.kinds.is_empty() {
+            let kinds = query
+                .kinds
+                .iter()
+                .filter_map(|kind| self.kinds.get(kind))
+                .flatten()
+                .collect::<HashSet<_>>();
+            result.retain(|key| kinds.contains(key));
+        }
+
+        if !query.extensions.is_empty() {
+            let extensions = query
+                .extensions
+                .iter()
+                .filter_map(|extension| self.extensions.get(extension))
+                .flatten()
+                .collect::<HashSet<_>>();
+            result.retain(|key| extensions.contains(key));
         }
 
         if let Some(favorite) = query.favorite {
@@ -100,7 +110,7 @@ impl AssetIndex {
             let prefix = format!("{namespace}/");
             self.tags
                 .iter()
-                .filter(|(tag, _)| tag.as_str() == namespace || tag.starts_with(&prefix))
+                .filter(|(tag, _)| tag.starts_with(&prefix))
                 .flat_map(|(_, keys)| keys.iter().cloned())
                 .collect()
         } else {
@@ -119,6 +129,12 @@ impl AssetIndex {
             .entry(record.kind)
             .or_default()
             .insert(record.key.clone());
+        if let Some(extension) = &record.extension {
+            self.extensions
+                .entry(extension.to_ascii_lowercase())
+                .or_default()
+                .insert(record.key.clone());
+        }
         self.favorites
             .entry(record.favorite)
             .or_default()
@@ -130,6 +146,13 @@ impl AssetIndex {
             remove_key(&mut self.tags, tag, &record.key);
         }
         remove_key(&mut self.kinds, &record.kind, &record.key);
+        if let Some(extension) = &record.extension {
+            remove_key(
+                &mut self.extensions,
+                &extension.to_ascii_lowercase(),
+                &record.key,
+            );
+        }
         remove_key(&mut self.favorites, &record.favorite, &record.key);
     }
 }
@@ -153,13 +176,23 @@ mod tests {
 
     use asset_core::AssetRecord;
 
-    use super::{AssetIndex, AssetQuery};
+    use super::{AssetIndex, AssetQuery, parse_query};
 
     fn record(key: &str, tags: &[&str], favorite: bool) -> AssetRecord {
+        typed_record(key, "png", "image/png", tags, favorite)
+    }
+
+    fn typed_record(
+        key: &str,
+        extension: &str,
+        mime: &str,
+        tags: &[&str],
+        favorite: bool,
+    ) -> AssetRecord {
         let mut record = AssetRecord::untagged(
             key.into(),
-            PathBuf::from(format!("/{key}.png")),
-            "image/png".into(),
+            PathBuf::from(format!("/{key}.{extension}")),
+            mime.into(),
             1,
             0,
         );
@@ -172,20 +205,27 @@ mod tests {
     fn combines_all_any_excluded_and_namespace_tags() {
         let index = AssetIndex::from_records([
             record("a", &["ui/icon", "color/blue"], true),
-            record("b", &["ui/photo", "color/blue"], false),
-            record("c", &["ui/icon", "draft"], false),
+            typed_record("b", "jpg", "image/jpeg", &["ui/photo", "color/red"], false),
+            typed_record(
+                "c",
+                "mp4",
+                "video/mp4",
+                &["ui/icon", "color/blue", "draft"],
+                true,
+            ),
+            record("namespace-only", &["ui", "color/blue"], true),
         ]);
-        let query = AssetQuery {
-            all_tags: BTreeSet::from(["ui/*".into()]),
-            any_tags: BTreeSet::from(["color/blue".into(), "draft".into()]),
-            excluded_tags: BTreeSet::from(["draft".into()]),
-            kind: None,
-            favorite: None,
-        };
+        let query = parse_query(
+            "ui/* any:(color/blue|color/red) -draft type:image ext:png|jpg favorite:true",
+        )
+        .expect("parse query");
 
+        assert_eq!(index.query(&query), BTreeSet::from(["a".into()]));
+
+        let and_query = parse_query("ui/icon color/blue").expect("parse AND query");
         assert_eq!(
-            index.query(&query),
-            BTreeSet::from(["a".into(), "b".into()])
+            index.query(&and_query),
+            BTreeSet::from(["a".into(), "c".into()])
         );
     }
 
@@ -206,6 +246,40 @@ mod tests {
 
         assert!(index.query(&old).is_empty());
         assert_eq!(index.query(&new), BTreeSet::from(["a".into()]));
+    }
+
+    #[test]
+    fn upsert_replaces_extension_postings() {
+        let mut index =
+            AssetIndex::from_records([typed_record("a", "png", "image/png", &[], false)]);
+        index.upsert(typed_record("a", "jpg", "image/jpeg", &[], false));
+
+        assert!(
+            index
+                .query(&parse_query("ext:png").expect("PNG query"))
+                .is_empty()
+        );
+        assert_eq!(
+            index.query(&parse_query("ext:JPG").expect("JPEG query")),
+            BTreeSet::from(["a".into()])
+        );
+    }
+
+    #[test]
+    fn multiple_or_groups_are_combined_with_and() {
+        let index = AssetIndex::from_records([
+            record("a", &["color/blue", "usage/hero"], false),
+            record("b", &["color/red", "usage/card"], false),
+            record("c", &["color/blue", "usage/other"], false),
+            record("d", &["color/green", "usage/hero"], false),
+        ]);
+        let query = parse_query("any:(color/blue|color/red) any:(usage/hero|usage/card)")
+            .expect("parse OR groups");
+
+        assert_eq!(
+            index.query(&query),
+            BTreeSet::from(["a".into(), "b".into()])
+        );
     }
 
     #[test]

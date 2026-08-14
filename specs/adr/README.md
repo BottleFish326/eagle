@@ -24,3 +24,4 @@
 | [ADR-009](009-library-root-configuration.md) | 素材库根目录配置与授权状态 | Accepted |
 | [ADR-010](010-asset-record-and-scan-protocol.md) | 统一素材模型、字段优先级与增量扫描协议 | Accepted |
 | [ADR-011](011-sidecar-edit-and-catalog-consistency.md) | Sidecar 编辑、并发控制与目录一致性 | Accepted |
+| [ADR-012](012-query-language-and-index-semantics.md) | 查询语言与内存索引语义 | Accepted |

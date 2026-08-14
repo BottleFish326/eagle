@@ -142,6 +142,8 @@ name = "asset-index"
 version = "0.1.0"
 dependencies = [
  "asset-core",
+ "serde",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

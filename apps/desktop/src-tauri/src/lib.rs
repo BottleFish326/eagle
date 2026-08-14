@@ -2,12 +2,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use asset_catalog::{AssetCatalog, BatchMetadataEdit, BatchMetadataEditResult};
+use asset_catalog::{
+    AssetCatalog, BatchMetadataEdit, BatchMetadataEditResult, QueryAssetsInput, QueryAssetsResult,
+};
 use asset_filesystem::{
     AddLibraryRoot, LibraryRoot, LibraryRootManager, LibraryRootStatus, RootAccessStatus,
     ScanBatch, ScanCancellation, ScanOptions, ScanSummary, UpdateLibraryRoot,
     scan_root_incremental,
 };
+use asset_index::QueryParseError;
 use serde::Serialize;
 use tauri::{Manager, State, ipc::Channel};
 use uuid::Uuid;
@@ -47,6 +50,13 @@ enum LibraryScanEvent {
         scan_id: Uuid,
         message: String,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case", tag = "kind")]
+enum QueryAssetsError {
+    Parse { error: QueryParseError },
+    Internal { message: String },
 }
 
 #[derive(Default)]
@@ -256,6 +266,21 @@ fn edit_asset_metadata(
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn query_assets(
+    input: QueryAssetsInput,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+) -> Result<QueryAssetsResult, QueryAssetsError> {
+    catalog
+        .lock()
+        .map_err(|_| QueryAssetsError::Internal {
+            message: "asset catalog lock is poisoned".into(),
+        })?
+        .query_assets(&input)
+        .map_err(|error| QueryAssetsError::Parse { error })
+}
+
 /// Starts the desktop shell and blocks until its final window closes.
 ///
 /// # Panics
@@ -279,7 +304,8 @@ pub fn run() {
             remove_library_root,
             start_library_scan,
             cancel_library_scan,
-            edit_asset_metadata
+            edit_asset_metadata,
+            query_assets
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Material Eagle desktop application");
@@ -289,7 +315,11 @@ pub fn run() {
 mod tests {
     use uuid::Uuid;
 
-    use super::{LibraryScanEvent, ScanCancellation, ScanCoordinator, build_info};
+    use asset_index::{QueryParseError, QueryParseErrorKind};
+
+    use super::{
+        LibraryScanEvent, QueryAssetsError, ScanCancellation, ScanCoordinator, build_info,
+    };
 
     #[test]
     fn build_information_is_traceable() {
@@ -327,5 +357,23 @@ mod tests {
         assert_eq!(event["event"], "failed");
         assert_eq!(event["data"]["scanId"], scan_id.to_string());
         assert_eq!(event["data"]["message"], "invalid root");
+    }
+
+    #[test]
+    fn query_errors_use_a_structured_frontend_wire_shape() {
+        let value = serde_json::to_value(QueryAssetsError::Parse {
+            error: QueryParseError {
+                kind: QueryParseErrorKind::UnknownFilter,
+                offset: 4,
+                token: Some("kind:image".into()),
+                message: "unknown filter".into(),
+            },
+        })
+        .expect("serialize query error");
+
+        assert_eq!(value["kind"], "parse");
+        assert_eq!(value["error"]["kind"], "unknown-filter");
+        assert_eq!(value["error"]["offset"], 4);
+        assert_eq!(value["error"]["token"], "kind:image");
     }
 }

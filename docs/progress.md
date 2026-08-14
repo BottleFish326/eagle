@@ -7,7 +7,7 @@
 | 阶段 | 状态 | 说明 |
 |---|---|---|
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
-| 阶段 1：端到端 MVP | In progress | P1-01 至 P1-04 已完成本地验收，准备进入 P1-05 |
+| 阶段 1：端到端 MVP | In progress | P1-01 至 P1-05 已完成本地验收，准备进入 P1-06 |
 | 阶段 2：可靠性与恢复 | Not started | 等待阶段 1 退出 |
 | 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出 |
@@ -34,8 +34,9 @@
 | P1-02 素材库根目录管理 | Completed locally | 增删、停用、路径诊断、YAML 原子持久化和原文件保护测试通过；见 `reports/p1-02-acceptance.md` |
 | P1-03 正式扫描器与素材模型 | Completed locally | 四种图片格式、尺寸与 EXIF、增量批次、取消、错误隔离和 S 数据集测试通过；见 `reports/p1-03-acceptance.md` |
 | P1-04 Sidecar 元数据编辑 | Completed locally | 首次 Sidecar、全字段补丁、20 素材批量 Tag、冲突隔离和索引即时更新通过；见 `reports/p1-04-acceptance.md` |
-| P1-05 Tag 查询引擎 | Ready | 下一开发项 |
-| P1-06 至 P1-09 | Not started | 按开发计划顺序推进 |
+| P1-05 Tag 查询引擎 | Completed locally | 默认 AND、同组 OR、排除、命名空间、类型/扩展名/收藏过滤和结构化解析错误通过；L 数据集查询 p95 53.691 ms；见 `reports/p1-05-acceptance.md` |
+| P1-06 缩略图管线 | Ready | 下一开发项 |
+| P1-07 至 P1-09 | Not started | 按开发计划顺序推进 |
 
 > 当前仓库未配置 Git 远程地址，因此 GitHub Actions 的首次托管运行仍待远程仓库建立后确认；工作流所执行的同一组命令已在本机通过。
 
@@ -50,14 +51,17 @@
 - Vault 内使用标准 Obsidian 引用，Vault 外使用 `material://<uuid>`；
 - 默认不跟随符号链接，外部渲染只能访问显式授权根；
 - Sidecar 编辑按 SHA-256 执行乐观并发控制，成功持久化后才更新内存索引。
+- 查询文本先完整解析再执行，解析错误不得转换为零结果；查询索引保持可删除、可重建。
 
 ## 当前性能证据
 
 - [阶段 0 性能报告](reports/phase-0-performance.md)
 - [阶段 0 验收报告](reports/phase-0-acceptance.md)
+- [P1-05 查询引擎验收报告](reports/p1-05-acceptance.md)
 - [平台差异记录](../specs/platform-notes.md)
 - 参考环境：Apple M4、16 GiB、APFS SSD、macOS 26.5.2；
 - L 数据集：100,000 个素材、20,000 个 sidecar；
 - 完整扫描：1.454 秒；
 - 查询 p95：19.082 毫秒；
 - 峰值常驻内存：202,473,472 字节，约 193 MiB。
+- P1-05 正式复合查询（L 数据集、200 次）p95：53.691 毫秒。

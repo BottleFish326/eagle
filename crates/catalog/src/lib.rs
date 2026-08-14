@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use asset_core::{AssetIssue, AssetRecord, SidecarState};
-use asset_index::{AssetIndex, AssetQuery};
+use asset_index::{AssetIndex, AssetQuery, QueryParseError, parse_query};
 use metadata::{MetadataPatch, SidecarError, edit_asset_metadata};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -44,6 +44,21 @@ pub struct BatchMetadataEditResult {
     pub failures: Vec<MetadataEditFailure>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryAssetsInput {
+    pub expression: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryAssetsResult {
+    pub expression: String,
+    pub query: AssetQuery,
+    pub keys: Vec<String>,
+    pub total_assets: usize,
+}
+
 #[derive(Debug, Error)]
 pub enum CatalogError {
     #[error("metadata edit requires at least one target")]
@@ -70,6 +85,26 @@ impl AssetCatalog {
     #[must_use]
     pub fn query(&self, query: &AssetQuery) -> BTreeSet<String> {
         self.index.query(query)
+    }
+
+    /// Parses and executes a user-facing filter expression against the in-memory index.
+    ///
+    /// # Errors
+    ///
+    /// Returns a structured [`QueryParseError`] instead of treating malformed syntax
+    /// as an empty result.
+    pub fn query_assets(
+        &self,
+        input: &QueryAssetsInput,
+    ) -> Result<QueryAssetsResult, QueryParseError> {
+        let query = parse_query(&input.expression)?;
+        let keys = self.index.query(&query).into_iter().collect();
+        Ok(QueryAssetsResult {
+            expression: input.expression.clone(),
+            query,
+            keys,
+            total_assets: self.index.len(),
+        })
     }
 
     /// Applies the same metadata patch to one or more assets and updates index postings
@@ -183,12 +218,60 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use asset_core::AssetRecord;
-    use asset_index::AssetQuery;
+    use asset_core::{AssetKind, AssetRecord};
+    use asset_index::{AssetQuery, QueryParseErrorKind};
     use metadata::{MetadataPatch, digest_file};
     use tempfile::tempdir;
 
-    use super::{AssetCatalog, AssetEditTarget, BatchMetadataEdit, EditFailureKind};
+    use super::{
+        AssetCatalog, AssetEditTarget, BatchMetadataEdit, EditFailureKind, QueryAssetsInput,
+    };
+
+    #[test]
+    fn parsed_query_returns_deterministic_keys_and_visible_errors() {
+        let mut first = record("first", PathBuf::from("/assets/first.PNG"));
+        first.tags = BTreeSet::from(["ui/icon".into(), "color/blue".into()]);
+        first.favorite = true;
+        let mut second = record("second", PathBuf::from("/assets/second.jpg"));
+        second.tags = BTreeSet::from(["ui/photo".into(), "color/red".into()]);
+        let mut draft = record("draft", PathBuf::from("/assets/draft.mp4"));
+        draft.mime = "video/mp4".into();
+        draft.kind = AssetKind::Video;
+        draft.tags = BTreeSet::from(["ui/icon".into(), "color/blue".into(), "draft".into()]);
+        draft.favorite = true;
+        let mut catalog = AssetCatalog::default();
+        catalog.ingest([first, second, draft]);
+
+        let result = catalog
+            .query_assets(&QueryAssetsInput {
+                expression:
+                    "ui/* any:(color/blue|color/red) -draft type:image ext:png|jpg favorite:true"
+                        .into(),
+            })
+            .expect("query assets");
+
+        assert_eq!(result.keys, vec!["first"]);
+        assert_eq!(result.total_assets, 3);
+        assert_eq!(
+            result.query.extensions,
+            BTreeSet::from(["jpg".into(), "png".into()])
+        );
+
+        let all = catalog
+            .query_assets(&QueryAssetsInput {
+                expression: String::new(),
+            })
+            .expect("empty query");
+        assert_eq!(all.keys, vec!["draft", "first", "second"]);
+
+        let error = catalog
+            .query_assets(&QueryAssetsInput {
+                expression: "kind:image".into(),
+            })
+            .expect_err("unknown filters are visible");
+        assert_eq!(error.kind, QueryParseErrorKind::UnknownFilter);
+        assert_eq!(error.offset, 0);
+    }
 
     #[test]
     fn batch_edit_creates_sidecars_and_updates_tag_index_immediately() {
