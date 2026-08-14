@@ -12,6 +12,14 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use walkdir::WalkDir;
 
+mod library;
+
+pub use library::{
+    AddLibraryRoot, LibraryConfig, LibraryRoot, LibraryRootError, LibraryRootManager,
+    LibraryRootStatus, RootAccessStatus, RootOverlapKind, RootScanSettings, UpdateLibraryRoot,
+    inspect_root_access,
+};
+
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
     pub recursive: bool,

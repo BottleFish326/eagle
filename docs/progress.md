@@ -7,7 +7,7 @@
 | 阶段 | 状态 | 说明 |
 |---|---|---|
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
-| 阶段 1：端到端 MVP | In progress | P1-01 已完成本地验收，准备进入 P1-02 |
+| 阶段 1：端到端 MVP | In progress | P1-01、P1-02 已完成本地验收，准备进入 P1-03 |
 | 阶段 2：可靠性与恢复 | Not started | 等待阶段 1 退出 |
 | 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出 |
@@ -31,8 +31,9 @@
 | 工作项 | 状态 | 证据 |
 |---|---|---|
 | P1-01 项目骨架与持续集成 | Completed locally | 桌面端 Release 构建、质量门禁和 S 数据集测试通过；见 `reports/p1-01-acceptance.md` |
-| P1-02 素材库根目录管理 | Ready | 下一开发项 |
-| P1-03 至 P1-09 | Not started | 按开发计划顺序推进 |
+| P1-02 素材库根目录管理 | Completed locally | 增删、停用、路径诊断、YAML 原子持久化和原文件保护测试通过；见 `reports/p1-02-acceptance.md` |
+| P1-03 正式扫描器与素材模型 | Ready | 下一开发项 |
+| P1-04 至 P1-09 | Not started | 按开发计划顺序推进 |
 
 > 当前仓库未配置 Git 远程地址，因此 GitHub Actions 的首次托管运行仍待远程仓库建立后确认；工作流所执行的同一组命令已在本机通过。
 

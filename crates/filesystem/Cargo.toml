@@ -12,7 +12,10 @@ infer.workspace = true
 notify.workspace = true
 rayon.workspace = true
 serde.workspace = true
+serde_yaml_ng.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
+uuid.workspace = true
 walkdir.workspace = true
 
 [dev-dependencies]

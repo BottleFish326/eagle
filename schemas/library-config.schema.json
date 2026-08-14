@@ -1,44 +1,67 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://eagle.local/schemas/library-config.schema.json",
-  "title": "Material library root configuration",
+  "title": "Material library configuration",
   "type": "object",
-  "required": ["schema", "id", "name", "scan"],
+  "required": ["schema", "roots"],
   "properties": {
     "schema": {
       "const": 1
     },
-    "id": {
-      "type": "string",
-      "format": "uuid"
-    },
-    "name": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 128
-    },
-    "scan": {
+    "roots": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/libraryRoot"
+      }
+    }
+  },
+  "$defs": {
+    "libraryRoot": {
       "type": "object",
-      "required": ["recursive", "followSymlinks", "ignore"],
+      "required": ["id", "path", "name", "enabled", "scan"],
       "properties": {
-        "recursive": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "enabled": {
           "type": "boolean",
           "default": true
         },
-        "followSymlinks": {
-          "const": false
-        },
-        "ignore": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
+        "scan": {
+          "type": "object",
+          "required": ["recursive", "followSymlinks", "ignore"],
+          "properties": {
+            "recursive": {
+              "type": "boolean",
+              "default": true
+            },
+            "followSymlinks": {
+              "const": false
+            },
+            "ignore": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true,
+              "default": []
+            }
           },
-          "uniqueItems": true,
-          "default": []
+          "additionalProperties": false
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

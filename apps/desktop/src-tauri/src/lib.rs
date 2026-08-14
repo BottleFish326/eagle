@@ -1,4 +1,11 @@
+use std::sync::Mutex;
+
+use asset_filesystem::{
+    AddLibraryRoot, LibraryRoot, LibraryRootManager, LibraryRootStatus, UpdateLibraryRoot,
+};
 use serde::Serialize;
+use tauri::{Manager, State};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +28,56 @@ const fn build_info() -> BuildInfo {
     }
 }
 
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn list_library_roots(
+    state: State<'_, Mutex<LibraryRootManager>>,
+) -> Result<Vec<LibraryRootStatus>, String> {
+    let manager = state
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?;
+    Ok(manager.roots())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn add_library_root(
+    input: AddLibraryRoot,
+    state: State<'_, Mutex<LibraryRootManager>>,
+) -> Result<LibraryRootStatus, String> {
+    state
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .add_root(input)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn update_library_root(
+    input: UpdateLibraryRoot,
+    state: State<'_, Mutex<LibraryRootManager>>,
+) -> Result<LibraryRootStatus, String> {
+    state
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .update_root(input)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn remove_library_root(
+    id: Uuid,
+    state: State<'_, Mutex<LibraryRootManager>>,
+) -> Result<LibraryRoot, String> {
+    state
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .remove_root(id)
+        .map_err(|error| error.to_string())
+}
+
 /// Starts the desktop shell and blocks until its final window closes.
 ///
 /// # Panics
@@ -28,7 +85,19 @@ const fn build_info() -> BuildInfo {
 /// Panics when Tauri cannot initialize or run the application event loop.
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![build_info])
+        .setup(|app| {
+            let config_path = app.path().app_config_dir()?.join("library-roots.yml");
+            let roots = LibraryRootManager::open(config_path)?;
+            app.manage(Mutex::new(roots));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            build_info,
+            list_library_roots,
+            add_library_root,
+            update_library_root,
+            remove_library_root
+        ])
         .run(tauri::generate_context!())
         .expect("failed to run Material Eagle desktop application");
 }

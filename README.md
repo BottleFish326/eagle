@@ -4,12 +4,13 @@
 
 ## 当前状态
 
-阶段 0 已通过全部技术与 Obsidian 实机验收。阶段 1 已启动，P1-01 工程骨架与持续集成已完成本地验收。开发阶段、交付物和验收规范见：
+阶段 0 已通过全部技术与 Obsidian 实机验收。阶段 1 已启动，P1-01 工程骨架和 P1-02 素材库根目录管理已完成本地验收。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
 - [阶段 0 验收报告](docs/reports/phase-0-acceptance.md)
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
+- [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
 - [架构决策记录](specs/adr/README.md)
 
 ## 核心原则

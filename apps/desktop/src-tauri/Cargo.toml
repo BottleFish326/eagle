@@ -19,6 +19,7 @@ asset-index = { path = "../../../crates/index" }
 metadata = { path = "../../../crates/metadata" }
 serde.workspace = true
 tauri.workspace = true
+uuid.workspace = true
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
