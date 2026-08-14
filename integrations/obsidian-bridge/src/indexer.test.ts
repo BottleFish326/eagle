@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -8,8 +8,9 @@ import { buildAssetIndex } from './indexer';
 
 const ID = '0198a7c2-8341-7a31-b842-f15d39f33c18';
 
-test('indexes an adjacent sidecar inside an authorized root', async () => {
+test('indexes an adjacent sidecar inside an authorized root', async (context) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'material-bridge-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
   const asset = path.join(root, 'logo.png');
   await writeFile(asset, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   await writeFile(`${asset}.asset.yml`, sidecar(ID));
@@ -19,8 +20,9 @@ test('indexes an adjacent sidecar inside an authorized root', async () => {
   assert.equal(result.assets.get(ID)?.assetPath, await realpath(asset));
 });
 
-test('isolates malformed sidecars', async () => {
+test('isolates malformed sidecars', async (context) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'material-bridge-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
   const asset = path.join(root, 'broken.png');
   await writeFile(asset, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   await writeFile(`${asset}.asset.yml`, 'schema: [broken\n');
@@ -37,6 +39,10 @@ test('rejects a symlink that escapes an authorized root', async (context) => {
   }
   const root = await mkdtemp(path.join(os.tmpdir(), 'material-root-'));
   const outside = await mkdtemp(path.join(os.tmpdir(), 'material-outside-'));
+  context.after(() => Promise.all([
+    rm(root, { recursive: true, force: true }),
+    rm(outside, { recursive: true, force: true }),
+  ]));
   const outsideAsset = path.join(outside, 'secret.png');
   const linkedAsset = path.join(root, 'linked.png');
   await writeFile(outsideAsset, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
@@ -55,6 +61,10 @@ test('skips symlinked directories', async (context) => {
   }
   const root = await mkdtemp(path.join(os.tmpdir(), 'material-root-'));
   const outside = await mkdtemp(path.join(os.tmpdir(), 'material-outside-'));
+  context.after(() => Promise.all([
+    rm(root, { recursive: true, force: true }),
+    rm(outside, { recursive: true, force: true }),
+  ]));
   await mkdir(path.join(outside, 'nested'));
   const asset = path.join(outside, 'nested', 'secret.png');
   await writeFile(asset, Buffer.from([0x89, 0x50, 0x4e, 0x47]));

@@ -4,11 +4,11 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use asset_core::AssetKind;
-use asset_filesystem::{ScanOptions, WatchSession, scan_root};
+use asset_filesystem::{FsChangeKind, ScanOptions, WatchSession, scan_root};
 use asset_index::{AssetIndex, AssetQuery};
 use clap::{Parser, Subcommand, ValueEnum};
 use metadata::{
-    AssetSidecar, ExpectedVersion, digest_file, read_sidecar, sidecar_path_for,
+    AssetSidecar, ExpectedVersion, SidecarError, digest_file, read_sidecar, sidecar_path_for,
     write_sidecar_atomic,
 };
 
@@ -43,11 +43,15 @@ enum Command {
         asset: PathBuf,
         #[arg(long = "tag", required = true)]
         tags: Vec<String>,
+        #[arg(long, value_enum, default_value = "abort")]
+        on_conflict: ConflictAction,
     },
     Watch {
         root: PathBuf,
         #[arg(long, default_value_t = 10)]
         seconds: u64,
+        #[arg(long)]
+        summary: bool,
     },
     Benchmark {
         root: PathBuf,
@@ -62,6 +66,13 @@ enum KindArg {
     Video,
     Audio,
     Pdf,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum ConflictAction {
+    Abort,
+    Reload,
+    Merge,
 }
 
 impl From<KindArg> for AssetKind {
@@ -96,8 +107,16 @@ fn main() -> Result<()> {
                 favorite,
             },
         ),
-        Command::Tag { asset, tags } => run_tag(&asset, tags),
-        Command::Watch { root, seconds } => run_watch(&root, seconds),
+        Command::Tag {
+            asset,
+            tags,
+            on_conflict,
+        } => run_tag(&asset, tags, on_conflict),
+        Command::Watch {
+            root,
+            seconds,
+            summary,
+        } => run_watch(&root, seconds, summary),
         Command::Benchmark { root, iterations } => run_benchmark(&root, iterations),
     }
 }
@@ -127,7 +146,7 @@ fn run_query(root: &std::path::Path, query: &AssetQuery) -> Result<()> {
     Ok(())
 }
 
-fn run_tag(asset: &std::path::Path, tags: Vec<String>) -> Result<()> {
+fn run_tag(asset: &std::path::Path, tags: Vec<String>, on_conflict: ConflictAction) -> Result<()> {
     if !asset.is_file() {
         bail!("asset is not a readable file: {}", asset.display());
     }
@@ -139,31 +158,72 @@ fn run_tag(asset: &std::path::Path, tags: Vec<String>) -> Result<()> {
     } else {
         (AssetSidecar::new(), ExpectedVersion::Missing)
     };
-    sidecar.tags.extend(tags);
+    let requested_tags = tags.into_iter().collect::<BTreeSet<_>>();
+    sidecar.tags.extend(requested_tags.iter().cloned());
     sidecar.touch();
-    let receipt = write_sidecar_atomic(&sidecar_path, &sidecar, &expected)
-        .context("write sidecar atomically")?;
+    let receipt = match write_sidecar_atomic(&sidecar_path, &sidecar, &expected) {
+        Ok(receipt) => Some(receipt),
+        Err(error @ SidecarError::Conflict { .. }) => match on_conflict {
+            ConflictAction::Abort => return Err(error).context("write sidecar atomically"),
+            ConflictAction::Reload => {
+                let (latest, digest) =
+                    read_sidecar(&sidecar_path).context("reload conflicting sidecar")?;
+                println!("conflict: reloaded sidecar digest {digest}");
+                println!("current tags: {}", serde_json::to_string(&latest.tags)?);
+                None
+            }
+            ConflictAction::Merge => {
+                let (mut latest, digest) =
+                    read_sidecar(&sidecar_path).context("reload sidecar before merge")?;
+                latest.tags.extend(requested_tags);
+                latest.touch();
+                Some(
+                    write_sidecar_atomic(&sidecar_path, &latest, &ExpectedVersion::Digest(digest))
+                        .context("merge sidecar after conflict")?,
+                )
+            }
+        },
+        Err(error) => return Err(error).context("write sidecar atomically"),
+    };
     let asset_digest_after = digest_file(asset).context("hash asset after write")?;
     if asset_digest_before != asset_digest_after {
         bail!("asset content changed while writing metadata");
     }
-    println!("sidecar: {}", receipt.path.display());
-    println!("sidecar digest: {}", receipt.digest);
+    if let Some(receipt) = receipt {
+        println!("sidecar: {}", receipt.path.display());
+        println!("sidecar digest: {}", receipt.digest);
+    }
     println!("asset digest unchanged: {asset_digest_after}");
     Ok(())
 }
 
-fn run_watch(root: &std::path::Path, seconds: u64) -> Result<()> {
+fn run_watch(root: &std::path::Path, seconds: u64, summary: bool) -> Result<()> {
     let session = WatchSession::start(root).context("start watcher")?;
     let deadline = Instant::now() + Duration::from_secs(seconds);
+    let mut counts = [0_u64; 5];
     while Instant::now() < deadline {
         if let Some(change) = session
             .next_timeout(Duration::from_millis(250))
             .context("watch event")?
         {
-            println!("{}", serde_json::to_string(&change)?);
+            counts[match change.kind {
+                FsChangeKind::Create => 0,
+                FsChangeKind::Modify => 1,
+                FsChangeKind::Move => 2,
+                FsChangeKind::Delete => 3,
+                FsChangeKind::RescanRequired => 4,
+            }] += 1;
+            if !summary {
+                println!("{}", serde_json::to_string(&change)?);
+            }
         }
     }
+    println!("events_total: {}", counts.iter().sum::<u64>());
+    println!("events_create: {}", counts[0]);
+    println!("events_modify: {}", counts[1]);
+    println!("events_move: {}", counts[2]);
+    println!("events_delete: {}", counts[3]);
+    println!("events_rescan_required: {}", counts[4]);
     Ok(())
 }
 
@@ -180,6 +240,7 @@ fn run_benchmark(root: &std::path::Path, iterations: usize) -> Result<()> {
         excluded_tags: BTreeSet::from(["state/draft".into()]),
         ..AssetQuery::default()
     };
+    let query_matches = index.query(&query).len();
     let mut samples = Vec::with_capacity(iterations);
     for _ in 0..iterations {
         let started = Instant::now();
@@ -193,6 +254,7 @@ fn run_benchmark(root: &std::path::Path, iterations: usize) -> Result<()> {
     println!("assets: {}", index.len());
     println!("scan_ms: {}", scan_elapsed.as_millis());
     println!("query_iterations: {iterations}");
+    println!("query_matches: {query_matches}");
     println!("query_p50_us: {}", p50.as_micros());
     println!("query_p95_us: {}", p95.as_micros());
     Ok(())

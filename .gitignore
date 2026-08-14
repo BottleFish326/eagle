@@ -25,6 +25,7 @@ node_modules/
 dist/
 build/
 integrations/obsidian-bridge/main.js
+tests/runtime/
 coverage/
 .turbo/
 .vite/

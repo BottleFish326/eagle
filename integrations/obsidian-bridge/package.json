@@ -4,6 +4,9 @@
   "description": "Obsidian desktop bridge for filesystem material assets",
   "main": "main.js",
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
     "check": "tsc --noEmit --skipLibCheck",

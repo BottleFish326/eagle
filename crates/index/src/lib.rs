@@ -207,4 +207,35 @@ mod tests {
         assert!(index.query(&old).is_empty());
         assert_eq!(index.query(&new), BTreeSet::from(["a".into()]));
     }
+
+    #[test]
+    fn large_query_matches_an_independent_linear_filter() {
+        let records = (0..10_000)
+            .map(|index| {
+                let mut tags = Vec::new();
+                if index % 2 == 0 {
+                    tags.push("group/even");
+                }
+                if index % 11 == 0 {
+                    tags.push("state/draft");
+                }
+                record(&index.to_string(), &tags, index % 13 == 0)
+            })
+            .collect::<Vec<_>>();
+        let expected = records
+            .iter()
+            .filter(|record| {
+                record.tags.contains("group/even") && !record.tags.contains("state/draft")
+            })
+            .map(|record| record.key.clone())
+            .collect::<BTreeSet<_>>();
+        let index = AssetIndex::from_records(records);
+        let query = AssetQuery {
+            all_tags: BTreeSet::from(["group/even".into()]),
+            excluded_tags: BTreeSet::from(["state/draft".into()]),
+            ..AssetQuery::default()
+        };
+
+        assert_eq!(index.query(&query), expected);
+    }
 }

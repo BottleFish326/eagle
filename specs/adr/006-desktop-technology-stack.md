@@ -15,8 +15,9 @@
 4. JavaScript 包管理器使用 npm，避免阶段 0 增加额外全局工具依赖。
 5. Obsidian 插件使用 TypeScript 和 esbuild。
 6. Rust 版本通过仓库内 `rust-toolchain.toml` 固定到稳定通道并包含 rustfmt、clippy。
-7. 阶段 0 的核心原型首先作为 Rust workspace 和 CLI 实现；阶段 1 再接入 Tauri UI。
-8. 核心逻辑不得依赖 Tauri API，保证命令行、测试和未来其他前端可复用。
+7. Node.js 使用 24 LTS，并通过仓库根目录 `.nvmrc` 和 npm `engines` 声明固定主版本。
+8. 阶段 0 的核心原型首先作为 Rust workspace 和 CLI 实现；阶段 1 再接入 Tauri UI。
+9. 核心逻辑不得依赖 Tauri API，保证命令行、测试和未来其他前端可复用。
 
 ## 后果
 
@@ -30,3 +31,4 @@
 - [Tauri 2 前置条件](https://v2.tauri.app/start/prerequisites/)
 - [Tauri 2 安全模型](https://v2.tauri.app/security/)
 - [Rust 官方安装方式](https://www.rust-lang.org/tools/install)
+- [Node.js 官方发布状态](https://nodejs.org/en/about/previous-releases)

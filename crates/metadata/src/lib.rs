@@ -182,6 +182,7 @@ pub fn write_sidecar_atomic(
     sidecar: &AssetSidecar,
     expected: &ExpectedVersion,
 ) -> Result<WriteReceipt, SidecarError> {
+    inject_fault("before-temp");
     sidecar.validate()?;
     verify_expected_version(path, expected)?;
 
@@ -202,11 +203,13 @@ pub fn write_sidecar_atomic(
             source,
         })?;
 
+    inject_fault("after-temp-sync");
     verify_expected_version(path, expected)?;
     temp.persist(path).map_err(|error| SidecarError::Persist {
         path: path.to_path_buf(),
         source: error.error,
     })?;
+    inject_fault("after-persist");
     sync_parent(parent)?;
 
     Ok(WriteReceipt {
@@ -260,6 +263,7 @@ fn verify_expected_version(path: &Path, expected: &ExpectedVersion) -> Result<()
     }
 }
 
+#[cfg(unix)]
 fn sync_parent(parent: &Path) -> Result<(), SidecarError> {
     let directory = File::open(parent).map_err(|source| SidecarError::Io {
         path: parent.to_path_buf(),
@@ -271,6 +275,13 @@ fn sync_parent(parent: &Path) -> Result<(), SidecarError> {
     })
 }
 
+#[cfg(not(unix))]
+fn sync_parent(_parent: &Path) -> Result<(), SidecarError> {
+    // Rust's standard File API cannot portably open a directory for fsync on Windows.
+    // The file itself has already been flushed before atomic replacement.
+    Ok(())
+}
+
 fn digest_bytes(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
@@ -280,6 +291,16 @@ fn digest_bytes(bytes: &[u8]) -> String {
 fn now_rfc3339() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
+
+#[cfg(feature = "fault-injection")]
+fn inject_fault(point: &str) {
+    if std::env::var("EAGLE_SIDECAR_FAULT_POINT").as_deref() == Ok(point) {
+        std::process::abort();
+    }
+}
+
+#[cfg(not(feature = "fault-injection"))]
+const fn inject_fault(_point: &str) {}
 
 #[cfg(test)]
 mod tests {

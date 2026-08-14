@@ -6,6 +6,7 @@ members = [
   "crates/metadata",
   "tools/eagle-p0",
   "tools/fixture-generator",
+  "tools/sidecar-fault",
 ]
 resolver = "3"
 

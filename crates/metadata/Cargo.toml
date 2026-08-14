@@ -5,6 +5,9 @@ license.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[features]
+fault-injection = []
+
 [dependencies]
 chrono.workspace = true
 serde.workspace = true

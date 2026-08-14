@@ -1,0 +1,14 @@
+[package]
+name = "sidecar-fault"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+metadata = { path = "../../crates/metadata", features = ["fault-injection"] }
+
+[lints]
+workspace = true
