@@ -12,6 +12,10 @@ use tempfile::NamedTempFile;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod edit;
+
+pub use edit::{MetadataEdit, MetadataPatch, edit_asset_metadata};
+
 pub const SIDECAR_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,7 +77,7 @@ impl AssetSidecar {
     ///
     /// # Errors
     ///
-    /// Returns [`SidecarError`] when the schema, rating, tags, or timestamp are invalid.
+    /// Returns [`SidecarError`] when the schema, user metadata, or timestamp are invalid.
     pub fn validate(&self) -> Result<(), SidecarError> {
         if self.schema != SIDECAR_SCHEMA_VERSION {
             return Err(SidecarError::UnsupportedSchema(self.schema));
@@ -83,6 +87,18 @@ impl AssetSidecar {
         }
         if self.tags.iter().any(|tag| tag.trim().is_empty()) {
             return Err(SidecarError::EmptyTag);
+        }
+        if self.tags.iter().any(|tag| tag.chars().count() > 128) {
+            return Err(SidecarError::TagTooLong);
+        }
+        if self.aliases.iter().any(|alias| alias.trim().is_empty()) {
+            return Err(SidecarError::EmptyAlias);
+        }
+        if self.aliases.iter().any(|alias| alias.chars().count() > 256) {
+            return Err(SidecarError::AliasTooLong);
+        }
+        if self.note.chars().count() > 10_000 {
+            return Err(SidecarError::NoteTooLong);
         }
         DateTime::parse_from_rfc3339(&self.updated_at)
             .map_err(|_| SidecarError::InvalidUpdatedAt(self.updated_at.clone()))?;
@@ -131,6 +147,22 @@ pub enum SidecarError {
     InvalidRating(u8),
     #[error("tags cannot contain an empty value")]
     EmptyTag,
+    #[error("tags cannot exceed 128 characters")]
+    TagTooLong,
+    #[error("aliases cannot contain an empty value")]
+    EmptyAlias,
+    #[error("aliases cannot exceed 256 characters")]
+    AliasTooLong,
+    #[error("note cannot exceed 10000 characters")]
+    NoteTooLong,
+    #[error("asset does not exist or is not a file: {0}")]
+    InvalidAsset(PathBuf),
+    #[error("metadata edit must change at least one field")]
+    EmptyEdit,
+    #[error("setTags cannot be combined with addTags or removeTags")]
+    AmbiguousTagEdit,
+    #[error("the same tag cannot be both added and removed: {0}")]
+    ConflictingTagEdit(String),
     #[error("updatedAt is not RFC 3339: {0}")]
     InvalidUpdatedAt(String),
     #[error("sidecar changed since it was read: {path}")]

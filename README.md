@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段 0 已通过全部技术与 Obsidian 实机验收。阶段 1 已启动，P1-01 至 P1-03 已完成本地验收，当前具备工程骨架、素材根管理和可取消增量扫描能力。开发阶段、交付物和验收规范见：
+阶段 0 已通过全部技术与 Obsidian 实机验收。阶段 1 已启动，P1-01 至 P1-04 已完成本地验收，当前具备工程骨架、素材根管理、可取消增量扫描，以及具备并发保护的 Sidecar 批量编辑与内存索引即时更新能力。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
@@ -12,6 +12,7 @@
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
 - [P1-03 验收报告](docs/reports/p1-03-acceptance.md)
+- [P1-04 验收报告](docs/reports/p1-04-acceptance.md)
 - [架构决策记录](specs/adr/README.md)
 
 ## 核心原则

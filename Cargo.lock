@@ -98,6 +98,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "asset-catalog"
+version = "0.1.0"
+dependencies = [
+ "asset-core",
+ "asset-index",
+ "metadata",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "asset-core"
 version = "0.1.0"
 dependencies = [
@@ -1967,6 +1979,7 @@ dependencies = [
 name = "material-eagle-desktop"
 version = "0.1.0"
 dependencies = [
+ "asset-catalog",
  "asset-core",
  "asset-filesystem",
  "asset-index",

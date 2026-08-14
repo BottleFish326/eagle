@@ -1,0 +1,19 @@
+[package]
+name = "asset-catalog"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+asset-core = { path = "../asset-core" }
+asset-index = { path = "../index" }
+metadata = { path = "../metadata" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

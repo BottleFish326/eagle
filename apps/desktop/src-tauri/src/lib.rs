@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use asset_catalog::{AssetCatalog, BatchMetadataEdit, BatchMetadataEditResult};
 use asset_filesystem::{
     AddLibraryRoot, LibraryRoot, LibraryRootManager, LibraryRootStatus, RootAccessStatus,
     ScanBatch, ScanCancellation, ScanOptions, ScanSummary, UpdateLibraryRoot,
@@ -148,6 +149,7 @@ fn start_library_scan(
     on_event: Channel<LibraryScanEvent>,
     roots: State<'_, Mutex<LibraryRootManager>>,
     scans: State<'_, Arc<ScanCoordinator>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
 ) -> Result<Uuid, String> {
     let root_status = roots
         .lock()
@@ -171,6 +173,7 @@ fn start_library_scan(
     let cancellation = ScanCancellation::new();
     scans.register(scan_id, cancellation.clone())?;
     let coordinator = Arc::clone(scans.inner());
+    let catalog = Arc::clone(catalog.inner());
     let root = root_status.root;
     let thread_name = format!("library-scan-{}", &scan_id.to_string()[..8]);
     let spawn_result = std::thread::Builder::new()
@@ -198,6 +201,11 @@ fn start_library_scan(
                 &options,
                 &cancellation,
                 |batch| {
+                    if let Ok(mut catalog) = catalog.lock() {
+                        catalog.ingest(batch.assets.iter().cloned());
+                    } else {
+                        cancellation.cancel();
+                    }
                     if on_event
                         .send(LibraryScanEvent::Batch { scan_id, batch })
                         .is_err()
@@ -235,6 +243,19 @@ fn cancel_library_scan(
     scans.cancel(scan_id)
 }
 
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn edit_asset_metadata(
+    input: BatchMetadataEdit,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+) -> Result<BatchMetadataEditResult, String> {
+    catalog
+        .lock()
+        .map_err(|_| "asset catalog lock is poisoned".to_owned())?
+        .edit_metadata(&input)
+        .map_err(|error| error.to_string())
+}
+
 /// Starts the desktop shell and blocks until its final window closes.
 ///
 /// # Panics
@@ -247,6 +268,7 @@ pub fn run() {
             let roots = LibraryRootManager::open(config_path)?;
             app.manage(Mutex::new(roots));
             app.manage(Arc::new(ScanCoordinator::default()));
+            app.manage(Arc::new(Mutex::new(AssetCatalog::default())));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -256,7 +278,8 @@ pub fn run() {
             update_library_root,
             remove_library_root,
             start_library_scan,
-            cancel_library_scan
+            cancel_library_scan,
+            edit_asset_metadata
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Material Eagle desktop application");
