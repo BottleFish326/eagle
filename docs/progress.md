@@ -6,8 +6,8 @@
 
 | 阶段 | 状态 | 说明 |
 |---|---|---|
-| 阶段 0：技术验证与架构定案 | In progress | 核心原型和故障注入已完成，Obsidian 实机验收待完成 |
-| 阶段 1：端到端 MVP | Not started | 等待阶段 0 退出 |
+| 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
+| 阶段 1：端到端 MVP | Ready | 阶段 0 已退出，可以开始 P1-01 |
 | 阶段 2：可靠性与恢复 | Not started | 等待阶段 1 退出 |
 | 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出 |
@@ -23,8 +23,8 @@
 | P0-04 内存索引与查询原型 | Completed | 100,000 素材查询 p95 19.082 ms |
 | P0-05 Sidecar 写入与冲突原型 | Completed | 三个进程崩溃点保持完整，CLI 提供 abort/reload/merge 冲突策略 |
 | P0-06 文件监听原型 | Completed | 创建/移动/删除风暴产生 68,362 个事件，最终扫描准确收敛到 5,000 个素材 |
-| P0-07 Obsidian 联动原型 | Implemented | Node 24 LTS 下类型检查、8 项自动化测试和构建通过；测试 Vault 实机渲染待授权 |
-| 阶段 0 验收报告 | Draft | P0-A06/P0-A07 实机渲染因 Obsidian CLI 未启用而待验收 |
+| P0-07 Obsidian 联动原型 | Completed | Node 24 LTS 自动化通过；Obsidian 1.12.7 内外部引用实机渲染通过 |
+| 阶段 0 验收报告 | Accepted | P0-A01 至 P0-A08 全部通过，截图证据已归档 |
 
 ## 已固定的关键决定
 

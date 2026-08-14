@@ -1,6 +1,6 @@
 # 阶段 0 验收报告
 
-> 状态：Draft，尚未满足阶段退出条件
+> 状态：Accepted，阶段退出条件已满足
 >
 > 日期：2026-08-14
 >
@@ -13,7 +13,7 @@
 - Rust 1.97.1；
 - Node.js 24.19.0 LTS（Node 官方发布包 SHA-256 校验通过）；
 - Obsidian 1.12.7；
-- Obsidian CLI 全局设置：未启用。
+- Obsidian CLI 全局设置：已启用。
 
 ## 工作项结果
 
@@ -25,7 +25,7 @@
 | P0-04 索引 | Pass | 独立线性过滤对照通过；查询 p95 19.082 ms |
 | P0-05 Sidecar | Pass | 原子替换、并发摘要、未知字段及进程崩溃测试通过；CLI 提供 abort/reload/merge 冲突策略 |
 | P0-06 监听 | Pass on macOS | 10,000 文件创建、移动和删除事件风暴最终收敛 |
-| P0-07 Obsidian | Partial | 构建和自动化安全测试通过，实机渲染待授权 |
+| P0-07 Obsidian | Pass | 构建、自动化安全测试和 Obsidian 1.12.7 实机渲染通过 |
 
 ## 验收用例
 
@@ -36,8 +36,8 @@
 | P0-A03 | Pass | `before-temp`、`after-temp-sync` 保留原 Sidecar；`after-persist` 得到完整新 Sidecar |
 | P0-A04 | Pass | 外部修改后摘要冲突被拒绝，外部内容未覆盖；用户可通过 `--on-conflict reload|merge` 显式选择处理方式 |
 | P0-A05 | Pass on macOS | 创建 10,000、移动 10,000、删除 5,000 个素材；68,362 个归一化事件后完整扫描收敛到 5,000 个素材、0 问题，监听进程峰值 RSS 9,338,880 字节 |
-| P0-A06 | Partial | Vault 相对路径生成测试通过；尚未在 Obsidian 实机关闭插件验证渲染 |
-| P0-A07 | Partial | 外部稳定 ID、测试 Vault 生成和插件构建通过；实机对象 URL 渲染待验收 |
+| P0-A06 | Pass | Vault 内生成标准 `![[internal.png]]`；停用插件并重新渲染后仍为完整的 `app:` 图片，`naturalWidth=1` |
+| P0-A07 | Pass | 外部稳定 ID 被转换为完整的 `blob:` 图片，`naturalWidth=1`；Vault 内 PNG 总数仍为 1，未复制外部素材 |
 | P0-A08 | Pass | 伪造 URI、查询参数、路径逃逸、文件/目录符号链接逃逸均被拒绝 |
 
 ## Sidecar 故障注入
@@ -72,6 +72,23 @@ after-persist     新文件完整、可解析、扫描问题数为 0
 - Windows x86_64 MSVC：workspace 全目标 `cargo check` 通过；
 - Windows/Linux 运行时监听和文件系统语义尚未执行。
 
+## Obsidian 实机渲染
+
+在带清理标记的隔离 Vault 中使用 Obsidian 1.12.7 和官方 CLI 执行：
+
+1. 启用并重载 `material-bridge`，打开 `smoke.md` 的阅读视图；
+2. 外部 `material://0198a7c2-8341-7a31-b842-f15d39f33c18` 被解析为 `blob:` URL，图片 `complete=true`、`naturalWidth=1`；
+3. Vault 内 `![[internal.png]]` 保持 Obsidian `app:` URL，图片 `complete=true`、`naturalWidth=1`；
+4. 插件索引只有 1 个授权根外素材，Vault 文件清单只有 `internal.png`，确认没有复制外部素材；
+5. 调试器捕获到 0 个运行时错误、0 个 error 日志、0 个 warning 日志；
+6. 停用插件后，旧对象 URL 无法继续读取，证明 `URL.revokeObjectURL` 已执行；
+7. 重新渲染后外部引用按预期不可用，Vault 内标准引用仍完整渲染。
+
+证据：
+
+- [启用插件时的渲染截图](evidence/phase-0-obsidian-enabled.png)
+- [停用插件后的渲染截图](evidence/phase-0-obsidian-disabled.png)
+
 ## 技术风险与阶段 1 估算依据
 
 | 风险 | 当前控制 | 阶段 1 处理与估算影响 |
@@ -84,20 +101,6 @@ after-persist     新文件完整、可解析、扫描问题数为 0
 
 阶段 1 的工作量依据是九个工作包：工程/CI 1 份、核心文件系统与元数据 3 份、查询与缩略图 2 份、桌面 UI 1 份、Vault 内联动 1 份、配置恢复 1 份。首轮估算按 1 名全职开发者 8–10 周，或 2 名开发者 5–6 周；平台签名、公证和外部引用正式发布不计入该估算。进入阶段 1 前应把工作包拆成可在 1–3 天内验收的任务，并以本报告基线重新估算。
 
-## 当前阻断项
-
-Obsidian 官方开发 CLI 要求在 **Settings → General → Advanced** 中启用 Command line interface。本机该设置未启用，CLI 拒绝连接。为了不修改用户的全局 Obsidian 设置或个人 Vault，本轮没有绕过该门禁。
-
-完成 P0-A06/P0-A07 需要用户显式启用 CLI，随后使用自动生成的专用临时 Vault 执行：
-
-- 启用和重载 `material-bridge`；
-- 打开 `smoke.md`；
-- 查询 DOM 中标准图片和外部图片；
-- 检查 `dev:errors`；
-- 保存截图作为证据；
-- 禁用插件并验证标准引用继续渲染；
-- 通过带标记清理工具删除测试 Vault 和外部素材根。
-
 ## 阶段结论
 
-阶段 0 暂不标记 Accepted。核心文件系统、索引、Sidecar、监听和安全边界已经达到原型目标；阶段退出的剩余门禁为 P0-A06/P0-A07 的 Obsidian 实机渲染。Windows/Linux 运行时验证仍是公开发布前的必要工作，但当前阶段已经记录差异和待验项。根据开发计划，不进入阶段 1 产品 UI 实现，直至阶段退出条件被明确接受或通过 ADR 调整。
+阶段 0 标记为 Accepted。ADR-001 至 ADR-008、P0-A01 至 P0-A08、性能基线、Sidecar 安全性和 Obsidian 外部渲染路线均已通过。Windows/Linux 运行时验证仍是公开发布前的必要工作，但不再阻断阶段 1。下一步可以按照开发计划进入阶段 1 的工程骨架与端到端 MVP 实现。

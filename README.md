@@ -4,10 +4,11 @@
 
 ## 当前状态
 
-项目处于架构与开发准备阶段。开发阶段、交付物和验收规范见：
+阶段 0 已通过全部技术与 Obsidian 实机验收，项目可以进入阶段 1 端到端 MVP。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
+- [阶段 0 验收报告](docs/reports/phase-0-acceptance.md)
 - [架构决策记录](specs/adr/README.md)
 
 ## 核心原则
