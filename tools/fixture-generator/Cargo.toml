@@ -1,0 +1,18 @@
+[package]
+name = "fixture-generator"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+metadata = { path = "../../crates/metadata" }
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

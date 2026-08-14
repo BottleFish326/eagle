@@ -1,0 +1,23 @@
+{
+  "name": "material-bridge",
+  "version": "0.1.0",
+  "description": "Obsidian desktop bridge for filesystem material assets",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
+    "check": "tsc --noEmit --skipLibCheck",
+    "test": "tsx --test src/**/*.test.ts"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.15.17",
+    "esbuild": "0.25.5",
+    "obsidian": "latest",
+    "tsx": "^4.20.5",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  }
+}

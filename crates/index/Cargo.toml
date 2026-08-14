@@ -1,0 +1,12 @@
+[package]
+name = "asset-index"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+asset-core = { path = "../asset-core" }
+
+[lints]
+workspace = true

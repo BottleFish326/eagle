@@ -1,0 +1,22 @@
+[package]
+name = "asset-filesystem"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+asset-core = { path = "../asset-core" }
+metadata = { path = "../metadata" }
+infer.workspace = true
+notify.workspace = true
+rayon.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+walkdir.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

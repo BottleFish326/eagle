@@ -44,3 +44,25 @@ docs/                            项目文档
 - Sidecar Schema、文件写入规则和 Obsidian 协议变更必须附带 ADR。
 
 完整协作规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 阶段 0 本地验证
+
+Rust 核心原型：
+
+```bash
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+cargo run --release -p fixture-generator -- generate /tmp/eagle-fixture --scale small
+cargo run --release -p eagle-p0 -- scan /tmp/eagle-fixture
+cargo run --release -p fixture-generator -- clean /tmp/eagle-fixture
+```
+
+Obsidian 插件原型：
+
+```bash
+cd integrations/obsidian-bridge
+npm ci
+npm run check
+npm test
+npm run build
+```

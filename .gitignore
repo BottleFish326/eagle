@@ -24,6 +24,7 @@ Desktop.ini
 node_modules/
 dist/
 build/
+integrations/obsidian-bridge/main.js
 coverage/
 .turbo/
 .vite/

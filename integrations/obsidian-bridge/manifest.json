@@ -1,0 +1,9 @@
+{
+  "id": "material-bridge",
+  "name": "Material Bridge",
+  "version": "0.1.0",
+  "minAppVersion": "1.7.0",
+  "description": "Resolve filesystem material assets by stable sidecar IDs.",
+  "author": "BottleFish",
+  "isDesktopOnly": true
+}
