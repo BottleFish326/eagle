@@ -1,6 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use app_config::{
     APPLICATION_CONFIG_SCHEMA_VERSION, ApplicationConfig, ApplicationConfigManager,
@@ -12,9 +13,9 @@ use asset_catalog::{
     AssetCatalog, BatchMetadataEdit, BatchMetadataEditResult, QueryAssetsInput, QueryAssetsResult,
 };
 use asset_filesystem::{
-    AddLibraryRoot, LibraryRoot, LibraryRootManager, LibraryRootStatus, RootAccessStatus,
-    ScanBatch, ScanCancellation, ScanOptions, ScanSummary, UpdateLibraryRoot,
-    scan_root_incremental,
+    AddLibraryRoot, FsChangeBatch, FsRescanReason, LibraryRoot, LibraryRootManager,
+    LibraryRootStatus, RootAccessStatus, ScanBatch, ScanCancellation, ScanOptions, ScanSummary,
+    UpdateLibraryRoot, WatchSession, scan_root_incremental,
 };
 use asset_index::QueryParseError;
 use asset_link_resolver::{
@@ -94,6 +95,34 @@ enum LibraryScanEvent {
     Failed {
         scan_id: Uuid,
         message: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    tag = "event",
+    content = "data"
+)]
+enum LibraryWatchEvent {
+    Started {
+        watch_id: Uuid,
+        root_id: Uuid,
+    },
+    Changes {
+        watch_id: Uuid,
+        root_id: Uuid,
+        batch: FsChangeBatch,
+    },
+    Failed {
+        watch_id: Uuid,
+        root_id: Uuid,
+        message: String,
+    },
+    Stopped {
+        watch_id: Uuid,
+        root_id: Uuid,
     },
 }
 
@@ -193,6 +222,64 @@ impl From<PreviewError> for ThumbnailCommandError {
 #[derive(Default)]
 struct ScanCoordinator {
     active: Mutex<HashMap<Uuid, ScanCancellation>>,
+}
+
+#[derive(Debug, Clone)]
+struct ActiveWatch {
+    root_id: Uuid,
+    cancellation: ScanCancellation,
+}
+
+#[derive(Default)]
+struct WatchCoordinator {
+    active: Mutex<HashMap<Uuid, ActiveWatch>>,
+}
+
+impl WatchCoordinator {
+    fn register(
+        &self,
+        watch_id: Uuid,
+        root_id: Uuid,
+        cancellation: ScanCancellation,
+    ) -> Result<(), String> {
+        let mut active = self
+            .active
+            .lock()
+            .map_err(|_| "watch coordinator lock is poisoned".to_owned())?;
+        if active.values().any(|watch| watch.root_id == root_id) {
+            return Err(format!("library root is already watched: {root_id}"));
+        }
+        active.insert(
+            watch_id,
+            ActiveWatch {
+                root_id,
+                cancellation,
+            },
+        );
+        Ok(())
+    }
+
+    fn cancel(&self, watch_id: Uuid) -> Result<bool, String> {
+        let mut active = self
+            .active
+            .lock()
+            .map_err(|_| "watch coordinator lock is poisoned".to_owned())?;
+        Ok(active.remove(&watch_id).is_some_and(|watch| {
+            watch.cancellation.cancel();
+            true
+        }))
+    }
+
+    fn finish(&self, watch_id: Uuid) {
+        if let Ok(mut active) = self.active.lock() {
+            active.remove(&watch_id);
+        }
+    }
+
+    #[cfg(test)]
+    fn active_count(&self) -> usize {
+        self.active.lock().map_or(0, |active| active.len())
+    }
 }
 
 impl ScanCoordinator {
@@ -517,6 +604,23 @@ fn run_library_scan_thread(
     catalog: &Mutex<AssetCatalog>,
     diagnostics: &DiagnosticService,
 ) {
+    let removed_records = if let Ok(mut catalog) = catalog.lock() {
+        catalog.remove_root(root.id)
+    } else {
+        record_diagnostic(
+            diagnostics,
+            DiagnosticLevel::Error,
+            "scanner",
+            "catalog-reset-failed",
+            [("scanId", scan_id.to_string())],
+        );
+        let _ = on_event.send(LibraryScanEvent::Failed {
+            scan_id,
+            message: "asset catalog lock is poisoned".into(),
+        });
+        coordinator.finish(scan_id);
+        return;
+    };
     record_diagnostic(
         diagnostics,
         DiagnosticLevel::Info,
@@ -525,6 +629,7 @@ fn run_library_scan_thread(
         [
             ("scanId", scan_id.to_string()),
             ("rootId", root.id.to_string()),
+            ("catalogRecordsRemoved", removed_records.to_string()),
         ],
     );
     if on_event
@@ -596,6 +701,197 @@ fn cancel_library_scan(
     scans: State<'_, Arc<ScanCoordinator>>,
 ) -> Result<bool, String> {
     scans.cancel(scan_id)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn start_library_watch(
+    root_id: Uuid,
+    on_event: Channel<LibraryWatchEvent>,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    watches: State<'_, Arc<WatchCoordinator>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+) -> Result<Uuid, String> {
+    let root_status = roots
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .roots()
+        .into_iter()
+        .find(|root| root.root.id == root_id)
+        .ok_or_else(|| format!("library root was not found: {root_id}"))?;
+    if !root_status.root.enabled {
+        return Err(format!("library root is disabled: {root_id}"));
+    }
+    if root_status.access_status != RootAccessStatus::Available {
+        return Err(format!(
+            "library root is not available ({}): {}",
+            root_status.access_status,
+            root_status.root.path.display()
+        ));
+    }
+
+    let watch_id = Uuid::now_v7();
+    let cancellation = ScanCancellation::new();
+    watches.register(watch_id, root_id, cancellation.clone())?;
+    let coordinator = Arc::clone(watches.inner());
+    let diagnostics = Arc::clone(diagnostics.inner());
+    let root = root_status.root;
+    let thread_name = format!("library-watch-{}", &watch_id.to_string()[..8]);
+    let spawn_result = std::thread::Builder::new()
+        .name(thread_name)
+        .spawn(move || {
+            run_library_watch_thread(
+                watch_id,
+                &root,
+                &on_event,
+                &cancellation,
+                &coordinator,
+                &diagnostics,
+            );
+        });
+    if let Err(error) = spawn_result {
+        watches.finish(watch_id);
+        return Err(format!("failed to start library watch thread: {error}"));
+    }
+    Ok(watch_id)
+}
+
+fn run_library_watch_thread(
+    watch_id: Uuid,
+    root: &LibraryRoot,
+    on_event: &Channel<LibraryWatchEvent>,
+    cancellation: &ScanCancellation,
+    coordinator: &WatchCoordinator,
+    diagnostics: &DiagnosticService,
+) {
+    let session = match WatchSession::start(&root.path) {
+        Ok(session) => session,
+        Err(error) => {
+            record_diagnostic(
+                diagnostics,
+                DiagnosticLevel::Error,
+                "watcher",
+                "watch-start-failed",
+                [("rootId", root.id.to_string())],
+            );
+            let _ = on_event.send(LibraryWatchEvent::Failed {
+                watch_id,
+                root_id: root.id,
+                message: error.to_string(),
+            });
+            coordinator.finish(watch_id);
+            return;
+        }
+    };
+    record_diagnostic(
+        diagnostics,
+        DiagnosticLevel::Info,
+        "watcher",
+        "watch-started",
+        [
+            ("watchId", watch_id.to_string()),
+            ("rootId", root.id.to_string()),
+        ],
+    );
+    if on_event
+        .send(LibraryWatchEvent::Started {
+            watch_id,
+            root_id: root.id,
+        })
+        .is_err()
+    {
+        cancellation.cancel();
+    }
+
+    while !cancellation.is_cancelled() {
+        match session.next_batch_timeout(Duration::from_millis(250)) {
+            Ok(Some(batch)) if !batch.changes.is_empty() => {
+                let terminal_loss = batch
+                    .changes
+                    .iter()
+                    .any(|change| change.reason == Some(FsRescanReason::ChannelDisconnected));
+                if !publish_watch_batch(watch_id, root.id, batch, on_event, diagnostics) {
+                    cancellation.cancel();
+                }
+                if terminal_loss {
+                    break;
+                }
+            }
+            Ok(_) => {}
+            Err(error) => {
+                record_diagnostic(
+                    diagnostics,
+                    DiagnosticLevel::Error,
+                    "watcher",
+                    "watch-failed",
+                    [("rootId", root.id.to_string())],
+                );
+                let _ = on_event.send(LibraryWatchEvent::Failed {
+                    watch_id,
+                    root_id: root.id,
+                    message: error.to_string(),
+                });
+                break;
+            }
+        }
+    }
+    record_diagnostic(
+        diagnostics,
+        DiagnosticLevel::Info,
+        "watcher",
+        "watch-stopped",
+        [("rootId", root.id.to_string())],
+    );
+    let _ = on_event.send(LibraryWatchEvent::Stopped {
+        watch_id,
+        root_id: root.id,
+    });
+    coordinator.finish(watch_id);
+}
+
+fn publish_watch_batch(
+    watch_id: Uuid,
+    root_id: Uuid,
+    batch: FsChangeBatch,
+    on_event: &Channel<LibraryWatchEvent>,
+    diagnostics: &DiagnosticService,
+) -> bool {
+    let requires_rescan = batch.requires_rescan();
+    record_diagnostic(
+        diagnostics,
+        if requires_rescan {
+            DiagnosticLevel::Warning
+        } else {
+            DiagnosticLevel::Info
+        },
+        "watcher",
+        if requires_rescan {
+            "bounded-rescan-requested"
+        } else {
+            "change-batch"
+        },
+        [
+            ("rootId", root_id.to_string()),
+            ("rawEventCount", batch.raw_event_count.to_string()),
+            ("changeCount", batch.changes.len().to_string()),
+        ],
+    );
+    on_event
+        .send(LibraryWatchEvent::Changes {
+            watch_id,
+            root_id,
+            batch,
+        })
+        .is_ok()
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn stop_library_watch(
+    watch_id: Uuid,
+    watches: State<'_, Arc<WatchCoordinator>>,
+) -> Result<bool, String> {
+    watches.cancel(watch_id)
 }
 
 #[tauri::command]
@@ -902,6 +1198,7 @@ pub fn run() {
                 ApplicationConfigManager::open(config_directory.join("application.yml"))?;
             app.manage(Mutex::new(application_config));
             app.manage(Arc::new(ScanCoordinator::default()));
+            app.manage(Arc::new(WatchCoordinator::default()));
             app.manage(Arc::new(Mutex::new(AssetCatalog::default())));
             let previews = Arc::new(ThumbnailService::open(&cache_directory, 4)?);
             let cache_startup = previews.startup_report();
@@ -944,6 +1241,8 @@ pub fn run() {
             resolve_obsidian_vault_references,
             start_library_scan,
             cancel_library_scan,
+            start_library_watch,
+            stop_library_watch,
             edit_asset_metadata,
             query_assets,
             request_thumbnail,
@@ -960,15 +1259,17 @@ pub fn run() {
 mod tests {
     use std::path::Path;
 
+    use asset_filesystem::{FsChange, FsChangeBatch, FsChangeKind, FsRescanReason};
     use asset_preview::CacheClearReport;
     use uuid::Uuid;
 
     use asset_index::{QueryParseError, QueryParseErrorKind};
 
     use super::{
-        ApplicationPaths, DerivedStateResetReport, LibraryScanEvent, QueryAssetsError,
-        ScanCancellation, ScanCoordinator, ThumbnailCommandError, VaultReferenceFailureKind,
-        build_info, path_fingerprint, vault_failure_kind,
+        ApplicationPaths, DerivedStateResetReport, LibraryScanEvent, LibraryWatchEvent,
+        QueryAssetsError, ScanCancellation, ScanCoordinator, ThumbnailCommandError,
+        VaultReferenceFailureKind, WatchCoordinator, build_info, path_fingerprint,
+        vault_failure_kind,
     };
 
     #[test]
@@ -1007,6 +1308,64 @@ mod tests {
         assert_eq!(event["event"], "failed");
         assert_eq!(event["data"]["scanId"], scan_id.to_string());
         assert_eq!(event["data"]["message"], "invalid root");
+    }
+
+    #[test]
+    fn watch_coordinator_prevents_duplicate_root_watchers() {
+        let coordinator = WatchCoordinator::default();
+        let root_id = Uuid::now_v7();
+        let first_id = Uuid::now_v7();
+        let second_id = Uuid::now_v7();
+        let cancellation = ScanCancellation::new();
+        coordinator
+            .register(first_id, root_id, cancellation.clone())
+            .expect("register watch");
+
+        assert!(
+            coordinator
+                .register(second_id, root_id, ScanCancellation::new())
+                .expect_err("duplicate root")
+                .contains("already watched")
+        );
+        assert_eq!(coordinator.active_count(), 1);
+        assert!(coordinator.cancel(first_id).expect("cancel watch"));
+        assert!(cancellation.is_cancelled());
+        assert_eq!(coordinator.active_count(), 0);
+        coordinator.finish(first_id);
+        assert_eq!(coordinator.active_count(), 0);
+    }
+
+    #[test]
+    fn watch_events_use_a_bounded_frontend_wire_shape() {
+        let watch_id = Uuid::now_v7();
+        let root_id = Uuid::now_v7();
+        let value = serde_json::to_value(LibraryWatchEvent::Changes {
+            watch_id,
+            root_id,
+            batch: FsChangeBatch {
+                root: "/library".into(),
+                changes: vec![FsChange {
+                    kind: FsChangeKind::RescanRequired,
+                    paths: vec!["/library".into()],
+                    reason: Some(FsRescanReason::BatchOverflow),
+                }],
+                raw_event_count: 3,
+            },
+        })
+        .expect("serialize watch event");
+
+        assert_eq!(value["event"], "changes");
+        assert_eq!(value["data"]["watchId"], watch_id.to_string());
+        assert_eq!(value["data"]["rootId"], root_id.to_string());
+        assert_eq!(value["data"]["batch"]["rawEventCount"], 3);
+        assert_eq!(
+            value["data"]["batch"]["changes"][0]["kind"],
+            "rescan-required"
+        );
+        assert_eq!(
+            value["data"]["batch"]["changes"][0]["reason"],
+            "batch-overflow"
+        );
     }
 
     #[test]

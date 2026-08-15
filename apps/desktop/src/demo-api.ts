@@ -50,6 +50,7 @@ export function createDemoDesktopApi(
   const previewKeys = new Map<string, string>();
   const previewBytes = new Map<string, Promise<ArrayBuffer>>();
   const timers = new Map<string, number[]>();
+  const watchTimers = new Map<string, number>();
 
   return {
     async getApplicationConfig() {
@@ -188,6 +189,24 @@ export function createDemoDesktopApi(
       active.forEach(window.clearTimeout);
       timers.delete(scanId);
       return true;
+    },
+    async startLibraryWatch(rootId, receive) {
+      if (!roots.some((root) => root.id === rootId)) {
+        throw new Error("素材根不存在");
+      }
+      const watchId = demoUuid((Date.now() % 1000) + 2_000);
+      const timer = window.setTimeout(() => {
+        watchTimers.delete(watchId);
+        receive({ event: "started", data: { watchId, rootId } });
+      }, 20);
+      watchTimers.set(watchId, timer);
+      return watchId;
+    },
+    async stopLibraryWatch(watchId) {
+      const timer = watchTimers.get(watchId);
+      if (timer !== undefined) window.clearTimeout(timer);
+      watchTimers.delete(watchId);
+      return timer !== undefined;
     },
     async queryAssets(input) {
       if (/\bkind:/u.test(input.expression)) {

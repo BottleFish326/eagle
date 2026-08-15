@@ -11,6 +11,7 @@ asset-index = { path = "../index" }
 metadata = { path = "../metadata" }
 serde.workspace = true
 thiserror.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

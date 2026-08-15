@@ -112,6 +112,8 @@ pub enum FilesystemError {
     },
     #[error("scan batch size must be greater than zero")]
     InvalidBatchSize,
+    #[error("file watcher batch size must be greater than zero")]
+    InvalidWatchBatchSize,
     #[error("invalid ignore rule {rule}: {message}")]
     InvalidIgnoreRule { rule: String, message: String },
     #[error("file watcher error: {0}")]

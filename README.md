@@ -4,13 +4,14 @@
 
 ## 当前状态
 
-阶段 0 已通过全部技术与 Obsidian 实机验收。阶段 1 的 P1-01 至 P1-09 和 P1-A01 至 P1-A12 已完成本地验收，当前具备工程骨架、素材根管理、可取消增量扫描、具备并发保护的 Sidecar 批量编辑、布尔 Tag 查询、按视口窗口化的版本化缩略图管线、可操作的扁平素材桌面界面、Obsidian Vault 内标准引用，以及可读配置、安全缓存重建和脱敏诊断导出。阶段 2 已具备启动条件；仓库尚无远程地址，首次托管 CI 仍待远程建立后确认。开发阶段、交付物和验收规范见：
+阶段 0 与阶段 1 已通过本地验收。阶段 2 已完成 P2-01：桌面端会按素材根监听外部文件变化，折叠重复事件和临时保存序列，并在半重命名、越界、监听丢失或溢出时执行有范围限制的一致性扫描。下一项为 P2-02 移动与孤立文件处理。仓库尚无远程地址，首次托管 CI 仍待远程建立后确认。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
 - [阶段 0 验收报告](docs/reports/phase-0-acceptance.md)
 - [阶段 1 性能与稳定性报告](docs/reports/phase-1-performance.md)
 - [阶段 1 验收报告](docs/reports/phase-1-acceptance.md)
+- [P2-01 验收报告](docs/reports/p2-01-acceptance.md)
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
 - [P1-03 验收报告](docs/reports/p1-03-acceptance.md)
@@ -26,6 +27,7 @@
 - [缩略图协议](specs/thumbnail-protocol.md)
 - [Obsidian Vault 内引用协议](specs/obsidian-vault-reference-protocol.md)
 - [应用配置与恢复协议](specs/application-recovery-protocol.md)
+- [文件事件与一致性扫描协议](specs/filesystem-event-protocol.md)
 - [架构决策记录](specs/adr/README.md)
 
 ## 核心原则

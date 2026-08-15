@@ -87,12 +87,13 @@ export function RootManager({
               </div>
               <span className="root-access">{accessLabel(root)}</span>
               <button
+                aria-label={`完整一致性扫描 ${root.name}`}
                 className="root-action"
                 disabled={
                   busy || !root.enabled || root.accessStatus !== "available"
                 }
                 onClick={() => void onScan(root)}
-                title="重新扫描"
+                title="执行完整一致性扫描"
                 type="button"
               >
                 <Icon name="refresh" size={15} />

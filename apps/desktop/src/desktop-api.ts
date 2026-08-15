@@ -20,6 +20,8 @@ import type {
   LibraryRootStatus,
   UpdateLibraryRootInput,
 } from "./library-roots";
+import type { LibraryWatchEvent } from "./filesystem-events";
+import { startLibraryWatch, stopLibraryWatch } from "./filesystem-events";
 import {
   addLibraryRoot,
   listLibraryRoots,
@@ -74,6 +76,11 @@ export interface DesktopApi {
     receive: (event: LibraryScanEvent) => void,
   ): Promise<string>;
   cancelLibraryScan(scanId: string): Promise<boolean>;
+  startLibraryWatch(
+    rootId: string,
+    receive: (event: LibraryWatchEvent) => void,
+  ): Promise<string>;
+  stopLibraryWatch(watchId: string): Promise<boolean>;
   queryAssets(input: QueryAssetsInput): Promise<QueryAssetsResult>;
   editAssetMetadata(input: BatchMetadataEdit): Promise<BatchMetadataEditResult>;
   requestThumbnail(input: ThumbnailRequest): Promise<ThumbnailOutcome>;
@@ -102,6 +109,8 @@ export const tauriDesktopApi: DesktopApi = {
   removeLibraryRoot,
   startLibraryScan,
   cancelLibraryScan,
+  startLibraryWatch,
+  stopLibraryWatch,
   queryAssets,
   editAssetMetadata,
   requestThumbnail,

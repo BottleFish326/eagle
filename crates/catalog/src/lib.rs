@@ -5,6 +5,7 @@ use asset_index::{AssetIndex, AssetQuery, QueryParseError, parse_query};
 use metadata::{MetadataPatch, SidecarError, edit_asset_metadata};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,6 +90,26 @@ impl AssetCatalog {
 
     pub fn clear(&mut self) {
         self.index.clear();
+    }
+
+    /// Removes every derived record associated with one configured library root.
+    /// Files and Sidecars are never touched.
+    pub fn remove_root(&mut self, root_id: Uuid) -> usize {
+        let keys = self
+            .index
+            .query(&AssetQuery::default())
+            .into_iter()
+            .filter(|key| {
+                self.index
+                    .get(key)
+                    .is_some_and(|record| record.root_id == Some(root_id))
+            })
+            .collect::<Vec<_>>();
+        let count = keys.len();
+        for key in keys {
+            self.index.remove(&key);
+        }
+        count
     }
 
     #[must_use]
@@ -236,6 +257,7 @@ mod tests {
     use asset_index::{AssetQuery, QueryParseErrorKind};
     use metadata::{MetadataPatch, digest_file, sidecar_path_for};
     use tempfile::tempdir;
+    use uuid::Uuid;
 
     use super::{
         AssetCatalog, AssetEditTarget, BatchMetadataEdit, EditFailureKind, QueryAssetsInput,
@@ -285,6 +307,35 @@ mod tests {
             .expect_err("unknown filters are visible");
         assert_eq!(error.kind, QueryParseErrorKind::UnknownFilter);
         assert_eq!(error.offset, 0);
+    }
+
+    #[test]
+    fn root_consistency_reset_removes_only_derived_records() {
+        let first_root = Uuid::now_v7();
+        let second_root = Uuid::now_v7();
+        let first_path = PathBuf::from("/assets/first.png");
+        let second_path = PathBuf::from("/other/second.png");
+        let mut first = record("first", first_path);
+        first.root_id = Some(first_root);
+        first.tags = BTreeSet::from(["old".into()]);
+        let mut second = record("second", second_path);
+        second.root_id = Some(second_root);
+        second.tags = BTreeSet::from(["keep".into()]);
+        let mut catalog = AssetCatalog::default();
+        catalog.ingest([first, second]);
+
+        assert_eq!(catalog.remove_root(first_root), 1);
+        assert!(catalog.get("first").is_none());
+        assert!(
+            catalog
+                .query(&AssetQuery {
+                    all_tags: BTreeSet::from(["old".into()]),
+                    ..AssetQuery::default()
+                })
+                .is_empty()
+        );
+        assert!(catalog.get("second").is_some());
+        assert_eq!(catalog.remove_root(first_root), 0);
     }
 
     #[test]

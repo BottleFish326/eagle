@@ -69,6 +69,11 @@ interface Notice {
 
 export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const search = useRef<HTMLInputElement>(null);
+  const activeScanRoots = useRef<Set<string>>(new Set());
+  const rootsById = useRef<Map<string, LibraryRootStatus>>(new Map());
+  const watchIds = useRef<Map<string, string | null>>(new Map());
+  const watchRescanTimers = useRef<Map<string, number>>(new Map());
+  const appMounted = useRef(true);
   const [buildInfo, setBuildInfo] = useState<BuildInfo>();
   const [roots, setRoots] = useState<LibraryRootStatus[]>([]);
   const [vaults, setVaults] = useState<ObsidianVaultStatus[]>([]);
@@ -112,6 +117,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
 
   const runScan = useCallback(
     async (root: LibraryRootStatus) => {
+      activeScanRoots.current.add(root.id);
       setAssets((current) => removeRootAssets(current, root.id));
       setScans((current) => ({
         ...current,
@@ -124,6 +130,9 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       }));
       const receive = (event: LibraryScanEvent) => {
         handleScanEvent(root.id, event, setAssets, setScans);
+        if (event.event === "finished" || event.event === "failed") {
+          activeScanRoots.current.delete(root.id);
+        }
       };
       try {
         const scanId = await api.startLibraryScan(root.id, receive);
@@ -140,6 +149,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
           },
         }));
       } catch (error) {
+        activeScanRoots.current.delete(root.id);
         setScans((current) => ({
           ...current,
           [root.id]: {
@@ -157,6 +167,34 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       }
     },
     [api],
+  );
+
+  const scheduleWatchRescan = useCallback(
+    (rootId: string) => {
+      const existing = watchRescanTimers.current.get(rootId);
+      if (existing !== undefined) window.clearTimeout(existing);
+      const attempt = () => {
+        watchRescanTimers.current.delete(rootId);
+        const root = rootsById.current.get(rootId);
+        if (
+          !appMounted.current ||
+          root === undefined ||
+          !root.enabled ||
+          root.accessStatus !== "available"
+        )
+          return;
+        if (activeScanRoots.current.has(rootId)) {
+          watchRescanTimers.current.set(
+            rootId,
+            window.setTimeout(attempt, 500),
+          );
+          return;
+        }
+        void runScan(root);
+      };
+      watchRescanTimers.current.set(rootId, window.setTimeout(attempt, 350));
+    },
+    [runScan],
   );
 
   useEffect(() => {
@@ -207,6 +245,84 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       active = false;
     };
   }, [api, runScan]);
+
+  useEffect(() => {
+    rootsById.current = new Map(roots.map((root) => [root.id, root]));
+    const desired = new Set(
+      roots
+        .filter((root) => root.enabled && root.accessStatus === "available")
+        .map((root) => root.id),
+    );
+    for (const [rootId, watchId] of watchIds.current) {
+      if (desired.has(rootId)) continue;
+      watchIds.current.delete(rootId);
+      if (watchId !== null) void api.stopLibraryWatch(watchId);
+      const timer = watchRescanTimers.current.get(rootId);
+      if (timer !== undefined) window.clearTimeout(timer);
+      watchRescanTimers.current.delete(rootId);
+    }
+    for (const root of roots) {
+      if (!desired.has(root.id) || watchIds.current.has(root.id)) continue;
+      watchIds.current.set(root.id, null);
+      void api
+        .startLibraryWatch(root.id, (event) => {
+          if (!appMounted.current) return;
+          if (event.event === "changes") {
+            scheduleWatchRescan(event.data.rootId);
+          } else if (event.event === "failed") {
+            watchIds.current.delete(event.data.rootId);
+            setNotice({
+              tone: "error",
+              message: `${root.name} 的文件监听已停止：${event.data.message}`,
+            });
+          } else if (event.event === "stopped") {
+            if (
+              watchIds.current.get(event.data.rootId) === event.data.watchId
+            ) {
+              watchIds.current.delete(event.data.rootId);
+            }
+          }
+        })
+        .then((watchId) => {
+          const current = rootsById.current.get(root.id);
+          if (
+            !appMounted.current ||
+            current === undefined ||
+            !current.enabled ||
+            current.accessStatus !== "available" ||
+            watchIds.current.get(root.id) !== null
+          ) {
+            watchIds.current.delete(root.id);
+            void api.stopLibraryWatch(watchId);
+            return;
+          }
+          watchIds.current.set(root.id, watchId);
+        })
+        .catch((error: unknown) => {
+          watchIds.current.delete(root.id);
+          if (!appMounted.current) return;
+          setNotice({
+            tone: "error",
+            message: `无法监听 ${root.name}：${errorMessage(error)}`,
+          });
+        });
+    }
+  }, [api, roots, scheduleWatchRescan]);
+
+  useEffect(() => {
+    appMounted.current = true;
+    return () => {
+      appMounted.current = false;
+      for (const watchId of watchIds.current.values()) {
+        if (watchId !== null) void api.stopLibraryWatch(watchId);
+      }
+      watchIds.current.clear();
+      for (const timer of watchRescanTimers.current.values()) {
+        window.clearTimeout(timer);
+      }
+      watchRescanTimers.current.clear();
+    };
+  }, [api]);
 
   useEffect(() => {
     if (!preferencesReady) return;

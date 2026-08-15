@@ -215,19 +215,21 @@ fn run_watch(root: &std::path::Path, seconds: u64, summary: bool) -> Result<()> 
     let deadline = Instant::now() + Duration::from_secs(seconds);
     let mut counts = [0_u64; 5];
     while Instant::now() < deadline {
-        if let Some(change) = session
-            .next_timeout(Duration::from_millis(250))
+        if let Some(batch) = session
+            .next_batch_timeout(Duration::from_millis(250))
             .context("watch event")?
         {
-            counts[match change.kind {
-                FsChangeKind::Create => 0,
-                FsChangeKind::Modify => 1,
-                FsChangeKind::Move => 2,
-                FsChangeKind::Delete => 3,
-                FsChangeKind::RescanRequired => 4,
-            }] += 1;
-            if !summary {
-                println!("{}", serde_json::to_string(&change)?);
+            for change in batch.changes {
+                counts[match change.kind {
+                    FsChangeKind::Create => 0,
+                    FsChangeKind::Modify => 1,
+                    FsChangeKind::Move => 2,
+                    FsChangeKind::Delete => 3,
+                    FsChangeKind::RescanRequired => 4,
+                }] += 1;
+                if !summary {
+                    println!("{}", serde_json::to_string(&change)?);
+                }
             }
         }
     }
