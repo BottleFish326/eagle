@@ -10,7 +10,7 @@ import {
   type SavedTagFilterState,
 } from "./application-runtime";
 import { type BuildInfo, loadBuildInfo } from "./build-info";
-import { createDemoDesktopApi } from "./demo-api";
+import { createDemoDesktopApi, demoAssetCountFromSearch } from "./demo-api";
 import {
   type DesktopApi,
   isTauriRuntime,
@@ -22,6 +22,7 @@ import type { LibraryRootStatus } from "./library-roots";
 import type { MetadataPatch } from "./metadata-editor";
 import {
   copyVaultReference,
+  referenceResolutionKeys,
   type ObsidianVaultStatus,
   type VaultReference,
   type VaultReferenceFailure,
@@ -41,7 +42,14 @@ import {
 } from "./ui-model";
 import { VaultManager } from "./VaultManager";
 
-const defaultApi = isTauriRuntime() ? tauriDesktopApi : createDemoDesktopApi();
+const defaultApi = isTauriRuntime()
+  ? tauriDesktopApi
+  : createDemoDesktopApi({
+      assetCount: demoAssetCountFromSearch(
+        typeof window === "undefined" ? "" : window.location.search,
+        import.meta.env.DEV,
+      ),
+    });
 
 type ScanPhase = "starting" | "scanning" | "completed" | "cancelled" | "failed";
 
@@ -69,6 +77,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     () => new Map(),
   );
   const [visibleKeys, setVisibleKeys] = useState<string[]>([]);
+  const [gridWindowKeys, setGridWindowKeys] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [selectionAnchor, setSelectionAnchor] = useState<string>();
   const [expression, setExpression] = useState("");
@@ -275,6 +284,10 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       ),
     [assets, selected],
   );
+  const vaultReferenceKeys = useMemo(
+    () => referenceResolutionKeys(gridWindowKeys, selected),
+    [gridWindowKeys, selected],
+  );
   const tags = useMemo(
     () => summarizeTags(allAssets, tagFilters),
     [allAssets, tagFilters],
@@ -312,7 +325,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
 
   useEffect(() => {
     let active = true;
-    if (activeVaultId === undefined || visibleKeys.length === 0) {
+    if (activeVaultId === undefined || vaultReferenceKeys.length === 0) {
       setVaultReferences(new Map());
       setVaultReferenceFailures(new Map());
       setVaultReferencesPending(false);
@@ -325,7 +338,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       void api
         .resolveObsidianVaultReferences({
           vaultId: activeVaultId,
-          assetKeys: visibleKeys,
+          assetKeys: vaultReferenceKeys,
         })
         .then((result) => {
           if (!active) return;
@@ -360,7 +373,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [activeVaultId, api, visibleKeys]);
+  }, [activeVaultId, api, vaultReferenceKeys]);
 
   useEffect(() => {
     setSelected(
@@ -1080,6 +1093,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
               api={api}
               assets={visibleAssets}
               onSelect={selectAsset}
+              onWindowChange={setGridWindowKeys}
               selected={selected}
               vaultReferences={vaultReferences}
             />

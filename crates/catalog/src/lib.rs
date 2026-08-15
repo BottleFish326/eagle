@@ -234,7 +234,7 @@ mod tests {
 
     use asset_core::{AssetKind, AssetRecord};
     use asset_index::{AssetQuery, QueryParseErrorKind};
-    use metadata::{MetadataPatch, digest_file};
+    use metadata::{MetadataPatch, digest_file, sidecar_path_for};
     use tempfile::tempdir;
 
     use super::{
@@ -428,6 +428,54 @@ mod tests {
             catalog
                 .query(&AssetQuery {
                     all_tags: BTreeSet::from(["new".into()]),
+                    ..AssetQuery::default()
+                })
+                .is_empty()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_only_directory_reports_write_failure_without_fake_catalog_update() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempdir().expect("tempdir");
+        let asset = directory.path().join("asset.png");
+        fs::write(&asset, b"protected asset").expect("write asset");
+        let asset_digest = digest_file(&asset).expect("asset digest");
+        let sidecar = sidecar_path_for(&asset);
+        let original_permissions = fs::metadata(directory.path())
+            .expect("directory metadata")
+            .permissions();
+        let mut read_only = original_permissions.clone();
+        read_only.set_mode(0o555);
+        fs::set_permissions(directory.path(), read_only).expect("make directory read-only");
+
+        let mut catalog = AssetCatalog::default();
+        catalog.ingest([record("asset", asset.clone())]);
+        let edit = catalog.edit_metadata(&BatchMetadataEdit {
+            targets: vec![target("asset", None)],
+            patch: MetadataPatch {
+                add_tags: BTreeSet::from(["state/review".into()]),
+                ..MetadataPatch::default()
+            },
+        });
+
+        fs::set_permissions(directory.path(), original_permissions)
+            .expect("restore directory permissions");
+        let result = edit.expect("batch failure result");
+        assert!(result.updated.is_empty());
+        assert_eq!(result.failures.len(), 1);
+        assert_eq!(result.failures[0].kind, EditFailureKind::WriteFailed);
+        assert!(!sidecar.exists());
+        assert_eq!(
+            digest_file(&asset).expect("asset digest after edit"),
+            asset_digest
+        );
+        assert!(
+            catalog
+                .query(&AssetQuery {
+                    all_tags: BTreeSet::from(["state/review".into()]),
                     ..AssetQuery::default()
                 })
                 .is_empty()

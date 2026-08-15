@@ -659,12 +659,19 @@ textarea:focus-visible {
 }
 
 .asset-grid {
+  position: relative;
+  min-height: 1px;
+}
+
+.asset-grid-window {
+  position: absolute;
+  inset: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
-  gap: 20px 14px;
+  align-items: start;
 }
 
 .asset-grid-item {
+  height: 100%;
   min-width: 0;
 }
 
@@ -1596,10 +1603,6 @@ textarea:focus-visible {
   .library-main {
     padding-inline: 22px;
   }
-
-  .asset-grid {
-    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
-  }
 }
 
 @media (max-width: 900px) {
@@ -1698,11 +1701,6 @@ textarea:focus-visible {
   .library-actions {
     justify-content: end;
     flex-wrap: wrap;
-  }
-
-  .asset-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px 10px;
   }
 
   .inspector {

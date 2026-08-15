@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "command": "node tools/verify-ui-stability.mjs --duration-seconds 1800 --warmup-seconds 60",
+  "environment": {
+    "cpu": "Apple M4",
+    "memoryBytes": 17179869184,
+    "operatingSystem": "macOS 26.5.2 (25F84)",
+    "fileSystem": "APFS",
+    "storage": "SSD",
+    "node": "24.19.0",
+    "chrome": "151.0.7922.138"
+  },
+  "startedAt": "2026-08-15T06:13:05.115Z",
+  "completedAt": "2026-08-15T06:43:05.188Z",
+  "datasetSize": 10000,
+  "warmupMs": 60000,
+  "durationMs": 1800000,
+  "observationCount": 224,
+  "summary": {
+    "sampleCount": 362,
+    "actionCount": 2025,
+    "firstUsedJsHeapBytes": 35417003,
+    "lastUsedJsHeapBytes": 33986773,
+    "maxUsedJsHeapBytes": 60347036,
+    "heapGrowthBytes": -1430230,
+    "heapSlopeBytesPerMinute": 36746.32124511114,
+    "maxDomNodes": 891,
+    "maxAssetCards": 30,
+    "eventLoopLagP95Ms": 1,
+    "eventLoopLagMaxMs": 3,
+    "longTaskCount": 40,
+    "longTaskDurationMs": 2248,
+    "longTaskRatio": 0.0012488659930123503,
+    "accepted": true,
+    "failures": []
+  },
+  "milestones": [
+    {
+      "targetMinutes": 0,
+      "elapsedMs": 0,
+      "heapMiB": 33.8,
+      "domNodes": 528,
+      "assetCards": 18,
+      "resultCount": 10000,
+      "eventLoopLagMs": 0
+    },
+    {
+      "targetMinutes": 5,
+      "elapsedMs": 300003,
+      "heapMiB": 35.1,
+      "domNodes": 618,
+      "assetCards": 30,
+      "resultCount": 10000,
+      "eventLoopLagMs": 0
+    },
+    {
+      "targetMinutes": 10,
+      "elapsedMs": 600004,
+      "heapMiB": 56.9,
+      "domNodes": 714,
+      "assetCards": 30,
+      "resultCount": 3750,
+      "eventLoopLagMs": 1
+    },
+    {
+      "targetMinutes": 15,
+      "elapsedMs": 900002,
+      "heapMiB": 43.2,
+      "domNodes": 651,
+      "assetCards": 27,
+      "resultCount": 3125,
+      "eventLoopLagMs": 0
+    },
+    {
+      "targetMinutes": 20,
+      "elapsedMs": 1200003,
+      "heapMiB": 57.6,
+      "domNodes": 741,
+      "assetCards": 30,
+      "resultCount": 10000,
+      "eventLoopLagMs": 0
+    },
+    {
+      "targetMinutes": 25,
+      "elapsedMs": 1500003,
+      "heapMiB": 42.4,
+      "domNodes": 591,
+      "assetCards": 27,
+      "resultCount": 2500,
+      "eventLoopLagMs": 0
+    },
+    {
+      "targetMinutes": 30,
+      "elapsedMs": 1800003,
+      "heapMiB": 32.4,
+      "domNodes": 624,
+      "assetCards": 30,
+      "resultCount": 3125,
+      "eventLoopLagMs": 0
+    }
+  ]
+}

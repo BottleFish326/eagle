@@ -1,14 +1,14 @@
 # 开发进度
 
-> 最后更新：2026-08-14
+> 最后更新：2026-08-15
 
 ## 总体状态
 
 | 阶段 | 状态 | 说明 |
 |---|---|---|
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
-| 阶段 1：端到端 MVP | In progress | P1-01 至 P1-09 已完成本地工作项验收；等待 M 数据集 30 分钟资源曲线与最终退出复核 |
-| 阶段 2：可靠性与恢复 | Not started | 等待阶段 1 退出 |
+| 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
+| 阶段 2：可靠性与恢复 | Ready | 阶段 1 已退出，可以开始 P2-01 |
 | 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出 |
 
@@ -39,6 +39,7 @@
 | P1-07 桌面端最小 UI | Completed locally | 根目录管理、增量扁平网格、三态 Tag、查询、检查器、多选批量编辑、错误状态和键盘可访问性通过；见 `reports/p1-07-acceptance.md` |
 | P1-08 Obsidian Vault 内引用 | Completed locally | 多 Vault 原子配置、真实路径边界、标准 WikiLink、复制与文本拖放、同名目录消歧通过；见 `reports/p1-08-acceptance.md` |
 | P1-09 应用配置与可恢复性 | Completed locally | 可读 YAML 偏好、原子持久化、缓存版本自动重建、安全显式重建、脱敏诊断导出和用户数据说明通过；见 `reports/p1-09-acceptance.md` |
+| 阶段 1 退出验收 | Accepted locally | P1-A01 至 P1-A12 全部通过；M UI 连续 30 分钟、2,025 次动作、0 错误；见 `reports/phase-1-acceptance.md` |
 
 > 当前仓库未配置 Git 远程地址，因此 GitHub Actions 的首次托管运行仍待远程仓库建立后确认；工作流所执行的同一组命令已在本机通过。
 
@@ -65,6 +66,8 @@
 
 - [阶段 0 性能报告](reports/phase-0-performance.md)
 - [阶段 0 验收报告](reports/phase-0-acceptance.md)
+- [阶段 1 性能与稳定性报告](reports/phase-1-performance.md)
+- [阶段 1 验收报告](reports/phase-1-acceptance.md)
 - [P1-05 查询引擎验收报告](reports/p1-05-acceptance.md)
 - [P1-06 缩略图管线验收报告](reports/p1-06-acceptance.md)
 - [P1-07 桌面端最小 UI 验收报告](reports/p1-07-acceptance.md)
@@ -77,3 +80,5 @@
 - 查询 p95：19.082 毫秒；
 - 峰值常驻内存：202,473,472 字节，约 193 MiB。
 - P1-05 正式复合查询（L 数据集、200 次）p95：53.691 毫秒。
+- 阶段 1 M 数据集：10,000 素材、2,000 Sidecar，完整扫描 321 毫秒，200 次复合查询 p95 3.346 毫秒，原始素材摘要不变。
+- 阶段 1 M UI：60 秒预热后连续运行 30 分钟，2,025 次动作、0 错误；最大 JS 堆 57.6 MiB，最大 30 张卡片，事件循环延迟 p95 1 毫秒，Long Task 占比 0.1249%。

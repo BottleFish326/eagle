@@ -4,11 +4,13 @@
 
 ## 当前状态
 
-阶段 0 已通过全部技术与 Obsidian 实机验收。阶段 1 的 P1-01 至 P1-09 已完成本地工作项验收，当前具备工程骨架、素材根管理、可取消增量扫描、具备并发保护的 Sidecar 批量编辑、布尔 Tag 查询、按视口请求的版本化缩略图管线、可操作的扁平素材桌面界面、Obsidian Vault 内标准引用，以及可读配置、安全缓存重建和脱敏诊断导出。阶段 1 最终退出仍需完成 M 数据集 30 分钟资源曲线与综合复核。开发阶段、交付物和验收规范见：
+阶段 0 已通过全部技术与 Obsidian 实机验收。阶段 1 的 P1-01 至 P1-09 和 P1-A01 至 P1-A12 已完成本地验收，当前具备工程骨架、素材根管理、可取消增量扫描、具备并发保护的 Sidecar 批量编辑、布尔 Tag 查询、按视口窗口化的版本化缩略图管线、可操作的扁平素材桌面界面、Obsidian Vault 内标准引用，以及可读配置、安全缓存重建和脱敏诊断导出。阶段 2 已具备启动条件；仓库尚无远程地址，首次托管 CI 仍待远程建立后确认。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
 - [阶段 0 验收报告](docs/reports/phase-0-acceptance.md)
+- [阶段 1 性能与稳定性报告](docs/reports/phase-1-performance.md)
+- [阶段 1 验收报告](docs/reports/phase-1-acceptance.md)
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
 - [P1-03 验收报告](docs/reports/p1-03-acceptance.md)
@@ -69,9 +71,11 @@ Node.js 版本由 `.nvmrc` 固定为 24 LTS。安装各 JavaScript 工作区依�
 npm ci --prefix apps/desktop
 npm ci --prefix integrations/obsidian-bridge
 npm run ci
+npm run test:medium
+npm run test:stability
 ```
 
-`npm run ci` 依次执行格式检查、Rust/TypeScript 静态检查、全部单元测试、S 数据集跨模块测试、Tauri 桌面端构建和 Obsidian 插件构建。
+`npm run ci` 依次执行格式检查、Rust/TypeScript 静态检查、全部单元测试、S 数据集跨模块测试、Tauri 桌面端构建和 Obsidian 插件构建。`npm run test:medium` 在受标记保护的临时目录生成 10,000 项 M 夹具，验证扫描、复合查询和原始素材摘要后安全清理，用于阶段/每日规模回归，不放入每次提交的快速 CI。`npm run test:stability` 使用独立 Chrome 对同规模界面预热 60 秒并连续滚动、筛选 30 分钟，自动拒绝堆增长、主线程阻塞、全量卡片挂载、错误结果、页面重载和采集超时；默认需要 macOS Google Chrome，可用 `-- --chrome <path>` 覆盖浏览器路径。
 
 ## 阶段 0 原型单独验证
 

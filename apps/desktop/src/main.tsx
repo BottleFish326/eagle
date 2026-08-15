@@ -14,3 +14,10 @@ createRoot(root).render(
     <App />
   </StrictMode>,
 );
+
+if (import.meta.env.DEV) {
+  void import("./stability-harness").then(
+    ({ installStabilityHarnessFromLocation }) =>
+      installStabilityHarnessFromLocation(window.location.search),
+  );
+}

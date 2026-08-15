@@ -67,6 +67,17 @@ export interface ResolveVaultReferencesResult {
   failures: VaultReferenceFailure[];
 }
 
+export function referenceResolutionKeys(
+  windowKeys: readonly string[],
+  selectedKeys: ReadonlySet<string>,
+): string[] {
+  const keys = new Set(windowKeys);
+  if (selectedKeys.size === 1) {
+    for (const selectedKey of selectedKeys) keys.add(selectedKey);
+  }
+  return [...keys];
+}
+
 type Invoke = <T>(
   command: string,
   argumentsValue?: Record<string, unknown>,

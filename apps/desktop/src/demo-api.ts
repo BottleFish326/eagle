@@ -16,10 +16,20 @@ import { matchesDemoExpression } from "./ui-model";
 
 const DEMO_ROOT_ID = "0198a9b2-43c0-7cb0-a733-6dc58f829814";
 const DEMO_VAULT_ID = "0198a9b2-43c0-7cb0-a733-6dc58f829815";
+const DEFAULT_DEMO_ASSET_COUNT = 16;
+const MEDIUM_DEMO_ASSET_COUNT = 10_000;
 
-export function createDemoDesktopApi(): DesktopApi {
+export interface DemoDesktopApiOptions {
+  assetCount?: number;
+}
+
+export function createDemoDesktopApi(
+  options: DemoDesktopApiOptions = {},
+): DesktopApi {
+  const assetCount = normalizeDemoAssetCount(options.assetCount);
   let roots: LibraryRootStatus[] = [demoRoot()];
-  let assets = demoAssets();
+  let assets = demoAssets(assetCount);
+  let assetsByKey = new Map(assets.map((asset) => [asset.key, asset]));
   let vaults: ObsidianVaultStatus[] = [demoVault()];
   let applicationConfig: ApplicationConfig = {
     schema: 1,
@@ -38,6 +48,7 @@ export function createDemoDesktopApi(): DesktopApi {
     },
   };
   const previewKeys = new Map<string, string>();
+  const previewBytes = new Map<string, Promise<ArrayBuffer>>();
   const timers = new Map<string, number[]>();
 
   return {
@@ -57,6 +68,7 @@ export function createDemoDesktopApi(): DesktopApi {
     async resetDerivedState() {
       const removedFiles = previewKeys.size;
       previewKeys.clear();
+      previewBytes.clear();
       return {
         cache: { removedFiles, removedBytes: removedFiles * 4096 },
         catalogAssetsRemoved: assets.length,
@@ -109,6 +121,7 @@ export function createDemoDesktopApi(): DesktopApi {
       if (current === undefined) throw new Error("素材根不存在");
       roots = roots.filter((root) => root.id !== id);
       assets = assets.filter((asset) => asset.rootId !== id);
+      assetsByKey = new Map(assets.map((asset) => [asset.key, asset]));
       return structuredClone(current);
     },
     async startLibraryScan(rootId, receive) {
@@ -116,6 +129,12 @@ export function createDemoDesktopApi(): DesktopApi {
       const root = roots.find((candidate) => candidate.id === rootId);
       if (root === undefined) throw new Error("素材根不存在");
       const matching = assets.filter((asset) => asset.rootId === rootId);
+      const batchSize = matching.length > DEFAULT_DEMO_ASSET_COUNT ? 128 : 8;
+      const batches = Array.from(
+        { length: Math.ceil(matching.length / batchSize) },
+        (_, sequence) =>
+          matching.slice(sequence * batchSize, (sequence + 1) * batchSize),
+      );
       const eventTimers = [
         window.setTimeout(
           () =>
@@ -125,13 +144,20 @@ export function createDemoDesktopApi(): DesktopApi {
             }),
           40,
         ),
-        window.setTimeout(
-          () => receive(batchEvent(scanId, matching.slice(0, 8), 0)),
-          180,
-        ),
-        window.setTimeout(
-          () => receive(batchEvent(scanId, matching.slice(8), 1)),
-          360,
+        ...batches.map((batch, sequence) =>
+          window.setTimeout(
+            () =>
+              receive(
+                batchEvent(
+                  scanId,
+                  batch,
+                  sequence,
+                  matching.length,
+                  Math.min((sequence + 1) * batchSize, matching.length),
+                ),
+              ),
+            80 + sequence * 30,
+          ),
         ),
         window.setTimeout(
           () =>
@@ -150,7 +176,7 @@ export function createDemoDesktopApi(): DesktopApi {
                 },
               },
             }),
-          500,
+          120 + batches.length * 30,
         ),
       ];
       timers.set(scanId, eventTimers);
@@ -210,14 +236,13 @@ export function createDemoDesktopApi(): DesktopApi {
           },
         };
         assets[index] = next;
+        assetsByKey.set(next.key, next);
         updated.push(structuredClone(next));
       }
       return { updated, failures: [] } satisfies BatchMetadataEditResult;
     },
     async requestThumbnail(input) {
-      const asset = assets.find(
-        (candidate) => candidate.key === input.assetKey,
-      );
+      const asset = assetsByKey.get(input.assetKey);
       if (asset === undefined) throw new Error("素材不存在");
       if (
         asset.kind !== "image" ||
@@ -235,7 +260,9 @@ export function createDemoDesktopApi(): DesktopApi {
         } satisfies ThumbnailOutcome;
       }
       const cacheKey = demoCacheKey(asset.key);
-      previewKeys.set(cacheKey, asset.key);
+      const variant = demoThumbnailVariant(asset);
+      const cacheHit = previewBytes.has(variant);
+      previewKeys.set(cacheKey, variant);
       return {
         status: "ready",
         thumbnail: {
@@ -246,17 +273,24 @@ export function createDemoDesktopApi(): DesktopApi {
           height: Math.min(asset.dimensions?.height ?? 480, input.maxEdge),
           sourceSize: asset.size ?? 0,
           sourceModifiedUnixMs: asset.modifiedUnixMs ?? 0,
-          cacheHit: false,
+          cacheHit,
           decoderVersion: "demo-preview-v1",
         },
       } satisfies ThumbnailOutcome;
     },
     async readThumbnail(cacheKey) {
-      return renderDemoThumbnail(previewKeys.get(cacheKey) ?? cacheKey);
+      const variant = previewKeys.get(cacheKey) ?? cacheKey;
+      let bytes = previewBytes.get(variant);
+      if (bytes === undefined) {
+        bytes = renderDemoThumbnail(variant);
+        previewBytes.set(variant, bytes);
+      }
+      return bytes;
     },
     async clearThumbnailCache() {
       const removedFiles = previewKeys.size;
       previewKeys.clear();
+      previewBytes.clear();
       return { removedFiles, removedBytes: removedFiles * 4096 };
     },
     async listObsidianVaults() {
@@ -300,7 +334,7 @@ export function createDemoDesktopApi(): DesktopApi {
         failures: [],
       };
       for (const assetKey of [...new Set(input.assetKeys)]) {
-        const asset = assets.find((candidate) => candidate.key === assetKey);
+        const asset = assetsByKey.get(assetKey);
         if (asset === undefined) {
           result.failures.push({
             assetKey,
@@ -370,7 +404,7 @@ function demoRoot(): LibraryRootStatus {
   };
 }
 
-function demoAssets(): AssetRecord[] {
+function demoAssets(count = DEFAULT_DEMO_ASSET_COUNT): AssetRecord[] {
   const rows: Array<{
     name: string;
     tags: string[];
@@ -478,28 +512,41 @@ function demoAssets(): AssetRecord[] {
       },
     },
   ];
-  return rows.map((row, index) => {
-    const path = `/Users/demo/Pictures/Design Archive/${row.name}`;
+  const now = Date.now();
+  return Array.from({ length: count }, (_, index) => {
+    const row = rows[index % rows.length];
     const extension = row.name.split(".").at(-1) ?? "png";
+    const stem = row.name.slice(0, -(extension.length + 1));
+    const fileName =
+      count === rows.length
+        ? row.name
+        : `${stem}-${index.toString().padStart(5, "0")}.${extension}`;
+    const relativePath =
+      count === rows.length
+        ? fileName
+        : `group-${Math.floor(index / 500)
+            .toString()
+            .padStart(3, "0")}/${fileName}`;
+    const path = `/Users/demo/Pictures/Design Archive/${relativePath}`;
     return {
       key: path,
       id: demoUuid(index + 1),
       rootId: DEMO_ROOT_ID,
       path,
-      relativePath: row.name,
+      relativePath,
       sidecarPath: `${path}.asset.yml`,
       sidecarState: {
         schema: 1,
         digest: `demo-sidecar-${index}`,
         updatedAt: new Date(Date.now() - index * 3600_000).toISOString(),
       },
-      fileName: row.name,
+      fileName,
       extension,
       mime: extension === "jpg" ? "image/jpeg" : `image/${extension}`,
       kind: "image",
       size: 420_000 + index * 73_129,
-      createdUnixMs: Date.now() - (index + 30) * 86_400_000,
-      modifiedUnixMs: Date.now() - index * 7_200_000,
+      createdUnixMs: now - (index + 30) * 86_400_000,
+      modifiedUnixMs: now - index * 7_200_000,
       fileReadOnly: false,
       dimensions: row.dimensions
         ? { width: row.dimensions[0], height: row.dimensions[1] }
@@ -520,6 +567,8 @@ function batchEvent(
   scanId: string,
   records: AssetRecord[],
   sequence: number,
+  total: number,
+  visitedFiles: number,
 ): LibraryScanEvent {
   return {
     event: "batch",
@@ -537,10 +586,26 @@ function batchEvent(
                 },
               ]
             : [],
-        visitedFiles: sequence === 0 ? records.length : demoAssets().length,
+        visitedFiles: Math.min(visitedFiles, total),
       },
     },
   };
+}
+
+function normalizeDemoAssetCount(value: number | undefined): number {
+  return value === MEDIUM_DEMO_ASSET_COUNT
+    ? MEDIUM_DEMO_ASSET_COUNT
+    : DEFAULT_DEMO_ASSET_COUNT;
+}
+
+export function demoAssetCountFromSearch(
+  search: string,
+  development: boolean,
+): number {
+  if (!development) return DEFAULT_DEMO_ASSET_COUNT;
+  return new URLSearchParams(search).get("demoDataset") === "medium"
+    ? MEDIUM_DEMO_ASSET_COUNT
+    : DEFAULT_DEMO_ASSET_COUNT;
 }
 
 function emptyQuery(): AssetQuery {
@@ -561,6 +626,10 @@ function demoCacheKey(value: string): string {
     hash = Math.imul(hash, 16777619);
   }
   return Math.abs(hash).toString(16).padStart(8, "0").repeat(8).slice(0, 64);
+}
+
+function demoThumbnailVariant(asset: AssetRecord): string {
+  return asset.tags.join("|");
 }
 
 async function renderDemoThumbnail(seed: string): Promise<ArrayBuffer> {

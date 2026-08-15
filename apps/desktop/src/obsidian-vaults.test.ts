@@ -4,6 +4,7 @@ import {
   addObsidianVault,
   copyVaultReference,
   listObsidianVaults,
+  referenceResolutionKeys,
   referenceFailureLabel,
   removeObsidianVault,
   resolveObsidianVaultReferences,
@@ -44,6 +45,20 @@ describe("Obsidian Vault command wire", () => {
         { input: { vaultId: "vault-id", assetKeys: ["asset-key"] } },
       ],
     ]);
+  });
+});
+
+describe("Obsidian reference resolution window", () => {
+  it("resolves the visible grid window and one inspected asset", () => {
+    expect(
+      referenceResolutionKeys(["window-a", "window-b"], new Set(["inspected"])),
+    ).toEqual(["window-a", "window-b", "inspected"]);
+    expect(
+      referenceResolutionKeys(
+        ["window-a", "window-b"],
+        new Set(["selected-a", "selected-b"]),
+      ),
+    ).toEqual(["window-a", "window-b"]);
   });
 });
 
