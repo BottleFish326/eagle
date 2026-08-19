@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段 0 与阶段 1 已通过本地验收。阶段 2 已完成 P2-01 至 P2-03：文件监听可最终收敛，素材移动和孤立 Sidecar 可安全诊断/显式重联，批量元数据操作具有纯文件事务日志、崩溃续传和不覆盖外部编辑的条件恢复。下一项为 P2-04 并发编辑与同步冲突。仓库尚无远程地址，首次托管 CI 仍待远程建立后确认。开发阶段、交付物和验收规范见：
+阶段 0 与阶段 1 已通过本地验收。阶段 2 已完成 P2-01 至 P2-04：文件监听可最终收敛，素材移动和孤立 Sidecar 可安全诊断/显式重联，批量元数据操作具有纯文件事务恢复，并发编辑具有完整版本校验和字段级显式解决，同步冲突副本只读展示而不自动删除或合并。下一项为 P2-05 缓存生命周期。仓库尚无远程地址，首次托管 CI 仍待远程建立后确认。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
@@ -14,6 +14,7 @@
 - [P2-01 验收报告](docs/reports/p2-01-acceptance.md)
 - [P2-02 验收报告](docs/reports/p2-02-acceptance.md)
 - [P2-03 验收报告](docs/reports/p2-03-acceptance.md)
+- [P2-04 验收报告](docs/reports/p2-04-acceptance.md)
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
 - [P1-03 验收报告](docs/reports/p1-03-acceptance.md)

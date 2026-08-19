@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 
 use asset_core::{AssetIssue, AssetRecord};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
-use metadata::{Fingerprint, digest_file, quick_fingerprint_file, read_sidecar, sidecar_path_for};
+use metadata::{
+    ConflictField, Fingerprint, UserMetadata, digest_file, inspect_sidecar_version,
+    quick_fingerprint_file, read_sidecar, sidecar_path_for,
+};
 use serde::Serialize;
 use thiserror::Error;
 use uuid::Uuid;
@@ -55,6 +58,26 @@ pub struct RelinkCandidate {
     pub ambiguous: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SyncConflictSource {
+    Dropbox,
+    Syncthing,
+    Other,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncConflictCopy {
+    pub path: PathBuf,
+    pub source: SyncConflictSource,
+    pub modified_unix_ms: Option<i64>,
+    pub sidecar_id: Option<Uuid>,
+    pub original_sidecar_path: Option<PathBuf>,
+    pub differing_fields: Vec<ConflictField>,
+    pub message: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReconciliationReport {
@@ -62,6 +85,7 @@ pub struct ReconciliationReport {
     pub orphan_sidecars: Vec<OrphanSidecar>,
     pub missing_assets: Vec<MissingAsset>,
     pub pending_moves: Vec<RelinkCandidate>,
+    pub sync_conflict_copies: Vec<SyncConflictCopy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -115,72 +139,27 @@ pub fn inspect_reconciliation(
     let mut orphan_sidecars = Vec::new();
     let mut missing_assets = Vec::new();
     let mut pending_moves = Vec::new();
+    let mut sync_conflict_copies = Vec::new();
 
-    let mut walker = WalkDir::new(&root).follow_links(false);
-    if !options.recursive {
-        walker = walker.max_depth(1);
-    }
-    for entry in walker.into_iter().filter_entry(|entry| {
-        should_visit_entry(entry.path(), entry.depth(), &root, options, &ignore)
-    }) {
-        let Ok(entry) = entry else { continue };
-        if !entry.file_type().is_file() || !is_asset_sidecar(entry.path()) {
+    let files = reconciliation_files(&root, options, &ignore);
+    let canonical_sidecars = canonical_sidecars(assets);
+
+    for path in &files {
+        if let Some(source) = sync_conflict_source(path) {
+            sync_conflict_copies.push(inspect_sync_conflict_copy(
+                path,
+                source,
+                &canonical_sidecars,
+            ));
             continue;
         }
-        let sidecar_path = entry.into_path();
-        let expected_asset_path = asset_path_for_sidecar(&sidecar_path);
-        let mismatched_adjacent_asset = assets.iter().any(|asset| {
-            asset.path == expected_asset_path
-                && asset
-                    .issues
-                    .iter()
-                    .any(|issue| matches!(issue, AssetIssue::MismatchedSidecar(_)))
-        });
-        if expected_asset_path.is_file() && !mismatched_adjacent_asset {
-            continue;
+        if let Some((diagnostic, missing, candidates)) =
+            inspect_orphan_sidecar(root_id, path, assets, &candidates_by_size)
+        {
+            orphan_sidecars.push(diagnostic);
+            missing_assets.push(missing);
+            pending_moves.extend(candidates);
         }
-
-        let mut diagnostic = OrphanSidecar {
-            sidecar_id: None,
-            sidecar_path: sidecar_path.clone(),
-            expected_asset_path: expected_asset_path.clone(),
-            state: OrphanSidecarState::Invalid,
-            message: None,
-            candidate_count: 0,
-        };
-        match read_sidecar(&sidecar_path) {
-            Ok((sidecar, sidecar_digest)) => {
-                diagnostic.sidecar_id = Some(sidecar.id);
-                if let Some(fingerprint) = sidecar.fingerprint {
-                    let mut candidates = confirmed_candidates(
-                        root_id,
-                        sidecar.id,
-                        &sidecar_path,
-                        &sidecar_digest,
-                        &fingerprint,
-                        &candidates_by_size,
-                    );
-                    let ambiguous = candidates.len() > 1;
-                    for candidate in &mut candidates {
-                        candidate.ambiguous = ambiguous;
-                    }
-                    diagnostic.state = OrphanSidecarState::Ready;
-                    diagnostic.candidate_count = candidates.len();
-                    pending_moves.extend(candidates);
-                } else {
-                    diagnostic.state = OrphanSidecarState::MissingFingerprint;
-                    diagnostic.message =
-                        Some("Sidecar 没有素材指纹；应用不会仅凭文件名或大小猜测关联".into());
-                }
-            }
-            Err(error) => diagnostic.message = Some(error.to_string()),
-        }
-        missing_assets.push(MissingAsset {
-            sidecar_id: diagnostic.sidecar_id,
-            expected_asset_path,
-            sidecar_path: sidecar_path.clone(),
-        });
-        orphan_sidecars.push(diagnostic);
     }
 
     orphan_sidecars.sort_by(|left, right| left.sidecar_path.cmp(&right.sidecar_path));
@@ -190,12 +169,220 @@ pub fn inspect_reconciliation(
             .cmp(&right.sidecar_path)
             .then_with(|| left.asset_path.cmp(&right.asset_path))
     });
+    sync_conflict_copies.sort_by(|left, right| left.path.cmp(&right.path));
     Ok(ReconciliationReport {
         root_id,
         orphan_sidecars,
         missing_assets,
         pending_moves,
+        sync_conflict_copies,
     })
+}
+
+fn canonical_sidecars(assets: &[AssetRecord]) -> BTreeMap<Uuid, Vec<(PathBuf, UserMetadata)>> {
+    assets
+        .iter()
+        .filter_map(|asset| {
+            Some((
+                asset.id?,
+                (
+                    asset.sidecar_path.clone()?,
+                    UserMetadata {
+                        tags: asset.tags.clone(),
+                        rating: asset.rating,
+                        favorite: asset.favorite,
+                        note: asset.note.clone(),
+                        aliases: asset.aliases.clone(),
+                    },
+                ),
+            ))
+        })
+        .fold(BTreeMap::new(), |mut sidecars, (id, value)| {
+            sidecars.entry(id).or_insert_with(Vec::new).push(value);
+            sidecars
+        })
+}
+
+fn inspect_orphan_sidecar(
+    root_id: Uuid,
+    sidecar_path: &Path,
+    assets: &[AssetRecord],
+    candidates_by_size: &BTreeMap<u64, Vec<&AssetRecord>>,
+) -> Option<(OrphanSidecar, MissingAsset, Vec<RelinkCandidate>)> {
+    if !is_asset_sidecar(sidecar_path) {
+        return None;
+    }
+    let expected_asset_path = asset_path_for_sidecar(sidecar_path);
+    let mismatched_adjacent_asset = assets.iter().any(|asset| {
+        asset.path == expected_asset_path
+            && asset
+                .issues
+                .iter()
+                .any(|issue| matches!(issue, AssetIssue::MismatchedSidecar(_)))
+    });
+    if expected_asset_path.is_file() && !mismatched_adjacent_asset {
+        return None;
+    }
+    let mut diagnostic = OrphanSidecar {
+        sidecar_id: None,
+        sidecar_path: sidecar_path.to_path_buf(),
+        expected_asset_path: expected_asset_path.clone(),
+        state: OrphanSidecarState::Invalid,
+        message: None,
+        candidate_count: 0,
+    };
+    let mut candidates = Vec::new();
+    match read_sidecar(sidecar_path) {
+        Ok((sidecar, sidecar_digest)) => {
+            diagnostic.sidecar_id = Some(sidecar.id);
+            if let Some(fingerprint) = sidecar.fingerprint {
+                candidates = confirmed_candidates(
+                    root_id,
+                    sidecar.id,
+                    sidecar_path,
+                    &sidecar_digest,
+                    &fingerprint,
+                    candidates_by_size,
+                );
+                let ambiguous = candidates.len() > 1;
+                for candidate in &mut candidates {
+                    candidate.ambiguous = ambiguous;
+                }
+                diagnostic.state = OrphanSidecarState::Ready;
+                diagnostic.candidate_count = candidates.len();
+            } else {
+                diagnostic.state = OrphanSidecarState::MissingFingerprint;
+                diagnostic.message =
+                    Some("Sidecar 没有素材指纹；应用不会仅凭文件名或大小猜测关联".into());
+            }
+        }
+        Err(error) => diagnostic.message = Some(error.to_string()),
+    }
+    let missing = MissingAsset {
+        sidecar_id: diagnostic.sidecar_id,
+        expected_asset_path,
+        sidecar_path: sidecar_path.to_path_buf(),
+    };
+    Some((diagnostic, missing, candidates))
+}
+
+fn reconciliation_files(root: &Path, options: &ScanOptions, ignore: &GlobSet) -> Vec<PathBuf> {
+    let mut walker = WalkDir::new(root).follow_links(false);
+    if !options.recursive {
+        walker = walker.max_depth(1);
+    }
+    walker
+        .into_iter()
+        .filter_entry(|entry| {
+            should_visit_entry(entry.path(), entry.depth(), root, options, ignore)
+        })
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_file())
+        .map(walkdir::DirEntry::into_path)
+        .filter(|path| is_asset_sidecar(path) || sync_conflict_source(path).is_some())
+        .collect()
+}
+
+fn inspect_sync_conflict_copy(
+    path: &Path,
+    source: SyncConflictSource,
+    canonical_sidecars: &BTreeMap<Uuid, Vec<(PathBuf, UserMetadata)>>,
+) -> SyncConflictCopy {
+    let modified_unix_ms = inspect_sidecar_version(path)
+        .ok()
+        .map(|version| version.modified_unix_ms);
+    match read_sidecar(path) {
+        Ok((sidecar, _)) => {
+            let sidecar_id = sidecar.id;
+            let current = UserMetadata::from(&sidecar);
+            let Some(originals) = canonical_sidecars.get(&sidecar_id) else {
+                return SyncConflictCopy {
+                    path: path.to_path_buf(),
+                    source,
+                    modified_unix_ms,
+                    sidecar_id: Some(sidecar_id),
+                    original_sidecar_path: None,
+                    differing_fields: Vec::new(),
+                    message: Some("未找到具有相同稳定 ID 的原始 Sidecar；未执行任何操作".into()),
+                };
+            };
+            if originals.len() != 1 {
+                return SyncConflictCopy {
+                    path: path.to_path_buf(),
+                    source,
+                    modified_unix_ms,
+                    sidecar_id: Some(sidecar_id),
+                    original_sidecar_path: None,
+                    differing_fields: Vec::new(),
+                    message: Some("存在多个相同稳定 ID 的原始 Sidecar；未猜测来源".into()),
+                };
+            }
+            let (original_path, original) = &originals[0];
+            SyncConflictCopy {
+                path: path.to_path_buf(),
+                source,
+                modified_unix_ms,
+                sidecar_id: Some(sidecar_id),
+                original_sidecar_path: Some(original_path.clone()),
+                differing_fields: differing_user_fields(original, &current),
+                message: None,
+            }
+        }
+        Err(error) => SyncConflictCopy {
+            path: path.to_path_buf(),
+            source,
+            modified_unix_ms,
+            sidecar_id: None,
+            original_sidecar_path: None,
+            differing_fields: Vec::new(),
+            message: Some(error.to_string()),
+        },
+    }
+}
+
+fn differing_user_fields(left: &UserMetadata, right: &UserMetadata) -> Vec<ConflictField> {
+    let mut fields = Vec::new();
+    if left.tags != right.tags {
+        fields.push(ConflictField::Tags);
+    }
+    if left.rating != right.rating {
+        fields.push(ConflictField::Rating);
+    }
+    if left.favorite != right.favorite {
+        fields.push(ConflictField::Favorite);
+    }
+    if left.note != right.note {
+        fields.push(ConflictField::Note);
+    }
+    if left.aliases != right.aliases {
+        fields.push(ConflictField::Aliases);
+    }
+    fields
+}
+
+fn sync_conflict_source(path: &Path) -> Option<SyncConflictSource> {
+    let name = path.file_name()?.to_string_lossy().to_ascii_lowercase();
+    if !matches!(
+        path.extension()
+            .map(|value| value.to_string_lossy().to_ascii_lowercase())
+            .as_deref(),
+        Some("yml" | "yaml")
+    ) || !name.contains(".asset")
+    {
+        return None;
+    }
+    if name.contains(".sync-conflict-") {
+        Some(SyncConflictSource::Syncthing)
+    } else if name.contains("conflicted copy") && name.contains('(') {
+        Some(SyncConflictSource::Dropbox)
+    } else if (name.contains("conflict copy") && name.contains('('))
+        || name.contains(".conflicted.")
+        || name.contains("-conflicted-copy")
+    {
+        Some(SyncConflictSource::Other)
+    } else {
+        None
+    }
 }
 
 /// Applies one previously displayed candidate after revalidating all paths and hashes.
@@ -387,13 +574,17 @@ fn should_visit_entry(
 mod tests {
     use std::collections::BTreeSet;
     use std::fs;
+    use std::path::Path;
 
     use asset_core::AssetRecord;
-    use metadata::{MetadataPatch, edit_asset_metadata, sidecar_path_for};
+    use metadata::{
+        ExpectedVersion, MetadataPatch, edit_asset_metadata, read_sidecar, sidecar_path_for,
+        write_sidecar_atomic,
+    };
     use tempfile::tempdir;
     use uuid::Uuid;
 
-    use super::{apply_relink, inspect_reconciliation};
+    use super::{SyncConflictSource, apply_relink, inspect_reconciliation, sync_conflict_source};
     use crate::{ScanOptions, scan_root};
 
     const PNG: &[u8] = &[
@@ -403,6 +594,90 @@ mod tests {
         0xf8, 0x0f, 0x00, 0x01, 0x05, 0x01, 0x01, 0x27, 0x18, 0xe3, 0x66, 0x00, 0x00, 0x00, 0x00,
         0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
     ];
+
+    #[test]
+    fn recognizes_known_sync_conflict_copy_names_conservatively() {
+        assert_eq!(
+            sync_conflict_source(Path::new(
+                "photo.png.asset (Device's conflicted copy 2026-08-19).yml"
+            )),
+            Some(SyncConflictSource::Dropbox)
+        );
+        assert_eq!(
+            sync_conflict_source(Path::new(
+                "photo.png.asset.sync-conflict-20260819-123456.yml"
+            )),
+            Some(SyncConflictSource::Syncthing)
+        );
+        assert_eq!(sync_conflict_source(Path::new("photo.png.asset.yml")), None);
+        assert_eq!(
+            sync_conflict_source(Path::new("notes (conflicted copy 2026-08-19).txt")),
+            None
+        );
+        assert_eq!(
+            sync_conflict_source(Path::new("config (conflicted copy 2026-08-19).yml")),
+            None
+        );
+    }
+
+    #[test]
+    fn reports_sync_conflict_copy_without_modifying_or_merging_either_file() {
+        let directory = tempdir().expect("tempdir");
+        let asset = directory.path().join("photo.png");
+        fs::write(&asset, PNG).expect("asset");
+        edit_asset_metadata(
+            &asset,
+            None,
+            &MetadataPatch {
+                add_tags: BTreeSet::from(["original".into()]),
+                note: Some("original note".into()),
+                ..MetadataPatch::default()
+            },
+        )
+        .expect("sidecar");
+        let original_path = sidecar_path_for(&asset);
+        let original_bytes = fs::read(&original_path).expect("original bytes");
+        let (mut conflict_sidecar, _) = read_sidecar(&original_path).expect("read original");
+        conflict_sidecar.tags.insert("external".into());
+        conflict_sidecar.note = "conflicted note".into();
+        conflict_sidecar.touch();
+        let conflict_path = directory
+            .path()
+            .join("photo.png.asset (Device's conflicted copy 2026-08-19).yml");
+        write_sidecar_atomic(&conflict_path, &conflict_sidecar, &ExpectedVersion::Missing)
+            .expect("conflict copy");
+        let conflict_bytes = fs::read(&conflict_path).expect("conflict bytes");
+
+        let assets = scan_root(directory.path(), &ScanOptions::default())
+            .expect("scan")
+            .assets;
+        let report = inspect_reconciliation(
+            Uuid::now_v7(),
+            directory.path(),
+            &ScanOptions::default(),
+            &assets,
+        )
+        .expect("inspect");
+
+        assert_eq!(report.sync_conflict_copies.len(), 1);
+        let conflict = &report.sync_conflict_copies[0];
+        assert_eq!(
+            conflict.original_sidecar_path.as_ref(),
+            Some(&original_path.canonicalize().expect("canonical original"))
+        );
+        assert_eq!(
+            conflict.differing_fields,
+            vec![metadata::ConflictField::Tags, metadata::ConflictField::Note]
+        );
+        assert_eq!(
+            fs::read(original_path).expect("original after"),
+            original_bytes
+        );
+        assert_eq!(
+            fs::read(conflict_path).expect("conflict after"),
+            conflict_bytes
+        );
+    }
 
     #[test]
     fn moved_asset_is_a_confirmed_candidate_but_no_file_moves_during_inspection() {

@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AssetSidecar, ExpectedVersion, SidecarError, digest_file, fingerprint_asset, read_sidecar,
-    serialize_sidecar, sidecar_path_for, write_sidecar_atomic,
+    AssetSidecar, ExpectedVersion, SidecarError, SidecarFileVersion, fingerprint_asset,
+    read_sidecar_versioned, serialize_sidecar, sidecar_path_for, write_sidecar_atomic,
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,6 +28,8 @@ pub struct MetadataEdit {
     pub sidecar_path: PathBuf,
     pub sidecar: AssetSidecar,
     pub digest: String,
+    pub size: u64,
+    pub modified_unix_ms: i64,
     pub created: bool,
     pub changed: bool,
 }
@@ -63,6 +65,21 @@ pub fn edit_asset_metadata(
     )?)
 }
 
+/// Applies metadata using the complete size, mtime, and digest observed by the caller.
+///
+/// # Errors
+///
+/// Returns [`SidecarError`] when any version component changed or persistence fails.
+pub fn edit_asset_metadata_versioned(
+    asset_path: &Path,
+    expected: Option<&SidecarFileVersion>,
+    patch: &MetadataPatch,
+) -> Result<MetadataEdit, SidecarError> {
+    commit_prepared_metadata_edit(prepare_asset_metadata_edit_versioned(
+        asset_path, expected, patch,
+    )?)
+}
+
 /// Prepares deterministic Sidecar content without writing it to disk.
 ///
 /// # Errors
@@ -73,25 +90,59 @@ pub fn prepare_asset_metadata_edit(
     expected_digest: Option<&str>,
     patch: &MetadataPatch,
 ) -> Result<PreparedMetadataEdit, SidecarError> {
+    prepare_asset_metadata_edit_inner(
+        asset_path,
+        expected_digest.map(ExpectedObservation::Digest),
+        patch,
+    )
+}
+
+/// Prepares deterministic Sidecar content against a complete observed file version.
+///
+/// # Errors
+///
+/// Returns [`SidecarError`] when any version component changed or input is invalid.
+pub fn prepare_asset_metadata_edit_versioned(
+    asset_path: &Path,
+    expected: Option<&SidecarFileVersion>,
+    patch: &MetadataPatch,
+) -> Result<PreparedMetadataEdit, SidecarError> {
+    prepare_asset_metadata_edit_inner(
+        asset_path,
+        expected.map(ExpectedObservation::Snapshot),
+        patch,
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ExpectedObservation<'a> {
+    Digest(&'a str),
+    Snapshot(&'a SidecarFileVersion),
+}
+
+fn prepare_asset_metadata_edit_inner(
+    asset_path: &Path,
+    expected: Option<ExpectedObservation<'_>>,
+    patch: &MetadataPatch,
+) -> Result<PreparedMetadataEdit, SidecarError> {
     validate_patch(patch)?;
     if !asset_path.is_file() {
         return Err(SidecarError::InvalidAsset(asset_path.to_path_buf()));
     }
     let sidecar_path = sidecar_path_for(asset_path);
-    let (mut sidecar, expected, created) = if let Some(expected_digest) = expected_digest {
+    let (mut sidecar, expected, created) = if let Some(expected) = expected {
         if !sidecar_path.is_file() {
             return Err(SidecarError::Conflict { path: sidecar_path });
         }
-        let actual_digest = digest_file(&sidecar_path)?;
-        if actual_digest != expected_digest {
+        let (sidecar, actual) = read_sidecar_versioned(&sidecar_path)?;
+        let matches = match expected {
+            ExpectedObservation::Digest(digest) => actual.digest == digest,
+            ExpectedObservation::Snapshot(snapshot) => actual == *snapshot,
+        };
+        if !matches {
             return Err(SidecarError::Conflict { path: sidecar_path });
         }
-        let (sidecar, _) = read_sidecar(&sidecar_path)?;
-        (
-            sidecar,
-            ExpectedVersion::Digest(expected_digest.to_owned()),
-            false,
-        )
+        (sidecar, ExpectedVersion::Snapshot(actual), false)
     } else {
         (AssetSidecar::new(), ExpectedVersion::Missing, true)
     };
@@ -132,7 +183,7 @@ pub fn commit_prepared_metadata_edit(
     prepared: PreparedMetadataEdit,
 ) -> Result<MetadataEdit, SidecarError> {
     if !prepared.changed {
-        let ExpectedVersion::Digest(digest) = prepared.expected else {
+        let ExpectedVersion::Snapshot(version) = prepared.expected else {
             return Err(SidecarError::Conflict {
                 path: prepared.sidecar_path,
             });
@@ -140,7 +191,9 @@ pub fn commit_prepared_metadata_edit(
         return Ok(MetadataEdit {
             sidecar_path: prepared.sidecar_path,
             sidecar: prepared.sidecar,
-            digest,
+            digest: version.digest,
+            size: version.size,
+            modified_unix_ms: version.modified_unix_ms,
             created: prepared.created,
             changed: false,
         });
@@ -154,6 +207,8 @@ pub fn commit_prepared_metadata_edit(
         sidecar_path: prepared.sidecar_path,
         sidecar: prepared.sidecar,
         digest: receipt.digest,
+        size: receipt.size,
+        modified_unix_ms: receipt.modified_unix_ms,
         created: prepared.created,
         changed: true,
     })

@@ -12,7 +12,7 @@
 | `path` | 文件系统 | 否 | 规范化绝对路径 |
 | `relativePath` | 文件系统 | 否 | 相对于授权根的路径 |
 | `sidecarPath` | 文件系统 | 是 | 只有检测到相邻 sidecar 时存在 |
-| `sidecarState` | Sidecar 读取结果 | 是 | Schema、内容摘要和更新时间，供后续乐观并发写入使用 |
+| `sidecarState` | Sidecar 读取结果 | 是 | Schema、SHA-256、文件大小、mtime 和逻辑更新时间，供后续完整版本乐观并发写入使用 |
 | `fileName`、`extension` | 文件系统路径 | 部分 | `extension` 统一为小写 |
 | `mime`、`kind` | 文件头与受限扩展名回退 | 否 | P1 只接收 PNG/JPEG/GIF/WebP |
 | `size` | 文件系统 metadata | 是 | 文件在扫描中消失或不可读时为空 |

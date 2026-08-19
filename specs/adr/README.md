@@ -33,3 +33,4 @@
 | [ADR-018](018-bounded-filesystem-event-reconciliation.md) | 有界文件事件归一化与一致性扫描 | Accepted |
 | [ADR-019](019-stable-identity-and-explicit-relink.md) | 稳定身份扫描收敛与显式 Sidecar 重新关联 | Accepted |
 | [ADR-020](020-durable-batch-metadata-transactions.md) | 纯文件批量元数据事务与条件恢复 | Accepted |
+| [ADR-021](021-explicit-metadata-and-sync-conflicts.md) | 显式元数据合并与同步冲突副本诊断 | Accepted |

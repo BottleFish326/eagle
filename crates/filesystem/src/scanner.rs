@@ -8,7 +8,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use asset_core::{AssetDimensions, AssetIssue, AssetRecord, NativeImageMetadata, SidecarState};
 use exif::{In, Tag, Value};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
-use metadata::{quick_fingerprint_file, read_sidecar, sidecar_path_for};
+use metadata::{quick_fingerprint_file, read_sidecar_versioned, sidecar_path_for};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -373,8 +373,8 @@ fn merge_adjacent_sidecar(asset: &mut AssetRecord, asset_path: &Path, asset_size
         return;
     }
     asset.sidecar_path = Some(sidecar_path.clone());
-    match read_sidecar(&sidecar_path) {
-        Ok((sidecar, digest)) => {
+    match read_sidecar_versioned(&sidecar_path) {
+        Ok((sidecar, version)) => {
             if sidecar.fingerprint.as_ref().is_some_and(|fingerprint| {
                 fingerprint.size != asset_size
                     || fingerprint.quick_value.as_ref().is_some_and(|expected| {
@@ -389,7 +389,9 @@ fn merge_adjacent_sidecar(asset: &mut AssetRecord, asset_path: &Path, asset_size
             // File-derived fields remain authoritative. Sidecars only provide user metadata.
             asset.sidecar_state = Some(SidecarState {
                 schema: sidecar.schema,
-                digest,
+                digest: version.digest,
+                size: version.size,
+                modified_unix_ms: version.modified_unix_ms,
                 updated_at: sidecar.updated_at.clone(),
             });
             asset.id = Some(sidecar.id);

@@ -55,6 +55,8 @@ pub struct AssetDimensions {
 pub struct SidecarState {
     pub schema: u32,
     pub digest: String,
+    pub size: u64,
+    pub modified_unix_ms: i64,
     pub updated_at: String,
 }
 

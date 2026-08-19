@@ -6,9 +6,10 @@ use std::path::{Path, PathBuf};
 use asset_core::AssetRecord;
 use chrono::{SecondsFormat, Utc};
 use metadata::{
-    AssetSidecar, ExpectedVersion, MetadataPatch, SidecarError, digest_file, fingerprint_asset,
-    prepare_asset_metadata_edit, remove_sidecar_if_version, restore_sidecar_content_atomic,
-    sidecar_path_for,
+    AssetSidecar, ExpectedVersion, MetadataPatch, SidecarError, SidecarFileVersion, digest_file,
+    fingerprint_asset, inspect_sidecar_version, prepare_asset_metadata_edit,
+    prepare_asset_metadata_edit_versioned, remove_sidecar_if_version,
+    restore_sidecar_content_atomic, sidecar_path_for,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -25,6 +26,8 @@ pub struct TransactionTarget {
     pub root_id: Uuid,
     pub asset_path: PathBuf,
     pub expected_sidecar_digest: Option<String>,
+    pub expected_sidecar_size: Option<u64>,
+    pub expected_sidecar_modified_unix_ms: Option<i64>,
 }
 
 impl TransactionTarget {
@@ -32,12 +35,16 @@ impl TransactionTarget {
     pub fn from_record(
         record: &AssetRecord,
         expected_sidecar_digest: Option<String>,
+        expected_sidecar_size: Option<u64>,
+        expected_sidecar_modified_unix_ms: Option<i64>,
     ) -> Option<Self> {
         Some(Self {
             key: record.key.clone(),
             root_id: record.root_id?,
             asset_path: record.path.clone(),
             expected_sidecar_digest,
+            expected_sidecar_size,
+            expected_sidecar_modified_unix_ms,
         })
     }
 }
@@ -104,7 +111,7 @@ pub struct CommittedSidecar {
     pub key: String,
     pub sidecar_path: PathBuf,
     pub sidecar: AssetSidecar,
-    pub digest: String,
+    pub version: SidecarFileVersion,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -558,7 +565,7 @@ impl TransactionItem {
             key: self.key.clone(),
             sidecar_path: self.sidecar_path.clone(),
             sidecar: serde_yaml_ng::from_str(content).ok()?,
-            digest: self.planned_digest.clone()?,
+            version: inspect_sidecar_version(&self.sidecar_path).ok()?,
         })
     }
 }
@@ -567,11 +574,23 @@ fn prepare_item(target: &TransactionTarget, patch: &MetadataPatch) -> Transactio
     let sidecar_path = sidecar_path_for(&target.asset_path);
     let original_content = fs::read_to_string(&sidecar_path).ok();
     let original_digest = original_content.as_deref().map(digest_content);
-    match prepare_asset_metadata_edit(
-        &target.asset_path,
-        target.expected_sidecar_digest.as_deref(),
-        patch,
-    ) {
+    let expected_version = target.expected_sidecar_digest.as_ref().and_then(|digest| {
+        Some(SidecarFileVersion {
+            digest: digest.clone(),
+            size: target.expected_sidecar_size?,
+            modified_unix_ms: target.expected_sidecar_modified_unix_ms?,
+        })
+    });
+    let prepared = if expected_version.is_some() || target.expected_sidecar_digest.is_none() {
+        prepare_asset_metadata_edit_versioned(&target.asset_path, expected_version.as_ref(), patch)
+    } else {
+        prepare_asset_metadata_edit(
+            &target.asset_path,
+            target.expected_sidecar_digest.as_deref(),
+            patch,
+        )
+    };
+    match prepared {
         Ok(prepared) => {
             let planned_content = if prepared.changed {
                 prepared.planned_content
@@ -847,6 +866,8 @@ mod tests {
                     root_id,
                     asset_path: path,
                     expected_sidecar_digest: None,
+                    expected_sidecar_size: None,
+                    expected_sidecar_modified_unix_ms: None,
                 }
             })
             .collect::<Vec<_>>();
@@ -896,6 +917,8 @@ mod tests {
                     root_id,
                     asset_path: path,
                     expected_sidecar_digest: None,
+                    expected_sidecar_size: None,
+                    expected_sidecar_modified_unix_ms: None,
                 }
             })
             .collect::<Vec<_>>();
@@ -909,6 +932,8 @@ mod tests {
         )
         .expect("existing sidecar");
         targets[2].expected_sidecar_digest = Some(existing.digest);
+        targets[2].expected_sidecar_size = Some(existing.size);
+        targets[2].expected_sidecar_modified_unix_ms = Some(existing.modified_unix_ms);
         let original_content =
             fs::read_to_string(sidecar_path_for(&targets[2].asset_path)).expect("original");
         let execution = store
@@ -959,6 +984,8 @@ mod tests {
                     root_id,
                     asset_path: path,
                     expected_sidecar_digest: None,
+                    expected_sidecar_size: None,
+                    expected_sidecar_modified_unix_ms: None,
                 }
             })
             .collect::<Vec<_>>();

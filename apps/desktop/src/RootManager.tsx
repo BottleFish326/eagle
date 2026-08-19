@@ -150,7 +150,8 @@ export function RootManager({
                 {report !== undefined &&
                 (report.orphanSidecars.length > 0 ||
                   report.missingAssets.length > 0 ||
-                  report.pendingMoves.length > 0) ? (
+                  report.pendingMoves.length > 0 ||
+                  report.syncConflictCopies.length > 0) ? (
                   <ReconciliationPanel
                     busy={relinkBusy}
                     onConfirm={onConfirmRelink}
@@ -233,7 +234,36 @@ function ReconciliationPanel({
         <span>孤立 Sidecar {report.orphanSidecars.length}</span>
         <span>丢失素材 {report.missingAssets.length}</span>
         <span>待确认移动 {report.pendingMoves.length}</span>
+        <span>同步冲突副本 {report.syncConflictCopies.length}</span>
       </div>
+      {report.syncConflictCopies.map((conflict) => (
+        <div
+          className="reconciliation-item reconciliation-item--conflict"
+          key={conflict.path}
+        >
+          <div>
+            <small>{syncConflictSourceLabel(conflict.source)}</small>
+            <strong title={conflict.path}>{fileName(conflict.path)}</strong>
+            <span>
+              {conflict.modifiedUnixMs === null
+                ? "修改时间未知"
+                : formatSyncConflictTime(conflict.modifiedUnixMs)}
+              {conflict.differingFields.length > 0
+                ? ` · 差异：${conflict.differingFields
+                    .map(conflictFieldLabel)
+                    .join("、")}`
+                : " · 尚无可比较字段"}
+            </span>
+            {conflict.originalSidecarPath ? (
+              <span title={conflict.originalSidecarPath}>
+                原文件：{fileName(conflict.originalSidecarPath)}
+              </span>
+            ) : null}
+            {conflict.message ? <em>{conflict.message}</em> : null}
+          </div>
+          <span className="reconciliation-state">仅诊断，不自动合并或删除</span>
+        </div>
+      ))}
       {report.orphanSidecars.map((orphan) => (
         <div className="reconciliation-item" key={orphan.sidecarPath}>
           <div>
@@ -300,4 +330,44 @@ function accessLabel(root: LibraryRootStatus): string {
     case "unavailable":
       return "当前不可用";
   }
+}
+
+function syncConflictSourceLabel(
+  source: "dropbox" | "syncthing" | "other",
+): string {
+  switch (source) {
+    case "dropbox":
+      return "Dropbox 冲突副本";
+    case "syncthing":
+      return "Syncthing 冲突副本";
+    case "other":
+      return "同步冲突副本";
+  }
+}
+
+function conflictFieldLabel(
+  field: "tags" | "rating" | "favorite" | "note" | "aliases",
+): string {
+  switch (field) {
+    case "tags":
+      return "Tag";
+    case "rating":
+      return "评分";
+    case "favorite":
+      return "收藏";
+    case "note":
+      return "备注";
+    case "aliases":
+      return "别名";
+  }
+}
+
+function formatSyncConflictTime(value: number): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(value);
 }

@@ -28,6 +28,8 @@ export interface NativeImageMetadata {
 export interface SidecarState {
   schema: number;
   digest: string;
+  size: number;
+  modifiedUnixMs: number;
   updatedAt: string;
 }
 

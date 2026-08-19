@@ -201,6 +201,7 @@ export function createDemoDesktopApi(
         orphanSidecars: [],
         missingAssets: [],
         pendingMoves: [],
+        syncConflictCopies: [],
       };
     },
     async confirmLibraryRelink() {
@@ -267,6 +268,8 @@ export function createDemoDesktopApi(
           sidecarState: {
             schema: 1,
             digest: `demo-${Date.now()}`,
+            size: 0,
+            modifiedUnixMs: Date.now(),
             updatedAt: new Date().toISOString(),
           },
         };
@@ -278,7 +281,14 @@ export function createDemoDesktopApi(
         updated,
         failures: [],
         transaction: null,
+        conflicts: [],
       } satisfies BatchMetadataEditResult;
+    },
+    async resolveMetadataConflict() {
+      throw new Error("演示数据没有并发编辑冲突");
+    },
+    async dismissMetadataConflict() {
+      return undefined;
     },
     async listMetadataTransactions() {
       return [];
@@ -589,6 +599,8 @@ function demoAssets(count = DEFAULT_DEMO_ASSET_COUNT): AssetRecord[] {
       sidecarState: {
         schema: 1,
         digest: `demo-sidecar-${index}`,
+        size: 0,
+        modifiedUnixMs: now - index * 7_200_000,
         updatedAt: new Date(Date.now() - index * 3600_000).toISOString(),
       },
       fileName,

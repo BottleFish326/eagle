@@ -37,6 +37,12 @@ use sha2::{Digest, Sha256};
 use tauri::{Manager, State, ipc::Channel, ipc::Response};
 use uuid::Uuid;
 
+mod metadata_conflicts;
+
+use metadata_conflicts::{
+    MetadataConflictStore, MetadataConflictView, ResolveMetadataConflictInput,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BuildInfo {
@@ -83,6 +89,7 @@ struct BatchMetadataEditCommandResult {
     updated: Vec<asset_core::AssetRecord>,
     failures: Vec<MetadataEditFailure>,
     transaction: Option<TransactionSummary>,
+    conflicts: Vec<MetadataConflictView>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1106,6 +1113,7 @@ fn edit_asset_metadata(
     input: BatchMetadataEdit,
     catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
     transactions: State<'_, Arc<MetadataTransactionStore>>,
+    conflicts: State<'_, Arc<MetadataConflictStore>>,
     diagnostics: State<'_, Arc<DiagnosticService>>,
 ) -> Result<BatchMetadataEditCommandResult, String> {
     let targets = {
@@ -1114,7 +1122,7 @@ fn edit_asset_metadata(
             .map_err(|_| "asset catalog lock is poisoned".to_owned())?;
         transaction_targets(&catalog, &input)
     };
-    let result = if let Some(targets) = targets {
+    let mut result = if let Some(targets) = targets {
         let execution = transactions
             .execute(&targets, &input.patch)
             .map_err(|error| error.to_string())?;
@@ -1129,7 +1137,7 @@ fn edit_asset_metadata(
                     &committed.key,
                     committed.sidecar_path,
                     committed.sidecar,
-                    committed.digest,
+                    committed.version,
                 )
             })
             .collect();
@@ -1149,6 +1157,7 @@ fn edit_asset_metadata(
                 })
                 .collect(),
             transaction: Some(execution.summary),
+            conflicts: Vec::new(),
         }
     } else if input.targets.len() >= 2 {
         let catalog = catalog
@@ -1158,6 +1167,7 @@ fn edit_asset_metadata(
             updated: Vec::new(),
             failures: failed_batch_transaction_preflight(&catalog, &input),
             transaction: None,
+            conflicts: Vec::new(),
         }
     } else {
         let BatchMetadataEditResult { updated, failures } = catalog
@@ -1169,8 +1179,12 @@ fn edit_asset_metadata(
             updated,
             failures,
             transaction: None,
+            conflicts: Vec::new(),
         }
     };
+    conflicts.invalidate_keys(result.updated.iter().map(|record| record.key.as_str()))?;
+    result.conflicts =
+        capture_metadata_conflicts(&result.failures, &catalog, conflicts.inner(), &input.patch)?;
     record_diagnostic(
         diagnostics.inner(),
         if result.failures.is_empty() {
@@ -1183,9 +1197,129 @@ fn edit_asset_metadata(
         [
             ("updatedCount", result.updated.len().to_string()),
             ("failureCount", result.failures.len().to_string()),
+            ("conflictCount", result.conflicts.len().to_string()),
         ],
     );
     Ok(result)
+}
+
+fn capture_metadata_conflicts(
+    failures: &[MetadataEditFailure],
+    catalog: &Mutex<AssetCatalog>,
+    conflicts: &MetadataConflictStore,
+    patch: &metadata::MetadataPatch,
+) -> Result<Vec<MetadataConflictView>, String> {
+    let catalog = catalog
+        .lock()
+        .map_err(|_| "asset catalog lock is poisoned".to_owned())?;
+    Ok(failures
+        .iter()
+        .filter(|failure| failure.kind == EditFailureKind::Conflict)
+        .filter_map(|failure| catalog.get(&failure.key))
+        .filter_map(|record| conflicts.capture(record, patch).ok())
+        .collect())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn resolve_metadata_conflict(
+    input: ResolveMetadataConflictInput,
+    conflicts: State<'_, Arc<MetadataConflictStore>>,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    scans: State<'_, Arc<ScanCoordinator>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+) -> Result<asset_core::AssetRecord, String> {
+    let pending = conflicts.get(input.conflict_id)?;
+    let root = roots
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .roots()
+        .into_iter()
+        .find(|root| root.root.id == pending.root_id)
+        .ok_or_else(|| format!("conflict library root was not found: {}", pending.root_id))?;
+    if !root.root.enabled || root.access_status != RootAccessStatus::Available {
+        return Err(format!(
+            "conflict library root is not available: {}",
+            pending.root_id
+        ));
+    }
+    if scans.is_root_active(pending.root_id) {
+        return Err(format!(
+            "library root is currently being scanned: {}",
+            pending.root_id
+        ));
+    }
+    ensure_transaction_item_inside_root(
+        &TransactionScopeItem {
+            root_id: pending.root_id,
+            asset_path: pending.asset_path.clone(),
+            sidecar_path: pending.sidecar_path.clone(),
+        },
+        &root.root,
+    )?;
+    let actual_version = metadata::inspect_sidecar_version(&pending.sidecar_path)
+        .map_err(|error| error.to_string())?;
+    if actual_version != pending.current_version {
+        return Err("Sidecar 在冲突界面打开后再次发生变化；请重新扫描后重试".into());
+    }
+    let mut resolved = metadata::resolve_metadata_conflict(
+        &pending.current_sidecar,
+        &pending.patch,
+        &pending.analysis,
+        &input.resolution,
+    )
+    .map_err(|error| error.to_string())?;
+    resolved.fingerprint =
+        Some(metadata::fingerprint_asset(&pending.asset_path).map_err(|error| error.to_string())?);
+    let version = if resolved == pending.current_sidecar {
+        pending.current_version
+    } else {
+        resolved.touch();
+        let receipt = metadata::write_sidecar_atomic(
+            &pending.sidecar_path,
+            &resolved,
+            &metadata::ExpectedVersion::Snapshot(pending.current_version),
+        )
+        .map_err(|error| error.to_string())?;
+        metadata::SidecarFileVersion {
+            digest: receipt.digest,
+            size: receipt.size,
+            modified_unix_ms: receipt.modified_unix_ms,
+        }
+    };
+    let updated = catalog
+        .lock()
+        .map_err(|_| "asset catalog lock is poisoned".to_owned())?
+        .apply_committed_sidecar(&pending.key, pending.sidecar_path, resolved, version)
+        .ok_or_else(|| format!("asset was not found: {}", pending.key))?;
+    conflicts.remove(input.conflict_id)?;
+    record_diagnostic(
+        diagnostics.inner(),
+        DiagnosticLevel::Info,
+        "metadata",
+        "conflict-resolved",
+        [("conflictId", input.conflict_id.to_string())],
+    );
+    Ok(updated)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn dismiss_metadata_conflict(
+    conflict_id: Uuid,
+    conflicts: State<'_, Arc<MetadataConflictStore>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+) -> Result<(), String> {
+    conflicts.remove(conflict_id)?;
+    record_diagnostic(
+        diagnostics.inner(),
+        DiagnosticLevel::Info,
+        "metadata",
+        "conflict-dismissed",
+        [("conflictId", conflict_id.to_string())],
+    );
+    Ok(())
 }
 
 fn failed_batch_transaction_preflight(
@@ -1227,7 +1361,12 @@ fn transaction_targets(
         .iter()
         .map(|target| {
             let record = catalog.get(&target.key)?;
-            TransactionTarget::from_record(record, target.expected_sidecar_digest.clone())
+            TransactionTarget::from_record(
+                record,
+                target.expected_sidecar_digest.clone(),
+                target.expected_sidecar_size,
+                target.expected_sidecar_modified_unix_ms,
+            )
         })
         .collect()
 }
@@ -1643,6 +1782,7 @@ pub fn run() {
             app.manage(Arc::new(MetadataTransactionStore::open(
                 config_directory.join("metadata-transactions-v1"),
             )?));
+            app.manage(Arc::new(MetadataConflictStore::default()));
             let previews = Arc::new(ThumbnailService::open(&cache_directory, 4)?);
             let cache_startup = previews.startup_report();
             app.manage(previews);
@@ -1689,6 +1829,8 @@ pub fn run() {
             start_library_watch,
             stop_library_watch,
             edit_asset_metadata,
+            resolve_metadata_conflict,
+            dismiss_metadata_conflict,
             list_metadata_transactions,
             continue_metadata_transaction,
             restore_metadata_transaction,
@@ -1922,6 +2064,7 @@ mod tests {
                 restored_count: 0,
                 root_ids: vec![root_id],
             }),
+            conflicts: Vec::new(),
         })
         .expect("serialize batch transaction result");
 
@@ -1948,6 +2091,8 @@ mod tests {
             record.sidecar_state = Some(SidecarState {
                 schema: 1,
                 digest: format!("current-{key}"),
+                size: 128,
+                modified_unix_ms: 1_234,
                 updated_at: "2026-08-19T08:00:00.000Z".into(),
             });
             record
@@ -1958,10 +2103,14 @@ mod tests {
                 AssetEditTarget {
                     key: "first".into(),
                     expected_sidecar_digest: Some("stale".into()),
+                    expected_sidecar_size: Some(128),
+                    expected_sidecar_modified_unix_ms: Some(1_234),
                 },
                 AssetEditTarget {
                     key: "second".into(),
                     expected_sidecar_digest: Some("current-second".into()),
+                    expected_sidecar_size: Some(128),
+                    expected_sidecar_modified_unix_ms: Some(1_234),
                 },
             ],
             patch: MetadataPatch {
@@ -1981,6 +2130,8 @@ mod tests {
                 AssetEditTarget {
                     key: "missing".into(),
                     expected_sidecar_digest: None,
+                    expected_sidecar_size: None,
+                    expected_sidecar_modified_unix_ms: None,
                 },
             ],
             patch: input.patch,

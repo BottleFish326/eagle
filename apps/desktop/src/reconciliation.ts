@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { MetadataConflictField } from "./metadata-conflicts";
 
 export type OrphanSidecarState = "ready" | "missing-fingerprint" | "invalid";
 
@@ -31,11 +32,22 @@ export interface RelinkCandidate {
   ambiguous: boolean;
 }
 
+export interface SyncConflictCopy {
+  path: string;
+  source: "dropbox" | "syncthing" | "other";
+  modifiedUnixMs: number | null;
+  sidecarId: string | null;
+  originalSidecarPath: string | null;
+  differingFields: MetadataConflictField[];
+  message: string | null;
+}
+
 export interface ReconciliationReport {
   rootId: string;
   orphanSidecars: OrphanSidecar[];
   missingAssets: MissingAsset[];
   pendingMoves: RelinkCandidate[];
+  syncConflictCopies: SyncConflictCopy[];
 }
 
 export interface RelinkReceipt {

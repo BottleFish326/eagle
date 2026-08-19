@@ -14,7 +14,8 @@ pub use library::{
 };
 pub use reconciliation::{
     MissingAsset, OrphanSidecar, OrphanSidecarState, ReconciliationError, ReconciliationReport,
-    RelinkCandidate, RelinkReceipt, apply_relink, inspect_reconciliation,
+    RelinkCandidate, RelinkReceipt, SyncConflictCopy, SyncConflictSource, apply_relink,
+    inspect_reconciliation,
 };
 pub use scanner::{
     FilesystemError, ScanBatch, ScanCancellation, ScanCompletion, ScanOptions, ScanProblem,

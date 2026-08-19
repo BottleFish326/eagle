@@ -2,7 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use asset_core::{AssetIssue, AssetRecord, SidecarState};
 use asset_index::{AssetIndex, AssetQuery, QueryParseError, parse_query};
-use metadata::{AssetSidecar, MetadataPatch, SidecarError, edit_asset_metadata};
+use metadata::{
+    AssetSidecar, MetadataPatch, SidecarError, SidecarFileVersion, edit_asset_metadata_versioned,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -12,6 +14,10 @@ use uuid::Uuid;
 pub struct AssetEditTarget {
     pub key: String,
     pub expected_sidecar_digest: Option<String>,
+    #[serde(default)]
+    pub expected_sidecar_size: Option<u64>,
+    #[serde(default)]
+    pub expected_sidecar_modified_unix_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -214,10 +220,10 @@ impl AssetCatalog {
         key: &str,
         sidecar_path: std::path::PathBuf,
         sidecar: AssetSidecar,
-        digest: String,
+        version: SidecarFileVersion,
     ) -> Option<AssetRecord> {
         let mut record = self.index.get(key)?.clone();
-        merge_sidecar_into_record(&mut record, sidecar_path, sidecar, digest);
+        merge_sidecar_into_record(&mut record, sidecar_path, sidecar, version);
         self.index.upsert(record.clone());
         Some(record)
     }
@@ -282,19 +288,18 @@ impl AssetCatalog {
             .get(&target.key)
             .cloned()
             .ok_or_else(|| EditOneError::NotFound(target.key.clone()))?;
-        let catalog_digest = record
-            .sidecar_state
-            .as_ref()
-            .map(|state| state.digest.as_str());
-        if catalog_digest != target.expected_sidecar_digest.as_deref() {
-            return Err(EditOneError::CatalogConflict(target.key.clone()));
-        }
-        let edit = edit_asset_metadata(
-            &record.path,
-            target.expected_sidecar_digest.as_deref(),
-            patch,
-        )?;
-        merge_sidecar_into_record(&mut record, edit.sidecar_path, edit.sidecar, edit.digest);
+        let expected = expected_version_from_catalog(&record, target)?;
+        let edit = edit_asset_metadata_versioned(&record.path, expected.as_ref(), patch)?;
+        merge_sidecar_into_record(
+            &mut record,
+            edit.sidecar_path,
+            edit.sidecar,
+            SidecarFileVersion {
+                digest: edit.digest,
+                size: edit.size,
+                modified_unix_ms: edit.modified_unix_ms,
+            },
+        );
         self.index.upsert(record.clone());
         Ok(record)
     }
@@ -304,13 +309,15 @@ fn merge_sidecar_into_record(
     record: &mut AssetRecord,
     sidecar_path: std::path::PathBuf,
     sidecar: AssetSidecar,
-    digest: String,
+    version: SidecarFileVersion,
 ) {
     record.id = Some(sidecar.id);
     record.sidecar_path = Some(sidecar_path);
     record.sidecar_state = Some(SidecarState {
         schema: sidecar.schema,
-        digest,
+        digest: version.digest,
+        size: version.size,
+        modified_unix_ms: version.modified_unix_ms,
         updated_at: sidecar.updated_at.clone(),
     });
     record.tags = sidecar.tags;
@@ -321,6 +328,31 @@ fn merge_sidecar_into_record(
     record
         .issues
         .retain(|issue| !matches!(issue, AssetIssue::InvalidSidecar(_)));
+}
+
+fn expected_version_from_catalog(
+    record: &AssetRecord,
+    target: &AssetEditTarget,
+) -> Result<Option<SidecarFileVersion>, EditOneError> {
+    match (&record.sidecar_state, &target.expected_sidecar_digest) {
+        (None, None) => Ok(None),
+        (Some(state), Some(digest))
+            if state.digest == *digest
+                && target
+                    .expected_sidecar_size
+                    .is_none_or(|size| size == state.size)
+                && target
+                    .expected_sidecar_modified_unix_ms
+                    .is_none_or(|modified| modified == state.modified_unix_ms) =>
+        {
+            Ok(Some(SidecarFileVersion {
+                digest: state.digest.clone(),
+                size: state.size,
+                modified_unix_ms: state.modified_unix_ms,
+            }))
+        }
+        _ => Err(EditOneError::CatalogConflict(target.key.clone())),
+    }
 }
 
 fn records_by_stable_id(records: &[AssetRecord]) -> BTreeMap<Uuid, Vec<&AssetRecord>> {
@@ -689,6 +721,8 @@ mod tests {
         AssetEditTarget {
             key: key.into(),
             expected_sidecar_digest,
+            expected_sidecar_size: None,
+            expected_sidecar_modified_unix_ms: None,
         }
     }
 }

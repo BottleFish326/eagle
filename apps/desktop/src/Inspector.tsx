@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 
 import { Icon } from "./Icon";
 import type { MetadataPatch } from "./metadata-editor";
+import type {
+  FieldConflictResolution,
+  MetadataConflict,
+  MetadataConflictField,
+  MetadataConflictResolution,
+  TagConflictResolution,
+  UserMetadataSnapshot,
+} from "./metadata-conflicts";
 import {
   type ObsidianVaultStatus,
   referenceFailureLabel,
@@ -14,11 +22,17 @@ import { formatBytes, issueDetails, issueLabel } from "./ui-model";
 export function Inspector({
   assets,
   busy,
+  conflicts,
+  conflictBusy,
   obsidian,
   onEdit,
+  onResolveConflict,
+  onDismissConflict,
 }: {
   assets: readonly AssetRecord[];
   busy: boolean;
+  conflicts: readonly MetadataConflict[];
+  conflictBusy?: string;
   obsidian: {
     vault?: ObsidianVaultStatus;
     reference?: VaultReference;
@@ -28,10 +42,19 @@ export function Inspector({
     onConfigure: () => void;
   };
   onEdit: (patch: MetadataPatch) => Promise<void>;
+  onResolveConflict: (
+    conflict: MetadataConflict,
+    resolution: MetadataConflictResolution,
+  ) => Promise<void>;
+  onDismissConflict: (conflict: MetadataConflict) => Promise<void>;
 }) {
   const asset = assets.length === 1 ? assets[0] : undefined;
   const [tag, setTag] = useState("");
   const [note, setNote] = useState(asset?.note ?? "");
+  const selectedKeys = new Set(assets.map((item) => item.key));
+  const selectedConflicts = conflicts.filter((conflict) =>
+    selectedKeys.has(conflict.key),
+  );
 
   useEffect(() => setNote(asset?.note ?? ""), [asset?.key, asset?.note]);
 
@@ -65,6 +88,16 @@ export function Inspector({
           eyebrow="批量编辑"
           title={`${assets.length} 项素材`}
         />
+        {selectedConflicts.map((conflict) => (
+          <MetadataConflictPanel
+            busy={conflictBusy !== undefined}
+            conflict={conflict}
+            key={conflict.id}
+            onDismiss={onDismissConflict}
+            onResolve={onResolveConflict}
+            resolving={conflictBusy === conflict.id}
+          />
+        ))}
         <div className="inspector-section">
           <label htmlFor="batch-tag">添加到全部选中项</label>
           <div className="compact-input-row">
@@ -130,6 +163,17 @@ export function Inspector({
         eyebrow={asset.extension?.toUpperCase() ?? asset.kind}
         title={asset.fileName}
       />
+
+      {selectedConflicts.map((conflict) => (
+        <MetadataConflictPanel
+          busy={conflictBusy !== undefined}
+          conflict={conflict}
+          key={conflict.id}
+          onDismiss={onDismissConflict}
+          onResolve={onResolveConflict}
+          resolving={conflictBusy === conflict.id}
+        />
+      ))}
 
       {asset.issues.length > 0 ? (
         <div className="asset-warning" role="status">
@@ -308,6 +352,204 @@ export function Inspector({
       </dl>
     </aside>
   );
+}
+
+function MetadataConflictPanel({
+  conflict,
+  busy,
+  resolving,
+  onResolve,
+  onDismiss,
+}: {
+  conflict: MetadataConflict;
+  busy: boolean;
+  resolving: boolean;
+  onResolve: (
+    conflict: MetadataConflict,
+    resolution: MetadataConflictResolution,
+  ) => Promise<void>;
+  onDismiss: (conflict: MetadataConflict) => Promise<void>;
+}) {
+  const [tags, setTags] = useState<TagConflictResolution>();
+  const [fields, setFields] = useState<
+    Partial<Record<MetadataConflictField, FieldConflictResolution>>
+  >({});
+
+  useEffect(() => {
+    setTags(undefined);
+    setFields({});
+  }, [conflict.id]);
+
+  const ready = conflict.conflictingFields.every((field) =>
+    field === "tags" ? tags !== undefined : fields[field] !== undefined,
+  );
+  const resolve = () =>
+    onResolve(conflict, {
+      ...(tags === undefined ? {} : { tags }),
+      fields,
+    });
+
+  return (
+    <section className="metadata-conflict" aria-label="并发元数据冲突">
+      <div className="metadata-conflict-heading">
+        <div>
+          <strong>检测到外部 Sidecar 修改</strong>
+          <span>{formatConflictTime(conflict.sidecarModifiedUnixMs)}</span>
+        </div>
+        <small>版本校验：mtime · 大小 · SHA-256</small>
+      </div>
+      {conflict.identityChanged ? (
+        <p className="metadata-conflict-warning">
+          外部版本的稳定 ID 也发生变化；解决时保留磁盘上的当前 ID。
+        </p>
+      ) : null}
+      <p>
+        外部变化：
+        {conflict.externallyChangedFields.map(conflictFieldLabel).join("、") ||
+          "文件版本变化但用户字段相同"}
+      </p>
+      {conflict.conflictingFields.length === 0 ? (
+        <p>你的修改与外部字段不重叠，可显式应用到当前外部版本。</p>
+      ) : null}
+      {conflict.conflictingFields.map((field) =>
+        field === "tags" ? (
+          <div className="metadata-conflict-field" key={field}>
+            <strong>Tags</strong>
+            <ConflictVersions conflict={conflict} field={field} />
+            <div className="conflict-choice-row">
+              {(
+                [
+                  ["merge", "合并 Tag"],
+                  ["keep-external", "保留外部"],
+                  ["use-mine", "使用我的"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  aria-pressed={tags === value}
+                  className={tags === value ? "is-active" : ""}
+                  disabled={busy}
+                  key={value}
+                  onClick={() => setTags(value)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="metadata-conflict-field" key={field}>
+            <strong>{conflictFieldLabel(field)}</strong>
+            <ConflictVersions conflict={conflict} field={field} />
+            <div className="conflict-choice-row">
+              {(
+                [
+                  ["keep-external", "保留外部"],
+                  ["use-mine", "使用我的"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  aria-pressed={fields[field] === value}
+                  className={fields[field] === value ? "is-active" : ""}
+                  disabled={busy}
+                  key={value}
+                  onClick={() =>
+                    setFields((current) => ({
+                      ...current,
+                      [field]: value,
+                    }))
+                  }
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ),
+      )}
+      <div className="metadata-conflict-actions">
+        <button
+          className="secondary-button"
+          disabled={busy}
+          onClick={() => void onDismiss(conflict)}
+          type="button"
+        >
+          放弃我的修改并重载
+        </button>
+        <button
+          className="primary-button"
+          disabled={busy || !ready}
+          onClick={() => void resolve()}
+          type="button"
+        >
+          {resolving ? "正在重新验证…" : "按所选版本解决"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ConflictVersions({
+  conflict,
+  field,
+}: {
+  conflict: MetadataConflict;
+  field: MetadataConflictField;
+}) {
+  return (
+    <div className="conflict-versions">
+      <span>
+        <small>编辑前</small>
+        {metadataFieldValue(conflict.base, field)}
+      </span>
+      <span>
+        <small>外部当前</small>
+        {metadataFieldValue(conflict.current, field)}
+      </span>
+      <span>
+        <small>我的修改</small>
+        {metadataFieldValue(conflict.proposed, field)}
+      </span>
+    </div>
+  );
+}
+
+function metadataFieldValue(
+  metadata: UserMetadataSnapshot,
+  field: MetadataConflictField,
+): string {
+  const value = metadata[field];
+  if (Array.isArray(value)) return value.join(", ") || "（空）";
+  if (typeof value === "boolean") return value ? "是" : "否";
+  if (field === "rating") return `${value} 星`;
+  return String(value || "（空）");
+}
+
+function conflictFieldLabel(field: MetadataConflictField): string {
+  switch (field) {
+    case "tags":
+      return "Tag";
+    case "rating":
+      return "评分";
+    case "favorite":
+      return "收藏";
+    case "note":
+      return "备注";
+    case "aliases":
+      return "别名";
+  }
+}
+
+function formatConflictTime(value: number): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(value);
 }
 
 function InspectorHeading({

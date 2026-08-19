@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -12,11 +13,19 @@ use tempfile::NamedTempFile;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod conflict;
 mod edit;
+
+pub use conflict::{
+    ConflictAnalysis, ConflictField, ConflictResolutionError, FieldConflictResolution,
+    MetadataConflictResolution, TagConflictResolution, UserMetadata, analyze_metadata_conflict,
+    resolve_metadata_conflict,
+};
 
 pub use edit::{
     MetadataEdit, MetadataPatch, PreparedMetadataEdit, commit_prepared_metadata_edit,
-    edit_asset_metadata, prepare_asset_metadata_edit,
+    edit_asset_metadata, edit_asset_metadata_versioned, prepare_asset_metadata_edit,
+    prepare_asset_metadata_edit_versioned,
 };
 
 pub const SIDECAR_SCHEMA_VERSION: u32 = 1;
@@ -146,13 +155,24 @@ impl Default for AssetSidecar {
 pub enum ExpectedVersion {
     Missing,
     Digest(String),
+    Snapshot(SidecarFileVersion),
     Any,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SidecarFileVersion {
+    pub digest: String,
+    pub size: u64,
+    pub modified_unix_ms: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WriteReceipt {
     pub path: PathBuf,
     pub digest: String,
+    pub size: u64,
+    pub modified_unix_ms: i64,
 }
 
 #[derive(Debug, Error)]
@@ -293,17 +313,35 @@ pub fn quick_fingerprint_file(path: &Path) -> Result<String, SidecarError> {
 ///
 /// Returns [`SidecarError`] when the file cannot be read, parsed, or validated.
 pub fn read_sidecar(path: &Path) -> Result<(AssetSidecar, String), SidecarError> {
-    let bytes = fs::read(path).map_err(|source| SidecarError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
+    let (sidecar, version) = read_sidecar_versioned(path)?;
+    Ok((sidecar, version.digest))
+}
+
+/// Reads, parses, and validates a Sidecar together with a stable file version snapshot.
+///
+/// # Errors
+///
+/// Returns [`SidecarError`] when the file changes while being read or cannot be parsed.
+pub fn read_sidecar_versioned(
+    path: &Path,
+) -> Result<(AssetSidecar, SidecarFileVersion), SidecarError> {
+    let (bytes, version) = read_versioned_bytes(path)?;
     let sidecar: AssetSidecar =
         serde_yaml_ng::from_slice(&bytes).map_err(|source| SidecarError::Parse {
             path: path.to_path_buf(),
             source,
         })?;
     sidecar.validate()?;
-    Ok((sidecar, digest_bytes(&bytes)))
+    Ok((sidecar, version))
+}
+
+/// Reads a stable Sidecar size, modification time, and SHA-256 snapshot.
+///
+/// # Errors
+///
+/// Returns [`SidecarError`] when the file changes during inspection or cannot be read.
+pub fn inspect_sidecar_version(path: &Path) -> Result<SidecarFileVersion, SidecarError> {
+    read_versioned_bytes(path).map(|(_, version)| version)
 }
 
 /// Writes a sidecar through a same-directory temporary file and atomic replacement.
@@ -396,9 +434,17 @@ fn write_serialized_sidecar_atomic(
     inject_fault("after-persist");
     sync_parent(parent)?;
 
+    let version = inspect_sidecar_version(path)?;
+    if version.digest != digest_bytes(serialized) {
+        return Err(SidecarError::Conflict {
+            path: path.to_path_buf(),
+        });
+    }
     Ok(WriteReceipt {
         path: path.to_path_buf(),
-        digest: digest_bytes(serialized),
+        digest: version.digest,
+        size: version.size,
+        modified_unix_ms: version.modified_unix_ms,
     })
 }
 
@@ -441,9 +487,69 @@ fn verify_expected_version(path: &Path, expected: &ExpectedVersion) -> Result<()
                 })
             }
         }
-        ExpectedVersion::Missing | ExpectedVersion::Digest(_) => Err(SidecarError::Conflict {
+        ExpectedVersion::Snapshot(expected) if path.is_file() => {
+            if inspect_sidecar_version(path)? == *expected {
+                Ok(())
+            } else {
+                Err(SidecarError::Conflict {
+                    path: path.to_path_buf(),
+                })
+            }
+        }
+        ExpectedVersion::Missing | ExpectedVersion::Digest(_) | ExpectedVersion::Snapshot(_) => {
+            Err(SidecarError::Conflict {
+                path: path.to_path_buf(),
+            })
+        }
+    }
+}
+
+fn read_versioned_bytes(path: &Path) -> Result<(Vec<u8>, SidecarFileVersion), SidecarError> {
+    let before = fs::metadata(path).map_err(|source| SidecarError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let before_modified = modified_unix_ms(&before, path)?;
+    let bytes = fs::read(path).map_err(|source| SidecarError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let after = fs::metadata(path).map_err(|source| SidecarError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let after_modified = modified_unix_ms(&after, path)?;
+    if before.len() != after.len()
+        || before_modified != after_modified
+        || after.len() != u64::try_from(bytes.len()).unwrap_or(u64::MAX)
+    {
+        return Err(SidecarError::Conflict {
             path: path.to_path_buf(),
-        }),
+        });
+    }
+    let digest = digest_bytes(&bytes);
+    Ok((
+        bytes,
+        SidecarFileVersion {
+            digest,
+            size: after.len(),
+            modified_unix_ms: after_modified,
+        },
+    ))
+}
+
+fn modified_unix_ms(metadata: &fs::Metadata, path: &Path) -> Result<i64, SidecarError> {
+    let modified = metadata.modified().map_err(|source| SidecarError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    Ok(system_time_to_unix_ms(modified))
+}
+
+fn system_time_to_unix_ms(value: SystemTime) -> i64 {
+    match value.duration_since(UNIX_EPOCH) {
+        Ok(duration) => i64::try_from(duration.as_millis()).unwrap_or(i64::MAX),
+        Err(error) => -i64::try_from(error.duration().as_millis()).unwrap_or(i64::MAX),
     }
 }
 
@@ -495,14 +601,15 @@ const fn inject_fault(_point: &str) {}
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::fs::{self, FileTimes, OpenOptions};
+    use std::time::{Duration, SystemTime};
 
     use serde_yaml_ng::Value;
     use tempfile::tempdir;
 
     use super::{
-        AssetSidecar, ExpectedVersion, SidecarError, read_sidecar, sidecar_path_for,
-        write_sidecar_atomic,
+        AssetSidecar, ExpectedVersion, SidecarError, SidecarFileVersion, read_sidecar,
+        sidecar_path_for, write_sidecar_atomic,
     };
 
     #[test]
@@ -547,5 +654,37 @@ mod tests {
 
         assert!(matches!(error, SidecarError::Conflict { .. }));
         assert_eq!(fs::read_to_string(path).expect("read"), "external: edit\n");
+    }
+
+    #[test]
+    fn rejects_a_same_content_file_with_a_changed_modification_time() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("logo.png.asset.yml");
+        let original = AssetSidecar::new();
+        let receipt =
+            write_sidecar_atomic(&path, &original, &ExpectedVersion::Missing).expect("write");
+        let original_bytes = fs::read(&path).expect("read original");
+        let expected = SidecarFileVersion {
+            digest: receipt.digest,
+            size: receipt.size,
+            modified_unix_ms: receipt.modified_unix_ms,
+        };
+
+        let file = OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .expect("open sidecar");
+        file.set_times(
+            FileTimes::new().set_modified(SystemTime::now() + Duration::from_secs(3_600)),
+        )
+        .expect("change modification time");
+
+        let mut proposed = original;
+        proposed.note = "my edit".into();
+        let error = write_sidecar_atomic(&path, &proposed, &ExpectedVersion::Snapshot(expected))
+            .expect_err("mtime-only external touch must invalidate the snapshot");
+
+        assert!(matches!(error, SidecarError::Conflict { .. }));
+        assert_eq!(fs::read(path).expect("read unchanged"), original_bytes);
     }
 }

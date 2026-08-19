@@ -48,6 +48,11 @@ import {
   updateObsidianVault,
 } from "./obsidian-vaults";
 import { editAssetMetadata } from "./metadata-editor";
+import type { MetadataConflictResolution } from "./metadata-conflicts";
+import {
+  dismissMetadataConflict,
+  resolveMetadataConflict,
+} from "./metadata-conflicts";
 import type {
   MetadataTransactionRecoveryResult,
   MetadataTransactionSummary,
@@ -63,7 +68,7 @@ import {
   confirmLibraryRelink,
   inspectLibraryReconciliation,
 } from "./reconciliation";
-import type { LibraryScanEvent } from "./scanner";
+import type { AssetRecord, LibraryScanEvent } from "./scanner";
 import { cancelLibraryScan, startLibraryScan } from "./scanner";
 import type {
   CacheClearReport,
@@ -100,6 +105,11 @@ export interface DesktopApi {
   stopLibraryWatch(watchId: string): Promise<boolean>;
   queryAssets(input: QueryAssetsInput): Promise<QueryAssetsResult>;
   editAssetMetadata(input: BatchMetadataEdit): Promise<BatchMetadataEditResult>;
+  resolveMetadataConflict(
+    conflictId: string,
+    resolution: MetadataConflictResolution,
+  ): Promise<AssetRecord>;
+  dismissMetadataConflict(conflictId: string): Promise<void>;
   listMetadataTransactions(): Promise<MetadataTransactionSummary[]>;
   continueMetadataTransaction(
     id: string,
@@ -140,6 +150,8 @@ export const tauriDesktopApi: DesktopApi = {
   stopLibraryWatch,
   queryAssets,
   editAssetMetadata,
+  resolveMetadataConflict,
+  dismissMetadataConflict,
   listMetadataTransactions,
   continueMetadataTransaction,
   restoreMetadataTransaction,

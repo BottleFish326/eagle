@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type { AssetRecord } from "./scanner";
 import type { MetadataTransactionSummary } from "./metadata-transactions";
+import type { MetadataConflict } from "./metadata-conflicts";
 
 export interface MetadataPatch {
   setTags?: string[];
@@ -16,6 +17,8 @@ export interface MetadataPatch {
 export interface AssetEditTarget {
   key: string;
   expectedSidecarDigest: string | null;
+  expectedSidecarSize: number | null;
+  expectedSidecarModifiedUnixMs: number | null;
 }
 
 export interface BatchMetadataEdit {
@@ -33,6 +36,7 @@ export interface BatchMetadataEditResult {
   updated: AssetRecord[];
   failures: MetadataEditFailure[];
   transaction: MetadataTransactionSummary | null;
+  conflicts: MetadataConflict[];
 }
 
 type Invoke = <T>(

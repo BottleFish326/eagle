@@ -90,6 +90,8 @@ fn create_targets(workspace: &std::path::Path, count: usize) -> Result<Vec<Trans
                 root_id,
                 asset_path,
                 expected_sidecar_digest: None,
+                expected_sidecar_size: None,
+                expected_sidecar_modified_unix_ms: None,
             })
         })
         .collect()

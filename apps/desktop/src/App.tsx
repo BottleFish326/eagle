@@ -20,6 +20,10 @@ import { Icon } from "./Icon";
 import { Inspector } from "./Inspector";
 import type { LibraryRootStatus } from "./library-roots";
 import type { MetadataPatch } from "./metadata-editor";
+import type {
+  MetadataConflict,
+  MetadataConflictResolution,
+} from "./metadata-conflicts";
 import type { MetadataTransactionSummary } from "./metadata-transactions";
 import {
   copyVaultReference,
@@ -109,6 +113,10 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     MetadataTransactionSummary[]
   >([]);
   const [transactionBusy, setTransactionBusy] = useState<string>();
+  const [metadataConflicts, setMetadataConflicts] = useState<
+    MetadataConflict[]
+  >([]);
+  const [metadataConflictBusy, setMetadataConflictBusy] = useState<string>();
   const [vaultReferences, setVaultReferences] = useState<
     Map<string, VaultReference>
   >(() => new Map());
@@ -631,6 +639,9 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         targets: selectedAssets.map((asset) => ({
           key: asset.key,
           expectedSidecarDigest: asset.sidecarState?.digest ?? null,
+          expectedSidecarSize: asset.sidecarState?.size ?? null,
+          expectedSidecarModifiedUnixMs:
+            asset.sidecarState?.modifiedUnixMs ?? null,
         })),
         patch,
       });
@@ -642,10 +653,25 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
           ...current.filter((item) => item.id !== transaction.id),
         ]);
       }
+      if (result.updated.length > 0 || result.conflicts.length > 0) {
+        setMetadataConflicts((current) => {
+          const incoming = new Set(result.conflicts.map((item) => item.key));
+          const updated = new Set(result.updated.map((item) => item.key));
+          return [
+            ...result.conflicts,
+            ...current.filter(
+              (item) => !incoming.has(item.key) && !updated.has(item.key),
+            ),
+          ];
+        });
+      }
       if (result.failures.length > 0) {
         setNotice({
           tone: "error",
-          message: `${result.updated.length} 项已更新，${result.failures.length} 项失败：${result.failures[0].message}`,
+          message:
+            result.conflicts.length > 0
+              ? `${result.updated.length} 项已更新，${result.conflicts.length} 项需要显式解决并发冲突。`
+              : `${result.updated.length} 项已更新，${result.failures.length} 项失败：${result.failures[0].message}`,
         });
       } else {
         setNotice({
@@ -660,6 +686,56 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       });
     } finally {
       setEditBusy(false);
+    }
+  };
+
+  const resolveConflict = async (
+    conflict: MetadataConflict,
+    resolution: MetadataConflictResolution,
+  ) => {
+    setMetadataConflictBusy(conflict.id);
+    try {
+      const updated = await api.resolveMetadataConflict(
+        conflict.id,
+        resolution,
+      );
+      setAssets((current) => upsertAssets(current, [updated]));
+      setMetadataConflicts((current) =>
+        current.filter((item) => item.id !== conflict.id),
+      );
+      setNotice({ tone: "info", message: "并发冲突已按所选版本安全解决。" });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `冲突解决失败：${errorMessage(error)}`,
+      });
+    } finally {
+      setMetadataConflictBusy(undefined);
+    }
+  };
+
+  const dismissConflict = async (conflict: MetadataConflict) => {
+    setMetadataConflictBusy(conflict.id);
+    try {
+      await api.dismissMetadataConflict(conflict.id);
+      setMetadataConflicts((current) =>
+        current.filter((item) => item.id !== conflict.id),
+      );
+      const root = rootsById.current.get(
+        assets.get(conflict.key)?.rootId ?? "",
+      );
+      if (root !== undefined) await runScan(root);
+      setNotice({
+        tone: "info",
+        message: "已放弃本次修改并重新扫描外部版本。",
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `无法关闭冲突：${errorMessage(error)}`,
+      });
+    } finally {
+      setMetadataConflictBusy(undefined);
     }
   };
 
@@ -1360,7 +1436,9 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
 
         <Inspector
           assets={selectedAssets}
-          busy={editBusy}
+          busy={editBusy || metadataConflictBusy !== undefined}
+          conflictBusy={metadataConflictBusy}
+          conflicts={metadataConflicts}
           obsidian={{
             vault: activeVault,
             reference:
@@ -1375,7 +1453,9 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
             onCopy: copySelectedVaultReference,
             onConfigure: openVaultManager,
           }}
+          onDismissConflict={dismissConflict}
           onEdit={editSelection}
+          onResolveConflict={resolveConflict}
         />
       </div>
 

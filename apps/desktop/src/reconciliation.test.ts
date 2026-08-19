@@ -12,6 +12,7 @@ describe("reconciliation commands", () => {
       orphanSidecars: [],
       missingAssets: [],
       pendingMoves: [],
+      syncConflictCopies: [],
     });
 
     await inspectLibraryReconciliation("root-id", call);

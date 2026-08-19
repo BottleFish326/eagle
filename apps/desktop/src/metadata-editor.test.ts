@@ -7,8 +7,18 @@ describe("metadata editor command", () => {
     const call = vi.fn().mockResolvedValue({ updated: [], failures: [] });
     const input = {
       targets: [
-        { key: "/assets/one.png", expectedSidecarDigest: null },
-        { key: "/assets/two.png", expectedSidecarDigest: "abc123" },
+        {
+          key: "/assets/one.png",
+          expectedSidecarDigest: null,
+          expectedSidecarSize: null,
+          expectedSidecarModifiedUnixMs: null,
+        },
+        {
+          key: "/assets/two.png",
+          expectedSidecarDigest: "abc123",
+          expectedSidecarSize: 512,
+          expectedSidecarModifiedUnixMs: 1234,
+        },
       ],
       patch: { addTags: ["project/eagle", "ui/icon"], favorite: true },
     };
