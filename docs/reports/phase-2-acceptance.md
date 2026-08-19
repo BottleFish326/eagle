@@ -94,6 +94,8 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 
 逐平台证据由 `tools/verify-platform-paths.mjs` 生成；最终结论由 `tools/verify-platform-matrix.mjs` 对三个 JSON 的原始输出、摘要、SHA-256、commit、run/attempt、workflow 和 hosted 身份重新核对后生成。两层纯分析测试与本机真实 macOS 10 项输出已经通过，只证明工具链可执行；正式分析会拒绝非 GitHub-hosted 环境，因此本机不能生成 accepted matrix artifact。
 
+下载四个 artifact 后运行 `node tools/archive-platform-matrix-evidence.mjs --input-directory <downloaded-artifacts>`。归档器会再次重放、确认受测 commit 是当前 HEAD 祖先，并把原始字节目录级原子保存到 `docs/reports/evidence/p2-a12-platform-evidence/`；不得用手工复制结果替代该步骤。
+
 ## 6. 产品不变量复核
 
 | 不变量 | 当前结论 |
@@ -120,7 +122,7 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 
 只有第 4、5 节证据都通过后，执行一次候选提交审计：
 
-1. 确认 P2-A11 final JSON、P2-A12 consolidated matrix/三个源 artifact/hosted logs 与实现 commit 可追溯；
+1. 确认 P2-A11 final JSON、P2-A12 已归档 consolidated matrix/三个源 artifact/hosted logs 与实现 commit 可追溯；
 2. 确认从 `c18e1ca` 起只有未被受测进程加载的只读 inspector/证据/文档变化；若有产品或验收器判定代码变化，重新跑相应门禁；
 3. 检查 `git status` 只包含预期最终证据，没有 partial、临时 fixture、token 或本机路径；
 4. 更新 P2-06/P2-08、本报告、`docs/progress.md` 和 README 为实际结论；

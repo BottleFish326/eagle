@@ -78,6 +78,17 @@ node tools/verify-platform-matrix.mjs \
 
 若某个 leg 失败，GitHub 的“仅重新运行失败 job”不会把旧 attempt 的成功 artifact 混入新结论，因此新汇总会因缺平台而拒绝。正式复验必须选择重新运行全部 job，让三个源 artifact 和汇总器来自同一 run attempt。
 
+## 5.1 正式证据归档
+
+下载同一 run attempt 的一个 matrix artifact 和三个 source artifact，并保持解压后的 artifact 子目录，使用 Node 24 执行：
+
+```text
+node tools/archive-platform-matrix-evidence.mjs \
+  --input-directory <downloaded-artifacts>
+```
+
+工具要求输入目录恰有四个普通文件、无符号链接且布局为 `<artifact-name>/<evidence.json>`。归档前会重新计算三个源文件 SHA-256、重放全部 Cargo 输出、要求重放报告与下载的 matrix 在 JSON 语义上完全一致，并确认受测 commit 存在且是当前 HEAD 的祖先。通过后先在同级临时目录写入四个原始字节文件，再一次 rename 为固定的 `docs/reports/evidence/p2-a12-platform-evidence/`；已有完全相同目录视为幂等成功，任何文件集或字节差异都拒绝覆盖。归档器不修改、删除或重写下载证据，也不接受拼接的 run/attempt。
+
 纯路径、原生 Unicode、重叠根和禁止 `followSymlinks` 配置的夹具在三平台执行。Unix 执行权限撤销、拔盘模拟和符号链接循环；Linux 额外执行大小写同名素材并存和移动根目录掉线。Windows leg 显式启用长路径策略，必须成功创建原生符号链接，并执行 260+ UTF-16 路径扫描及同路径 Sidecar 原子替换；强制环境下符号链接夹具不得静默 skip。
 
 ## 6. 失败语义

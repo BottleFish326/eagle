@@ -23,6 +23,7 @@
 - 源/汇总 artifact 都绑定 run attempt，分别命名为 `p2-a12-source-<runner>-<sha>-attempt-<n>` 与 `p2-a12-matrix-<sha>-attempt-<n>`，避免 rerun 冲突或混入旧证据；只有汇总 JSON 为 `accepted=true` 且 `failures=[]` 时代表机器验收通过；
 - 新增最终汇总证据 JSON Schema，固定成功与失败报告、验证 job 环境、三个源 artifact 摘要和精确测试 summary 的可移植字段契约；跨文件一致性继续由重放汇总器判定；
 - 三个源报告与汇总 job 还必须共享 GitHub repository/server；最终报告从受校验字段生成稳定 workflow `runUrl`，正式归档不再依赖人工抄写链接；
+- 新增离线归档器：下载四个 artifact 文件后再次计算摘要和重放 matrix，确认受测 commit 是当前 HEAD 祖先，再把原始字节以目录级原子 rename 保存到固定证据目录；相同输入可幂等执行，差异输入绝不覆盖；
 - Windows leg 显式启用长路径策略并要求原生符号链接夹具可创建，验证 260+ UTF-16 路径扫描、Sidecar 创建/替换和循环跳过；
 - Linux leg 增加大小写同名素材并存和扫描中移动根目录的非权威失败夹具，既有撤权夹具继续验证 permission-denied。
 
@@ -54,6 +55,8 @@ macOS ARM64 共 10 项通过：
 桌面 TypeScript 另有纯状态测试确认只有失败根切换为 permission-denied，其他根与配置记录保持不变。Rust wire test确认失败事件把 `rootAccessStatus` 序列化为稳定 kebab-case 值。
 
 单平台证据器使用 Node 24 执行 9 项纯分析测试，覆盖 macOS 10/Linux 12/Windows 9 项精确正例，以及缺项、非零、ignored、无摘要、Windows symlink skip 和非 hosted/commit mismatch 负例；全部通过。matrix 汇总器另有 10 项纯分析测试，覆盖三平台精确正例，以及缺/重复平台、跨 commit/run 或与汇总 job 不一致、原始输出或存储摘要篡改、非零进程、自托管 runner、Windows symlink 未强制、false verdict、错误 Node/工具链/命令/时间/摘要/产物名等负例；全部通过。2 项 CLI 端到端测试还实际创建三份隔离 artifact、调用汇总进程并复核 SHA-256/原子输出，同时确认缺一平台时退出非零且仍写出拒绝 JSON。
+
+归档器另有 2 项真实文件测试，覆盖四文件重放、原始字节保存、目录级原子发布、幂等复核，以及 matrix 字段或源文件字节改变时写前拒绝。
 
 本机真实 `cargo --list`/`cargo test` 输出交给同一单平台分析器后，得到 macOS expected/listed/executed 各 10 项、summary 10 passed/0 failed/0 ignored。以上只验证证据链实现，不替代 hosted P2-A12。
 
@@ -98,6 +101,7 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 3. 确认 Windows leg 实际执行强制符号链接、260+ 路径扫描及 Sidecar 原子替换，不能以 skip 计为通过；
 4. 确认 Linux leg 实际执行大小写并存、权限撤销和移动根目录掉线；
 5. 确认最终 `p2-08-platform-matrix.json` 是 `accepted=true`、`failures=[]`、同一 Git commit/run/attempt，且三个源 artifact 的 SHA-256、expected/listed/executed 和 summary 均被重放核对；
-6. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。
+6. 对四个解压 artifact 运行 `archive-platform-matrix-evidence.mjs`，提交固定证据目录；
+7. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。
 
 若首次运行有 leg 失败，必须使用 “Re-run all jobs” 进行正式复验；只重跑失败 job 会保留不同 attempt 的成功 leg，汇总器会按设计拒绝混合证据。
