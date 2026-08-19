@@ -919,6 +919,77 @@ mod tests {
         assert!(report.problems[0].message.contains("symbolic link skipped"));
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn p2_platform_windows_symlink_loop_is_skipped_when_native_creation_is_available() {
+        use std::os::windows::fs::symlink_dir;
+
+        let directory = tempdir().expect("tempdir");
+        let nested = directory.path().join("nested");
+        fs::create_dir(&nested).expect("create nested directory");
+        fs::write(nested.join("logo.png"), PNG).expect("write png");
+        if let Err(error) = symlink_dir(directory.path(), nested.join("loop")) {
+            assert!(
+                std::env::var("MATERIAL_EAGLE_REQUIRE_WINDOWS_SYMLINK").as_deref() != Ok("1"),
+                "hosted Windows runner must permit the native symlink fixture: {error}"
+            );
+            eprintln!("native Windows symlink fixture skipped: {error}");
+            return;
+        }
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan loop");
+        assert_eq!(report.assets.len(), 1);
+        assert_eq!(report.visited_files, 1);
+        assert_eq!(report.problems.len(), 1);
+        assert!(report.problems[0].message.contains("symbolic link skipped"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn p2_platform_windows_long_path_scans_and_atomically_updates_sidecar() {
+        use std::os::windows::ffi::OsStrExt;
+
+        let directory = tempdir().expect("tempdir");
+        let mut nested = directory.path().to_path_buf();
+        for index in 0..4 {
+            nested.push(format!("segment-{index}-{}", "a".repeat(64)));
+        }
+        fs::create_dir_all(&nested).expect("create long directory path");
+        let image = nested.join("Caf\u{e9}-\u{7d20}\u{6750}.png");
+        assert!(
+            image.as_os_str().encode_wide().count() > 260,
+            "fixture must exceed the legacy MAX_PATH boundary"
+        );
+        fs::write(&image, PNG).expect("write long-path png");
+
+        let sidecar_path = sidecar_path_for(&image);
+        let mut sidecar = AssetSidecar::new();
+        sidecar.tags.insert("windows/long-path".into());
+        let first = write_sidecar_atomic(&sidecar_path, &sidecar, &ExpectedVersion::Missing)
+            .expect("create long-path sidecar");
+        sidecar.tags.insert("atomic-replacement".into());
+        write_sidecar_atomic(
+            &sidecar_path,
+            &sidecar,
+            &ExpectedVersion::Digest(first.digest),
+        )
+        .expect("atomically replace long-path sidecar");
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan long path");
+        assert_eq!(report.assets.len(), 1);
+        assert_eq!(report.assets[0].path, image);
+        assert_eq!(
+            report.assets[0].tags,
+            [
+                "atomic-replacement".to_owned(),
+                "windows/long-path".to_owned()
+            ]
+            .into_iter()
+            .collect()
+        );
+        assert!(sidecar_path.is_file());
+    }
+
     #[cfg(unix)]
     #[test]
     fn p2_platform_disconnect_during_scan_is_non_authoritative() {
@@ -955,6 +1026,43 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn p2_platform_linux_moved_mount_root_is_non_authoritative() {
+        let directory = tempdir().expect("tempdir");
+        let root = directory.path().join("mounted-library");
+        let detached = directory.path().join("detached-library");
+        fs::create_dir(&root).expect("create root");
+        fs::write(root.join("first.png"), PNG).expect("write first png");
+        fs::write(root.join("second.png"), PNG).expect("write second png");
+        let cancellation = ScanCancellation::new();
+
+        let error = scan_root_incremental(
+            None,
+            &root,
+            &ScanOptions {
+                batch_size: 1,
+                ..ScanOptions::default()
+            },
+            &cancellation,
+            |_| {
+                if root.exists() {
+                    fs::rename(&root, &detached).expect("detach mounted root");
+                }
+            },
+        )
+        .expect_err("detached mount must not complete authoritatively");
+
+        assert!(matches!(
+            error,
+            FilesystemError::RootUnavailable {
+                status: RootAccessStatus::Missing,
+                ..
+            }
+        ));
+        assert!(detached.is_dir());
     }
 
     #[cfg(unix)]
@@ -1007,6 +1115,23 @@ mod tests {
             std::path::Path::new(file_name)
         );
         assert!(directory.path().join(file_name).is_file());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn p2_platform_linux_scans_case_distinct_files_as_separate_assets() {
+        let directory = tempdir().expect("tempdir");
+        fs::write(directory.path().join("Logo.png"), PNG).expect("write uppercase asset");
+        fs::write(directory.path().join("logo.png"), PNG).expect("write lowercase asset");
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan root");
+        let mut names = report
+            .assets
+            .iter()
+            .map(|asset| asset.file_name.as_str())
+            .collect::<Vec<_>>();
+        names.sort_unstable();
+        assert_eq!(names, ["Logo.png", "logo.png"]);
     }
 
     #[test]

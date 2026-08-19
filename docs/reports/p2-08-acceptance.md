@@ -16,7 +16,9 @@
 - 非取消扫描在每次批次发布后和权威完成前复核根目录访问，扫描中拔盘或撤权会返回非权威失败；
 - 桌面后端在失败时恢复扫描前目录记录，扫描/监听失败事件携带实时根访问状态；
 - UI 把对应根标为 missing、permission-denied、not-directory 或 unavailable，保留根配置和原有素材视图并显示降级提示；
-- CI 新增独立三平台 `platform-paths` job，不要求 Linux 安装完整 Tauri 图形依赖即可执行核心路径套件。
+- CI 新增独立三平台 `platform-paths` job，不要求 Linux 安装完整 Tauri 图形依赖即可执行核心路径套件；
+- Windows leg 显式启用长路径策略并要求原生符号链接夹具可创建，验证 260+ UTF-16 路径扫描、Sidecar 创建/替换和循环跳过；
+- Linux leg 增加大小写同名素材并存和扫描中移动根目录的非权威失败夹具，既有撤权夹具继续验证 permission-denied。
 
 所有路径规则、状态和扫描批次仍是运行期解释。没有新增素材数据库、在线状态数据库或权威扫描快照，也没有改名、移动、复制、删除任何源素材。
 
@@ -28,7 +30,7 @@
 cargo test --locked -p asset-filesystem p2_platform
 ```
 
-macOS ARM64 共 9 项通过：
+macOS ARM64 共 10 项通过：
 
 | 验收点 | 自动化证据 | 结果 |
 |---|---|---|
@@ -38,6 +40,7 @@ macOS ARM64 共 9 项通过：
 | Linux 路径身份 | 大小写和 NFC/NFD 拼写都保持不同 | Pass |
 | 原生 Unicode | `Café-素材.png` 被扫描且相对路径与文件名未重写 | Pass |
 | 根重叠 | 相同根、父包含子、子位于父内三种关系都明确拒绝 | Pass |
+| 禁止跟随链接 | 配置文件即使显式写入 `followSymlinks: true` 也在加载时被拒绝 | Pass |
 | 符号链接循环 | 根内链接回根自身，扫描只计 1 个真实素材、1 条显式跳过问题并终止 | Pass |
 | 扫描中拔盘 | 首批后删除模拟移动盘，返回 `RootUnavailable(missing)`，不产生 completed | Pass |
 | 扫描中撤权 | 首批后撤销根权限，返回 `RootUnavailable(permission-denied)`，权限随后恢复 | Pass |
@@ -50,17 +53,19 @@ macOS ARM64 共 9 项通过：
 |---|---|---|
 | P2-A08 扫描中撤权或拔盘 | Pass locally | 两种故障均转为非权威失败；后端恢复前态，UI 只标记对应根离线且不退出应用 |
 | P2-A09 符号链接循环和重叠根 | Pass locally | 不跟随链接、无重复计数、有明确问题；三种根重叠明确拒绝 |
-| P2-A12 三平台路径兼容 | Pending | macOS 原生 9 项通过；Linux/Windows 仅交叉检查通过，托管运行尚无远程仓库可触发 |
+| P2-A12 三平台路径兼容 | Pending | macOS 原生 10 项通过；Linux 预期 12 项、Windows 预期 9 项的原生条件测试和托管环境均已配置，但尚无远程仓库可触发 |
 
-P2-08 实现可合并，但不能把 P2-A12 或阶段 2 标为 Accepted。必须取得 GitHub Actions Ubuntu/macOS/Windows 三个 matrix leg 的实际通过结果，并补充 Windows 原生符号链接权限和长路径读写验证。
+P2-08 实现可合并，但不能把 P2-A12 或阶段 2 标为 Accepted。必须取得 GitHub Actions Ubuntu/macOS/Windows 三个 matrix leg 的实际通过结果；条件编译通过只证明这些原生用例可构建，不证明 NTFS/ext4 行为。
 
 ## 4. 跨目标检查
 
 以下命令无警告通过：
 
 ```text
-cargo check --locked -p asset-filesystem --all-targets --target x86_64-unknown-linux-gnu
-cargo check --locked -p asset-filesystem --all-targets --target x86_64-pc-windows-msvc
+cargo check --locked -p asset-filesystem --tests --target x86_64-unknown-linux-gnu
+cargo check --locked -p asset-filesystem --tests --target x86_64-pc-windows-msvc
+cargo clippy --locked -p asset-filesystem --tests --target x86_64-unknown-linux-gnu -- -D warnings
+cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msvc -- -D warnings
 ```
 
 交叉检查只证明类型、依赖和条件编译正确，不等同于在 NTFS/ext4 上执行测试。托管矩阵配置为 `ubuntu-24.04`、`macos-15`、`windows-2025` 且 `fail-fast: false`。
@@ -80,6 +85,6 @@ cargo check --locked -p asset-filesystem --all-targets --target x86_64-pc-window
 
 1. 建立 Git 远程并推送当前工作流；
 2. 确认 `platform-paths` 的三个 matrix leg 均实际通过并保存运行链接/提交号；
-3. 在 Windows 原生环境补充启用/未启用符号链接权限、260+ 完整路径的扫描和 Sidecar 原子写入；
-4. 在 Linux 实体或托管环境补充大小写并存、权限撤销和移动挂载点掉线；
+3. 确认 Windows leg 实际执行强制符号链接、260+ 路径扫描及 Sidecar 原子替换，不能以 skip 计为通过；
+4. 确认 Linux leg 实际执行大小写并存、权限撤销和移动根目录掉线；
 5. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。

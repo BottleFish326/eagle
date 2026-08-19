@@ -54,7 +54,7 @@
 | P2-05 缓存生命周期 | Completed locally | 20,000 项/1 GiB/30 天边界、LRU、解码器描述精确失效、扫描后孤立回收、手动回收及双崩溃点安全轮换通过；见 `reports/p2-05-acceptance.md` |
 | P2-06 资源与稳定性控制 | Acceptance pending | 统一限流、后台降级、协作期限、双有界队列与资源监控已通过短时 smoke；P2-A11 的 L 数据集连续 8 小时证据待生成，见 `reports/p2-06-acceptance.md` |
 | P2-07 诊断和支持工具 | Completed locally | 1 MiB × 5 JSONL 滚动日志、路径值脱敏、Schema 2 错误/性能导出、512 条有界只读一致性报告和 UUID 素材追踪通过；见 `reports/p2-07-acceptance.md` |
-| P2-08 平台与文件系统兼容 | Acceptance pending | macOS 上拔盘/撤权非权威失败、符号链接循环、重叠根、Unicode 与三平台纯规则夹具通过；Ubuntu/macOS/Windows 托管矩阵已配置，P2-A12 首次远程运行待完成；见 `reports/p2-08-acceptance.md` |
+| P2-08 平台与文件系统兼容 | Acceptance pending | macOS 原生 10 项通过；Windows 强制符号链接与 260+ 路径/Sidecar 原子替换、Linux 大小写并存/撤权/移动根目录用例已进入三平台矩阵，P2-A12 首次远程运行待完成；见 `reports/p2-08-acceptance.md` |
 
 ## 阶段 3 实施准备
 

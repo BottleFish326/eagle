@@ -497,7 +497,10 @@ fn sync_parent(parent: &Path) -> Result<(), LibraryRootError> {
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)]
 const fn sync_parent(_parent: &Path) -> Result<(), LibraryRootError> {
+    // Windows cannot portably fsync a directory through std; retain the Unix-shaped
+    // result so atomic configuration persistence has one cross-platform call path.
     Ok(())
 }
 
@@ -509,8 +512,9 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        AddLibraryRoot, LibraryRootError, LibraryRootManager, RootAccessStatus, RootOverlapKind,
-        UpdateLibraryRoot, inspect_root_access,
+        AddLibraryRoot, LibraryConfig, LibraryRoot, LibraryRootError, LibraryRootManager,
+        RootAccessStatus, RootOverlapKind, RootScanSettings, UpdateLibraryRoot,
+        inspect_root_access,
     };
 
     #[test]
@@ -636,6 +640,44 @@ mod tests {
                 kind: RootOverlapKind::ContainsExisting,
                 ..
             }
+        ));
+    }
+
+    #[test]
+    fn p2_platform_rejects_configuration_that_enables_symlink_traversal() {
+        let directory = tempdir().expect("tempdir");
+        let root = directory.path().join("library");
+        fs::create_dir(&root).expect("create root");
+        let config_path = directory.path().join("roots.yml");
+        let config = LibraryConfig {
+            schema: super::LIBRARY_CONFIG_SCHEMA_VERSION,
+            roots: vec![LibraryRoot {
+                id: uuid::Uuid::now_v7(),
+                path: root,
+                name: "Unsafe".into(),
+                enabled: true,
+                scan: RootScanSettings {
+                    recursive: true,
+                    follow_symlinks: true,
+                    ignore: Vec::new(),
+                },
+                extra: std::collections::BTreeMap::new(),
+            }],
+            extra: std::collections::BTreeMap::new(),
+        };
+        fs::write(
+            &config_path,
+            serde_yaml_ng::to_string(&config).expect("serialize config"),
+        )
+        .expect("write config");
+
+        let Err(error) = LibraryRootManager::open(config_path) else {
+            panic!("followSymlinks=true must be rejected");
+        };
+        assert!(matches!(
+            error,
+            LibraryRootError::InvalidConfig(message)
+                if message.contains("forbidden symlink traversal")
         ));
     }
 

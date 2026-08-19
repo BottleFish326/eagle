@@ -56,7 +56,7 @@ non-authoritative failure
 cargo test --locked -p asset-filesystem p2_platform
 ```
 
-GitHub Actions `platform-paths` job 使用 `ubuntu-24.04`、`macos-15` 和 `windows-2025`，`fail-fast: false`。纯路径夹具在三平台执行；原生 Unicode、重叠根夹具在三平台执行；权限撤销、拔盘模拟和符号链接循环在 Unix 执行。Windows 符号链接与真实长路径还需要具备相应权限和策略的实体/托管运行补充。
+GitHub Actions `platform-paths` job 使用 `ubuntu-24.04`、`macos-15` 和 `windows-2025`，`fail-fast: false`。纯路径、原生 Unicode、重叠根和禁止 `followSymlinks` 配置的夹具在三平台执行。Unix 执行权限撤销、拔盘模拟和符号链接循环；Linux 额外执行大小写同名素材并存和移动根目录掉线。Windows leg 显式启用长路径策略，必须成功创建原生符号链接，并执行 260+ UTF-16 路径扫描及同路径 Sidecar 原子替换；强制环境下符号链接夹具不得静默 skip。
 
 ## 6. 失败语义
 

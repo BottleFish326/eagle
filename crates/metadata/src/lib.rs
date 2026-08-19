@@ -566,9 +566,11 @@ fn sync_parent(parent: &Path) -> Result<(), SidecarError> {
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)]
 fn sync_parent(_parent: &Path) -> Result<(), SidecarError> {
     // Rust's standard File API cannot portably open a directory for fsync on Windows.
-    // The file itself has already been flushed before atomic replacement.
+    // The file itself has already been flushed before atomic replacement. Keep the
+    // fallible signature aligned with Unix so callers preserve the same durability flow.
     Ok(())
 }
 

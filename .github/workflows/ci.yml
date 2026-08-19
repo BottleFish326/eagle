@@ -31,7 +31,20 @@ jobs:
       - name: Install Rust toolchain
         run: rustup toolchain install stable --profile minimal
 
+      - name: Enable Windows long-path policy
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-ItemProperty `
+            -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' `
+            -Name LongPathsEnabled `
+            -Value 1 `
+            -PropertyType DWord `
+            -Force
+
       - name: Run P2-A12 path compatibility suite
+        env:
+          MATERIAL_EAGLE_REQUIRE_WINDOWS_SYMLINK: ${{ runner.os == 'Windows' && '1' || '0' }}
         run: cargo test --locked -p asset-filesystem p2_platform
 
   quality:
