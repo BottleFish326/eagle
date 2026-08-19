@@ -21,6 +21,7 @@
 - 三个 leg 无论成功失败都上传 90 天 JSON artifact，缺测试、ignored、非 GitHub-hosted 或 Windows symlink skip 都明确拒绝；
 - 新增独立 matrix 汇总器和 CI job，下载同一提交的三个 artifact、重新解析原始 Cargo 输出，并拒绝缺平台、重复平台、跨提交、跨 workflow run/attempt、产物改名或内容摘要异常；
 - 源/汇总 artifact 都绑定 run attempt，分别命名为 `p2-a12-source-<runner>-<sha>-attempt-<n>` 与 `p2-a12-matrix-<sha>-attempt-<n>`，避免 rerun 冲突或混入旧证据；只有汇总 JSON 为 `accepted=true` 且 `failures=[]` 时代表机器验收通过；
+- 新增最终汇总证据 JSON Schema，固定成功与失败报告、验证 job 环境、三个源 artifact 摘要和精确测试 summary 的可移植字段契约；跨文件一致性继续由重放汇总器判定；
 - Windows leg 显式启用长路径策略并要求原生符号链接夹具可创建，验证 260+ UTF-16 路径扫描、Sidecar 创建/替换和循环跳过；
 - Linux leg 增加大小写同名素材并存和扫描中移动根目录的非权威失败夹具，既有撤权夹具继续验证 permission-denied。
 

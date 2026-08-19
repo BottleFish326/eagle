@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json",
+  "title": "P2-A12 consolidated platform path evidence",
+  "description": "Portable contract for the replayed GitHub-hosted darwin/linux/win32 path compatibility verdict.",
+  "type": "object",
+  "required": [
+    "schema",
+    "accepted",
+    "failures",
+    "verifiedAt",
+    "gitCommit",
+    "workflow",
+    "verificationEnvironment",
+    "artifacts"
+  ],
+  "properties": {
+    "schema": { "const": 1 },
+    "accepted": { "type": "boolean" },
+    "failures": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "type": "string", "minLength": 1, "maxLength": 4096 }
+    },
+    "verifiedAt": { "type": "string", "format": "date-time" },
+    "gitCommit": {
+      "oneOf": [{ "$ref": "#/$defs/gitCommit" }, { "type": "null" }]
+    },
+    "workflow": { "$ref": "#/$defs/workflow" },
+    "verificationEnvironment": {
+      "oneOf": [
+        { "$ref": "#/$defs/verificationEnvironment" },
+        { "type": "null" }
+      ]
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 3,
+      "items": { "$ref": "#/$defs/artifact" }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "accepted": { "const": true } } },
+      "then": {
+        "properties": {
+          "failures": { "maxItems": 0 },
+          "gitCommit": { "$ref": "#/$defs/gitCommit" },
+          "workflow": { "$ref": "#/$defs/acceptedWorkflow" },
+          "verificationEnvironment": {
+            "$ref": "#/$defs/acceptedVerificationEnvironment"
+          },
+          "artifacts": {
+            "minItems": 3,
+            "maxItems": 3,
+            "items": { "$ref": "#/$defs/acceptedArtifact" }
+          }
+        }
+      },
+      "else": { "properties": { "failures": { "minItems": 1 } } }
+    }
+  ],
+  "$defs": {
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "nullableString": {
+      "type": ["string", "null"]
+    },
+    "nullablePositiveIntegerString": {
+      "oneOf": [
+        { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        { "type": "null" }
+      ]
+    },
+    "workflow": {
+      "type": "object",
+      "required": ["githubRunId", "githubRunAttempt", "githubWorkflowRef"],
+      "properties": {
+        "githubRunId": { "$ref": "#/$defs/nullableString" },
+        "githubRunAttempt": {
+          "$ref": "#/$defs/nullablePositiveIntegerString"
+        },
+        "githubWorkflowRef": { "$ref": "#/$defs/nullableString" }
+      },
+      "additionalProperties": false
+    },
+    "acceptedWorkflow": {
+      "type": "object",
+      "required": ["githubRunId", "githubRunAttempt", "githubWorkflowRef"],
+      "properties": {
+        "githubRunId": { "type": "string", "pattern": "^[0-9]+$" },
+        "githubRunAttempt": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "githubWorkflowRef": {
+          "type": "string",
+          "pattern": "^.+/\\.github/workflows/ci\\.yml@.+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "verificationEnvironment": {
+      "type": "object",
+      "required": [
+        "nodeVersion",
+        "githubActions",
+        "githubSha",
+        "githubRunId",
+        "githubRunAttempt",
+        "githubWorkflowRef",
+        "runnerOs",
+        "runnerArch",
+        "runnerEnvironment"
+      ],
+      "properties": {
+        "nodeVersion": { "$ref": "#/$defs/nullableString" },
+        "githubActions": { "$ref": "#/$defs/nullableString" },
+        "githubSha": {
+          "oneOf": [{ "$ref": "#/$defs/gitCommit" }, { "type": "null" }]
+        },
+        "githubRunId": { "$ref": "#/$defs/nullableString" },
+        "githubRunAttempt": {
+          "$ref": "#/$defs/nullablePositiveIntegerString"
+        },
+        "githubWorkflowRef": { "$ref": "#/$defs/nullableString" },
+        "runnerOs": { "$ref": "#/$defs/nullableString" },
+        "runnerArch": { "$ref": "#/$defs/nullableString" },
+        "runnerEnvironment": { "$ref": "#/$defs/nullableString" }
+      },
+      "additionalProperties": false
+    },
+    "acceptedVerificationEnvironment": {
+      "type": "object",
+      "required": [
+        "nodeVersion",
+        "githubActions",
+        "githubSha",
+        "githubRunId",
+        "githubRunAttempt",
+        "githubWorkflowRef",
+        "runnerOs",
+        "runnerArch",
+        "runnerEnvironment"
+      ],
+      "properties": {
+        "nodeVersion": { "type": "string", "pattern": "^v24\\." },
+        "githubActions": { "const": "true" },
+        "githubSha": { "$ref": "#/$defs/gitCommit" },
+        "githubRunId": { "type": "string", "pattern": "^[0-9]+$" },
+        "githubRunAttempt": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "githubWorkflowRef": {
+          "type": "string",
+          "pattern": "^.+/\\.github/workflows/ci\\.yml@.+$"
+        },
+        "runnerOs": { "const": "Linux" },
+        "runnerArch": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "runnerEnvironment": { "const": "github-hosted" }
+      },
+      "additionalProperties": false
+    },
+    "artifact": {
+      "type": "object",
+      "required": [
+        "artifactName",
+        "fileName",
+        "sha256",
+        "platform",
+        "accepted",
+        "startedAt",
+        "completedAt",
+        "environment",
+        "expectedTests",
+        "listedTests",
+        "executedTests",
+        "summary"
+      ],
+      "properties": {
+        "artifactName": { "$ref": "#/$defs/nullableString" },
+        "fileName": { "$ref": "#/$defs/nullableString" },
+        "sha256": { "$ref": "#/$defs/nullableString" },
+        "platform": { "$ref": "#/$defs/nullableString" },
+        "accepted": { "type": "boolean" },
+        "startedAt": { "$ref": "#/$defs/nullableString" },
+        "completedAt": { "$ref": "#/$defs/nullableString" },
+        "environment": { "$ref": "#/$defs/artifactEnvironment" },
+        "expectedTests": { "$ref": "#/$defs/testNames" },
+        "listedTests": { "$ref": "#/$defs/testNames" },
+        "executedTests": { "$ref": "#/$defs/testNames" },
+        "summary": {
+          "oneOf": [{ "$ref": "#/$defs/summary" }, { "type": "null" }]
+        }
+      },
+      "additionalProperties": false
+    },
+    "acceptedArtifact": {
+      "allOf": [
+        { "$ref": "#/$defs/artifact" },
+        {
+          "properties": {
+            "artifactName": {
+              "type": "string",
+              "pattern": "^p2-a12-source-(macOS|Linux|Windows)-[0-9a-f]{40,64}-attempt-[1-9][0-9]*$"
+            },
+            "fileName": { "const": "p2-a12-platform-paths.json" },
+            "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "platform": { "enum": ["darwin", "linux", "win32"] },
+            "accepted": { "const": true },
+            "startedAt": { "type": "string", "format": "date-time" },
+            "completedAt": { "type": "string", "format": "date-time" },
+            "environment": {
+              "$ref": "#/$defs/acceptedArtifactEnvironment"
+            },
+            "summary": { "$ref": "#/$defs/summary" }
+          }
+        }
+      ]
+    },
+    "artifactEnvironment": {
+      "type": "object",
+      "required": [
+        "architecture",
+        "nodeVersion",
+        "rustc",
+        "cargo",
+        "runnerOs",
+        "runnerArch",
+        "runnerEnvironment",
+        "githubRunId",
+        "githubRunAttempt",
+        "githubWorkflowRef"
+      ],
+      "properties": {
+        "architecture": { "$ref": "#/$defs/nullableString" },
+        "nodeVersion": { "$ref": "#/$defs/nullableString" },
+        "rustc": { "$ref": "#/$defs/nullableString" },
+        "cargo": { "$ref": "#/$defs/nullableString" },
+        "runnerOs": { "$ref": "#/$defs/nullableString" },
+        "runnerArch": { "$ref": "#/$defs/nullableString" },
+        "runnerEnvironment": { "$ref": "#/$defs/nullableString" },
+        "githubRunId": { "$ref": "#/$defs/nullableString" },
+        "githubRunAttempt": {
+          "$ref": "#/$defs/nullablePositiveIntegerString"
+        },
+        "githubWorkflowRef": { "$ref": "#/$defs/nullableString" }
+      },
+      "additionalProperties": false
+    },
+    "acceptedArtifactEnvironment": {
+      "allOf": [
+        { "$ref": "#/$defs/artifactEnvironment" },
+        {
+          "properties": {
+            "architecture": { "type": "string", "minLength": 1 },
+            "nodeVersion": { "type": "string", "pattern": "^v24\\." },
+            "rustc": { "type": "string", "minLength": 1 },
+            "cargo": { "type": "string", "minLength": 1 },
+            "runnerOs": { "enum": ["macOS", "Linux", "Windows"] },
+            "runnerArch": { "type": "string", "minLength": 1 },
+            "runnerEnvironment": { "const": "github-hosted" },
+            "githubRunId": { "type": "string", "pattern": "^[0-9]+$" },
+            "githubRunAttempt": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            },
+            "githubWorkflowRef": {
+              "type": "string",
+              "pattern": "^.+/\\.github/workflows/ci\\.yml@.+$"
+            }
+          }
+        }
+      ]
+    },
+    "testNames": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512,
+        "pattern": "^[A-Za-z0-9_:]+$"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "result",
+        "passed",
+        "failed",
+        "ignored",
+        "measured",
+        "filteredOut"
+      ],
+      "properties": {
+        "result": { "enum": ["ok", "FAILED"] },
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "ignored": { "type": "integer", "minimum": 0 },
+        "measured": { "type": "integer", "minimum": 0 },
+        "filteredOut": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  }
+}
