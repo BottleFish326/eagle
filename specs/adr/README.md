@@ -47,3 +47,4 @@
 | [ADR-032](032-production-interaction-state-and-accessibility.md) | 生产交互状态、后端排序与可访问虚拟网格 | Accepted |
 | [ADR-033](033-obsidian-machine-authorization-and-runtime.md) | Obsidian 机器级授权、用户态 IPC 与离线最小索引 | Accepted |
 | [ADR-034](034-revision-bound-obsidian-insertion-and-ephemeral-backlinks.md) | 版本绑定的 Obsidian 插入、临时反向索引与无改写恢复 | Accepted |
+| [ADR-035](035-obsidian-desktop-compatibility-and-release-boundary.md) | Obsidian 桌面专用兼容、源码保留降级与可复现发布边界 | Accepted |
