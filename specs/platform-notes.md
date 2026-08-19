@@ -1,6 +1,6 @@
 # 平台与文件系统差异记录
 
-> 最后更新：2026-08-19
+> 最后更新：2026-08-20
 
 ## 当前验证范围
 
@@ -19,7 +19,7 @@ cargo check -p asset-filesystem --all-targets --target x86_64-pc-windows-msvc
 cargo test --locked -p asset-filesystem p2_platform
 ```
 
-托管矩阵定义在 `.github/workflows/ci.yml` 的 `platform-paths` job，目标为 Ubuntu 24.04、macOS 15 和 Windows 2025。当前仓库没有 Git 远程且本机没有 `gh` 可执行文件，因此不能把“工作流已配置”写成“托管运行已通过”。
+托管矩阵定义在 `.github/workflows/ci.yml` 的 `platform-paths` job，目标为 Ubuntu 24.04、macOS 15 和 Windows 2025。随后 `platform-matrix-evidence` 下载三个 commit-bound JSON，重新解析原始 Cargo 输出并生成唯一汇总结论。当前仓库没有 Git 远程且本机没有 `gh` 可执行文件，因此不能把“工作流已配置”写成“托管运行已通过”。
 
 ## 已知差异
 

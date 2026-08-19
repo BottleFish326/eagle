@@ -1,7 +1,7 @@
 # P2-08 平台与文件系统兼容验收报告
 
 - 状态：Implemented locally；P2-A12 hosted matrix pending
-- 日期：2026-08-19
+- 日期：2026-08-20
 - 对应：P2-08、P2-A08、P2-A09、P2-A12
 - 决策：[ADR-025](../../specs/adr/025-platform-path-and-offline-root-semantics.md)
 - 协议：[路径兼容与离线根目录协议](../../specs/path-compatibility-protocol.md)
@@ -19,6 +19,8 @@
 - CI 新增独立三平台 `platform-paths` job，不要求 Linux 安装完整 Tauri 图形依赖即可执行核心路径套件；
 - 新增 P2-A12 机器可读证据器，精确核对每个平台应列出/执行的测试名、通过数、Git commit、Node/Rust/runner 环境和 hosted 来源；
 - 三个 leg 无论成功失败都上传 90 天 JSON artifact，缺测试、ignored、非 GitHub-hosted 或 Windows symlink skip 都明确拒绝；
+- 新增独立 matrix 汇总器和 CI job，下载同一提交的三个 artifact、重新解析原始 Cargo 输出，并拒绝缺平台、重复平台、跨提交、跨 workflow run/attempt、产物改名或内容摘要异常；
+- 源/汇总 artifact 都绑定 run attempt，分别命名为 `p2-a12-source-<runner>-<sha>-attempt-<n>` 与 `p2-a12-matrix-<sha>-attempt-<n>`，避免 rerun 冲突或混入旧证据；只有汇总 JSON 为 `accepted=true` 且 `failures=[]` 时代表机器验收通过；
 - Windows leg 显式启用长路径策略并要求原生符号链接夹具可创建，验证 260+ UTF-16 路径扫描、Sidecar 创建/替换和循环跳过；
 - Linux leg 增加大小写同名素材并存和扫描中移动根目录的非权威失败夹具，既有撤权夹具继续验证 permission-denied。
 
@@ -49,7 +51,9 @@ macOS ARM64 共 10 项通过：
 
 桌面 TypeScript 另有纯状态测试确认只有失败根切换为 permission-denied，其他根与配置记录保持不变。Rust wire test确认失败事件把 `rootAccessStatus` 序列化为稳定 kebab-case 值。
 
-证据器使用 Node 24 执行 9 项纯分析测试，覆盖 macOS 10/Linux 12/Windows 9 项精确正例，以及缺项、非零、ignored、无摘要、Windows symlink skip 和非 hosted/commit mismatch 负例；全部通过。随后把本机真实 `cargo --list`/`cargo test` 输出交给同一分析器，得到 macOS expected/listed/executed 各 10 项、summary 10 passed/0 failed/0 ignored。该本机结果验证证据器，但仍不替代 hosted P2-A12。
+单平台证据器使用 Node 24 执行 9 项纯分析测试，覆盖 macOS 10/Linux 12/Windows 9 项精确正例，以及缺项、非零、ignored、无摘要、Windows symlink skip 和非 hosted/commit mismatch 负例；全部通过。matrix 汇总器另有 10 项纯分析测试，覆盖三平台精确正例，以及缺/重复平台、跨 commit/run 或与汇总 job 不一致、原始输出或存储摘要篡改、非零进程、自托管 runner、Windows symlink 未强制、false verdict、错误 Node/工具链/命令/时间/摘要/产物名等负例；全部通过。
+
+本机真实 `cargo --list`/`cargo test` 输出交给同一单平台分析器后，得到 macOS expected/listed/executed 各 10 项、summary 10 passed/0 failed/0 ignored。以上只验证证据链实现，不替代 hosted P2-A12。
 
 ## 3. P2 验收项结论
 
@@ -57,7 +61,7 @@ macOS ARM64 共 10 项通过：
 |---|---|---|
 | P2-A08 扫描中撤权或拔盘 | Pass locally | 两种故障均转为非权威失败；后端恢复前态，UI 只标记对应根离线且不退出应用 |
 | P2-A09 符号链接循环和重叠根 | Pass locally | 不跟随链接、无重复计数、有明确问题；三种根重叠明确拒绝 |
-| P2-A12 三平台路径兼容 | Pending | macOS 原生 10 项通过；Linux 预期 12 项、Windows 预期 9 项的原生条件测试和托管环境均已配置，但尚无远程仓库可触发 |
+| P2-A12 三平台路径兼容 | Pending | macOS 原生 10 项通过；Linux 预期 12 项、Windows 预期 9 项；逐平台证据与跨平台重放汇总 job 均已配置，但尚无远程仓库可触发 |
 
 P2-08 实现可合并，但不能把 P2-A12 或阶段 2 标为 Accepted。必须取得 GitHub Actions Ubuntu/macOS/Windows 三个 matrix leg 的实际通过结果；条件编译通过只证明这些原生用例可构建，不证明 NTFS/ext4 行为。
 
@@ -88,8 +92,10 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 ## 6. 后续验收动作
 
 1. 建立 Git 远程并推送当前工作流；
-2. 确认 `platform-paths` 的三个 matrix leg 均实际通过，保存运行链接/提交号并下载三个 `p2-a12-<runner>-<sha>` JSON artifact；
+2. 确认 `platform-paths` 的三个 matrix leg 和 `platform-matrix-evidence` 均实际通过，保存运行链接/提交号/run attempt，并下载同一 attempt 的汇总及三个源 artifact；
 3. 确认 Windows leg 实际执行强制符号链接、260+ 路径扫描及 Sidecar 原子替换，不能以 skip 计为通过；
 4. 确认 Linux leg 实际执行大小写并存、权限撤销和移动根目录掉线；
-5. 确认三个 JSON 都是 `accepted=true`、`failures=[]`、同一 Git commit，且 expected/listed/executed 数组逐项一致；
+5. 确认最终 `p2-08-platform-matrix.json` 是 `accepted=true`、`failures=[]`、同一 Git commit/run/attempt，且三个源 artifact 的 SHA-256、expected/listed/executed 和 summary 均被重放核对；
 6. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。
+
+若首次运行有 leg 失败，必须使用 “Re-run all jobs” 进行正式复验；只重跑失败 job 会保留不同 attempt 的成功 leg，汇总器会按设计拒绝混合证据。

@@ -76,10 +76,11 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 
 ## 5. P2-A12 托管矩阵关闭流程
 
-当前工作流 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 已定义 `ubuntu-24.04`、`macos-15`、`windows-2025` 三个独立 `platform-paths` leg，`fail-fast: false`。阶段退出需要用户先建立 Git remote 并触发真实 hosted run，然后归档：
+当前工作流 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 已定义 `ubuntu-24.04`、`macos-15`、`windows-2025` 三个独立 `platform-paths` leg，`fail-fast: false`，并定义依赖三者的 `platform-matrix-evidence` 汇总 job。阶段退出需要用户先建立 Git remote 并触发真实 hosted run，然后归档：
 
 - remote URL、workflow run URL、commit SHA、runner image/version 和时间；
-- 三个 leg 均 success，并下载各自保留 90 天的 `p2-a12-<runner>-<sha>` JSON artifact；
+- 三个 leg 均 success，并下载各自保留 90 天的 `p2-a12-source-<runner>-<sha>-attempt-<n>` JSON artifact；
+- 汇总 job success，并下载同一 attempt 的 `p2-a12-matrix-<sha>-attempt-<n>` 中的 `p2-08-platform-matrix.json`；
 - 三个 JSON 都是 `accepted=true`、`failures=[]`、同一 commit，expected/listed/executed 逐项一致；
 - macOS/Linux/Windows 的精确通过数分别为 10/12/9，0 failed/ignored/measured；
 - Windows 明确创建强制符号链接，实际执行 260+ UTF-16 路径扫描和 Sidecar 原子替换，无 skip；
@@ -89,7 +90,9 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 
 如果某个 leg 因 runner 权限无法创建 Windows symlink，结果是 infrastructure failure，不是 P2-A12 pass；必须调整受控 runner/策略并重新完整执行。
 
-证据生成由 `tools/verify-platform-paths.mjs` 完成。其纯分析测试与本机真实 macOS 10 项输出已经通过，只证明工具链可执行；它会拒绝非 GitHub-hosted 环境，因此本机不能生成 formal accepted artifact。
+若需要复验，必须重新运行全部 job。只重跑失败 job 会让成功 leg 保持旧 run attempt；汇总器不会跨 attempt 拼接证据，并会以缺平台拒绝该次结论。
+
+逐平台证据由 `tools/verify-platform-paths.mjs` 生成；最终结论由 `tools/verify-platform-matrix.mjs` 对三个 JSON 的原始输出、摘要、SHA-256、commit、run/attempt、workflow 和 hosted 身份重新核对后生成。两层纯分析测试与本机真实 macOS 10 项输出已经通过，只证明工具链可执行；正式分析会拒绝非 GitHub-hosted 环境，因此本机不能生成 accepted matrix artifact。
 
 ## 6. 产品不变量复核
 
@@ -117,7 +120,7 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 
 只有第 4、5 节证据都通过后，执行一次候选提交审计：
 
-1. 确认 P2-A11 final JSON、P2-A12 hosted logs 与实现 commit 可追溯；
+1. 确认 P2-A11 final JSON、P2-A12 consolidated matrix/三个源 artifact/hosted logs 与实现 commit 可追溯；
 2. 确认从 `c18e1ca` 起只有未被受测进程加载的只读 inspector/证据/文档变化；若有产品或验收器判定代码变化，重新跑相应门禁；
 3. 检查 `git status` 只包含预期最终证据，没有 partial、临时 fixture、token 或本机路径；
 4. 更新 P2-06/P2-08、本报告、`docs/progress.md` 和 README 为实际结论；

@@ -58,8 +58,48 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: p2-a12-${{ runner.os }}-${{ github.sha }}
+          name: p2-a12-source-${{ runner.os }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/p2-a12-platform-paths.json
+          if-no-files-found: error
+          retention-days: 90
+
+  platform-matrix-evidence:
+    name: Consolidate path compatibility evidence
+    if: ${{ always() }}
+    needs: platform-paths
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Download P2-A12 platform evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: p2-a12-source-*-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p2-a12-input
+
+      - name: Verify and consolidate P2-A12 evidence
+        env:
+          MATERIAL_EAGLE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: node tools/verify-platform-matrix.mjs --input-directory "${{ runner.temp }}/p2-a12-input" --output "${{ runner.temp }}/p2-08-platform-matrix.json"
+
+      - name: Archive consolidated P2-A12 verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p2-a12-matrix-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p2-08-platform-matrix.json
           if-no-files-found: error
           retention-days: 90
 

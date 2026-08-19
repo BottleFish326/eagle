@@ -64,6 +64,18 @@ node tools/verify-platform-paths.mjs --output <runner-temp>/p2-a12-platform-path
 
 证据器先 `--list` 再实际运行，要求 macOS 10、Linux 12、Windows 9 个精确具名测试全部列出且执行为 `ok`，0 failed/ignored/measured；缺项、新增未登记项、非零退出或摘要不一致都会拒绝。它还要求 clean Git、`GITHUB_SHA` 与 HEAD 一致、GitHub-hosted runner、runner OS/arch 可追溯；Windows 必须设置强制 symlink 环境且输出不得含 skip。每个 leg 即使失败也上传 90 天机器可读 JSON artifact，包含 commit、runner/runtime、命令、清单、实际执行项、summary 和原始进程输出。
 
+三个 leg 结束后，`platform-matrix-evidence` job 使用 `actions/download-artifact@v8` 按当前 `github.sha` 下载三个独立 artifact，并执行：
+
+```text
+node tools/verify-platform-matrix.mjs \
+  --input-directory <runner-temp>/p2-a12-input \
+  --output <runner-temp>/p2-08-platform-matrix.json
+```
+
+汇总器不信任上游的布尔结论：它对每份原始 Cargo 输出重新解析具名测试和 summary，要求 darwin/linux/win32 各且仅各一份、Node 24、同一 HEAD/GitHub run/run attempt/workflow、GitHub-hosted runner、精确命令、完整工具链身份和与 runner OS/commit/run attempt 绑定的 artifact 名；这些字段还必须与当前汇总 job 的真实环境一致。源 artifact 使用 `p2-a12-source-<runner>-<sha>-attempt-<n>`，汇总 artifact 使用 `p2-a12-matrix-<sha>-attempt-<n>`，避免同一 workflow rerun 复用不可变旧产物或下载 pattern 误吞汇总结果。源 JSON 的 SHA-256 与逐平台摘要进入最终报告，原始 stdout/stderr 只保留在各平台 artifact，避免合并报告重复放大。只有 `p2-08-platform-matrix.json` 的 `accepted=true` 且 `failures=[]` 才是 P2-A12 的机器判定入口；单个 leg 的绿色状态或 JSON 不能独立关闭验收。
+
+若某个 leg 失败，GitHub 的“仅重新运行失败 job”不会把旧 attempt 的成功 artifact 混入新结论，因此新汇总会因缺平台而拒绝。正式复验必须选择重新运行全部 job，让三个源 artifact 和汇总器来自同一 run attempt。
+
 纯路径、原生 Unicode、重叠根和禁止 `followSymlinks` 配置的夹具在三平台执行。Unix 执行权限撤销、拔盘模拟和符号链接循环；Linux 额外执行大小写同名素材并存和移动根目录掉线。Windows leg 显式启用长路径策略，必须成功创建原生符号链接，并执行 260+ UTF-16 路径扫描及同路径 Sidecar 原子替换；强制环境下符号链接夹具不得静默 skip。
 
 ## 6. 失败语义
