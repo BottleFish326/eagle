@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/query-conformance-manifest.schema.json",
+  "title": "Advanced query conformance manifest",
+  "description": "Independent records, oracle predicates, and expected results for P3-A03.",
+  "type": "object",
+  "required": ["schema", "suite", "records", "validCases", "invalidCases"],
+  "properties": {
+    "schema": { "const": 1 },
+    "suite": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "version": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": { "$ref": "#/$defs/record" }
+    },
+    "validCases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2048,
+      "items": { "$ref": "#/$defs/validCase" }
+    },
+    "invalidCases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2048,
+      "items": { "$ref": "#/$defs/invalidCase" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "query": {
+      "type": "string",
+      "maxLength": 4096,
+      "pattern": "^[^\\r\\n]*$"
+    },
+    "record": {
+      "type": "object",
+      "required": [
+        "key",
+        "rootId",
+        "relativePath",
+        "kind",
+        "extension",
+        "size",
+        "createdUnixMs",
+        "modifiedUnixMs",
+        "width",
+        "height",
+        "displayQuarterTurns",
+        "durationMs",
+        "pageCount",
+        "colorSpace",
+        "hasAlpha",
+        "rating",
+        "favorite",
+        "note",
+        "tags"
+      ],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "rootId": { "oneOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }] },
+        "relativePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\u0000-\\u001f\\\\]+$"
+        },
+        "kind": { "enum": ["image", "video", "audio", "pdf", "other"] },
+        "extension": {
+          "oneOf": [
+            { "type": "string", "pattern": "^[a-z0-9]{1,32}$" },
+            { "type": "null" }
+          ]
+        },
+        "size": { "type": ["integer", "null"], "minimum": 0 },
+        "createdUnixMs": { "type": ["integer", "null"] },
+        "modifiedUnixMs": { "type": ["integer", "null"] },
+        "width": { "type": ["integer", "null"], "minimum": 1 },
+        "height": { "type": ["integer", "null"], "minimum": 1 },
+        "displayQuarterTurns": {
+          "description": "Clockwise quarter turns after file metadata normalization.",
+          "enum": [0, 1, 2, 3]
+        },
+        "durationMs": { "type": ["integer", "null"], "minimum": 0 },
+        "pageCount": { "type": ["integer", "null"], "minimum": 1 },
+        "colorSpace": {
+          "oneOf": [
+            { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+            { "type": "null" }
+          ]
+        },
+        "hasAlpha": { "type": ["boolean", "null"] },
+        "rating": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "favorite": { "type": "boolean" },
+        "note": { "type": "string", "maxLength": 65536 },
+        "tags": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "predicate": {
+      "type": "object",
+      "required": ["field", "operator", "value"],
+      "properties": {
+        "field": {
+          "enum": [
+            "tag",
+            "type",
+            "extension",
+            "favorite",
+            "rating",
+            "size",
+            "width",
+            "height",
+            "aspect",
+            "created",
+            "modified",
+            "duration",
+            "pages",
+            "orientation",
+            "root",
+            "path",
+            "color-space",
+            "has-note",
+            "has-alpha"
+          ]
+        },
+        "operator": {
+          "enum": ["all", "any", "none", "eq", "lt", "lte", "gt", "gte", "contains", "is-unknown"]
+        },
+        "value": {
+          "oneOf": [
+            { "type": "boolean" },
+            { "type": "integer" },
+            { "type": "string", "minLength": 1, "maxLength": 4096 },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 128,
+              "items": { "type": "string", "minLength": 1, "maxLength": 1024 },
+              "uniqueItems": true
+            },
+            {
+              "type": "object",
+              "required": ["numerator", "denominator"],
+              "properties": {
+                "numerator": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+                "denominator": { "type": "integer", "minimum": 1, "maximum": 1000000 }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "validCase": {
+      "type": "object",
+      "required": ["id", "expression", "oracle", "expectedKeys"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "expression": { "$ref": "#/$defs/query" },
+        "oracle": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/predicate" },
+          "maxItems": 128
+        },
+        "expectedKeys": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": { "type": "string", "minLength": 1, "maxLength": 1024 },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "invalidCase": {
+      "type": "object",
+      "required": ["id", "expression", "errorKind", "offset"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "expression": { "$ref": "#/$defs/query" },
+        "errorKind": {
+          "enum": [
+            "unclosed-quote",
+            "trailing-escape",
+            "empty-tag",
+            "tag-too-long",
+            "invalid-wildcard",
+            "invalid-or-group",
+            "unknown-filter",
+            "invalid-type",
+            "invalid-extension",
+            "invalid-favorite",
+            "conflicting-favorite",
+            "invalid-operator",
+            "invalid-integer",
+            "invalid-unit",
+            "numeric-overflow",
+            "invalid-ratio",
+            "invalid-date",
+            "invalid-enum",
+            "invalid-root-id",
+            "invalid-path",
+            "unsupported-unknown",
+            "conflicting-range",
+            "conflicting-value"
+          ]
+        },
+        "offset": { "type": "integer", "minimum": 0, "maximum": 4096 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

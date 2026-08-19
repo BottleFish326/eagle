@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "suite": {
+    "id": "advanced-query-example",
+    "version": 1
+  },
+  "records": [
+    {
+      "key": "asset-a",
+      "rootId": "0198a7c2-8341-7a31-b842-f15d39f33c18",
+      "relativePath": "Brand Assets/hero.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 12582912,
+      "createdUnixMs": 1787068800000,
+      "modifiedUnixMs": 1787072400000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": true,
+      "rating": 5,
+      "favorite": true,
+      "note": "Hero candidate",
+      "tags": ["project/eagle", "usage/hero"]
+    },
+    {
+      "key": "asset-b",
+      "rootId": null,
+      "relativePath": "unknown/audio.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": null,
+      "createdUnixMs": null,
+      "modifiedUnixMs": 1787076000000,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 0,
+      "durationMs": 45000,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": false,
+      "note": "",
+      "tags": ["project/eagle"]
+    }
+  ],
+  "validCases": [
+    {
+      "id": "rotated-wide-rated-image",
+      "expression": "project/eagle type:image rating:>=4 width:>=1920 aspect:>=16/9",
+      "oracle": [
+        { "field": "tag", "operator": "all", "value": ["project/eagle"] },
+        { "field": "type", "operator": "any", "value": ["image"] },
+        { "field": "rating", "operator": "gte", "value": 4 },
+        { "field": "width", "operator": "gte", "value": 1920 },
+        {
+          "field": "aspect",
+          "operator": "gte",
+          "value": { "numerator": 16, "denominator": 9 }
+        }
+      ],
+      "expectedKeys": ["asset-a"]
+    },
+    {
+      "id": "unknown-file-size",
+      "expression": "size:unknown",
+      "oracle": [
+        { "field": "size", "operator": "is-unknown", "value": "unknown" }
+      ],
+      "expectedKeys": ["asset-b"]
+    }
+  ],
+  "invalidCases": [
+    {
+      "id": "timezone-required",
+      "expression": "modified:>=2026-08-19",
+      "errorKind": "invalid-date",
+      "offset": 0
+    },
+    {
+      "id": "contradictory-width-range",
+      "expression": "width:>1920 width:<1000",
+      "errorKind": "conflicting-range",
+      "offset": 12
+    }
+  ]
+}
