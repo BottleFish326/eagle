@@ -42,3 +42,4 @@
 | [ADR-027](027-user-profile-saved-filters.md) | 用户级保存过滤器与显式 Tag 重命名 | Accepted |
 | [ADR-028](028-typed-advanced-query-predicates.md) | 定型高级查询谓词与独立结果预言机 | Accepted |
 | [ADR-029](029-exact-batch-selection-and-execution.md) | 精确批量选择快照与分层执行 | Accepted |
+| [ADR-030](030-nondestructive-duplicate-analysis.md) | 非破坏性重复素材分析 | Accepted |
