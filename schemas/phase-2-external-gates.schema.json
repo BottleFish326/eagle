@@ -196,37 +196,13 @@
           "maxItems": 3,
           "prefixItems": [
             {
-              "allOf": [
-                {
-                  "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedArtifact"
-                },
-                {
-                  "type": "object",
-                  "properties": { "platform": { "const": "darwin" } }
-                }
-              ]
+              "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedDarwinArtifact"
             },
             {
-              "allOf": [
-                {
-                  "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedArtifact"
-                },
-                {
-                  "type": "object",
-                  "properties": { "platform": { "const": "linux" } }
-                }
-              ]
+              "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedLinuxArtifact"
             },
             {
-              "allOf": [
-                {
-                  "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedArtifact"
-                },
-                {
-                  "type": "object",
-                  "properties": { "platform": { "const": "win32" } }
-                }
-              ]
+              "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedWin32Artifact"
             }
           ],
           "items": false

@@ -61,31 +61,13 @@
             "maxItems": 3,
             "prefixItems": [
               {
-                "allOf": [
-                  { "$ref": "#/$defs/acceptedArtifact" },
-                  {
-                    "type": "object",
-                    "properties": { "platform": { "const": "darwin" } }
-                  }
-                ]
+                "$ref": "#/$defs/acceptedDarwinArtifact"
               },
               {
-                "allOf": [
-                  { "$ref": "#/$defs/acceptedArtifact" },
-                  {
-                    "type": "object",
-                    "properties": { "platform": { "const": "linux" } }
-                  }
-                ]
+                "$ref": "#/$defs/acceptedLinuxArtifact"
               },
               {
-                "allOf": [
-                  { "$ref": "#/$defs/acceptedArtifact" },
-                  {
-                    "type": "object",
-                    "properties": { "platform": { "const": "win32" } }
-                  }
-                ]
+                "$ref": "#/$defs/acceptedWin32Artifact"
               }
             ],
             "items": false
@@ -287,6 +269,175 @@
               "$ref": "#/$defs/acceptedArtifactEnvironment"
             },
             "summary": { "$ref": "#/$defs/summary" }
+          }
+        }
+      ]
+    },
+    "darwinTests": {
+      "const": [
+        "library::tests::p2_platform_rejects_configuration_that_enables_symlink_traversal",
+        "library::tests::p2_platform_rejects_duplicate_and_overlapping_roots",
+        "platform::tests::p2_platform_linux_keys_preserve_case_and_unicode_spelling",
+        "platform::tests::p2_platform_macos_normalizes_unicode_without_assuming_volume_case_mode",
+        "platform::tests::p2_platform_windows_keys_are_case_insensitive_and_unicode_normalized",
+        "platform::tests::p2_platform_windows_portability_diagnostics_cover_names_characters_and_length",
+        "scanner::tests::p2_platform_disconnect_during_scan_is_non_authoritative",
+        "scanner::tests::p2_platform_permission_revocation_during_scan_is_non_authoritative",
+        "scanner::tests::p2_platform_scans_native_unicode_path_without_rewriting_it",
+        "scanner::tests::p2_platform_symlink_loop_is_skipped_once_with_an_explicit_diagnostic"
+      ]
+    },
+    "linuxTests": {
+      "const": [
+        "library::tests::p2_platform_rejects_configuration_that_enables_symlink_traversal",
+        "library::tests::p2_platform_rejects_duplicate_and_overlapping_roots",
+        "platform::tests::p2_platform_linux_keys_preserve_case_and_unicode_spelling",
+        "platform::tests::p2_platform_macos_normalizes_unicode_without_assuming_volume_case_mode",
+        "platform::tests::p2_platform_windows_keys_are_case_insensitive_and_unicode_normalized",
+        "platform::tests::p2_platform_windows_portability_diagnostics_cover_names_characters_and_length",
+        "scanner::tests::p2_platform_disconnect_during_scan_is_non_authoritative",
+        "scanner::tests::p2_platform_linux_moved_mount_root_is_non_authoritative",
+        "scanner::tests::p2_platform_linux_scans_case_distinct_files_as_separate_assets",
+        "scanner::tests::p2_platform_permission_revocation_during_scan_is_non_authoritative",
+        "scanner::tests::p2_platform_scans_native_unicode_path_without_rewriting_it",
+        "scanner::tests::p2_platform_symlink_loop_is_skipped_once_with_an_explicit_diagnostic"
+      ]
+    },
+    "win32Tests": {
+      "const": [
+        "library::tests::p2_platform_rejects_configuration_that_enables_symlink_traversal",
+        "library::tests::p2_platform_rejects_duplicate_and_overlapping_roots",
+        "platform::tests::p2_platform_linux_keys_preserve_case_and_unicode_spelling",
+        "platform::tests::p2_platform_macos_normalizes_unicode_without_assuming_volume_case_mode",
+        "platform::tests::p2_platform_windows_keys_are_case_insensitive_and_unicode_normalized",
+        "platform::tests::p2_platform_windows_portability_diagnostics_cover_names_characters_and_length",
+        "scanner::tests::p2_platform_scans_native_unicode_path_without_rewriting_it",
+        "scanner::tests::p2_platform_windows_long_path_scans_and_atomically_updates_sidecar",
+        "scanner::tests::p2_platform_windows_symlink_loop_is_skipped_when_native_creation_is_available"
+      ]
+    },
+    "acceptedDarwinArtifact": {
+      "allOf": [
+        { "$ref": "#/$defs/acceptedArtifact" },
+        {
+          "type": "object",
+          "properties": {
+            "artifactName": {
+              "type": "string",
+              "pattern": "^p2-a12-source-macOS-[0-9a-f]{40,64}-attempt-[1-9][0-9]*$"
+            },
+            "platform": { "const": "darwin" },
+            "environment": {
+              "allOf": [
+                { "$ref": "#/$defs/acceptedArtifactEnvironment" },
+                {
+                  "type": "object",
+                  "properties": { "runnerOs": { "const": "macOS" } }
+                }
+              ]
+            },
+            "expectedTests": { "$ref": "#/$defs/darwinTests" },
+            "listedTests": { "$ref": "#/$defs/darwinTests" },
+            "executedTests": { "$ref": "#/$defs/darwinTests" },
+            "summary": {
+              "allOf": [
+                { "$ref": "#/$defs/summary" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "result": { "const": "ok" },
+                    "passed": { "const": 10 },
+                    "failed": { "const": 0 },
+                    "ignored": { "const": 0 },
+                    "measured": { "const": 0 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "acceptedLinuxArtifact": {
+      "allOf": [
+        { "$ref": "#/$defs/acceptedArtifact" },
+        {
+          "type": "object",
+          "properties": {
+            "artifactName": {
+              "type": "string",
+              "pattern": "^p2-a12-source-Linux-[0-9a-f]{40,64}-attempt-[1-9][0-9]*$"
+            },
+            "platform": { "const": "linux" },
+            "environment": {
+              "allOf": [
+                { "$ref": "#/$defs/acceptedArtifactEnvironment" },
+                {
+                  "type": "object",
+                  "properties": { "runnerOs": { "const": "Linux" } }
+                }
+              ]
+            },
+            "expectedTests": { "$ref": "#/$defs/linuxTests" },
+            "listedTests": { "$ref": "#/$defs/linuxTests" },
+            "executedTests": { "$ref": "#/$defs/linuxTests" },
+            "summary": {
+              "allOf": [
+                { "$ref": "#/$defs/summary" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "result": { "const": "ok" },
+                    "passed": { "const": 12 },
+                    "failed": { "const": 0 },
+                    "ignored": { "const": 0 },
+                    "measured": { "const": 0 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "acceptedWin32Artifact": {
+      "allOf": [
+        { "$ref": "#/$defs/acceptedArtifact" },
+        {
+          "type": "object",
+          "properties": {
+            "artifactName": {
+              "type": "string",
+              "pattern": "^p2-a12-source-Windows-[0-9a-f]{40,64}-attempt-[1-9][0-9]*$"
+            },
+            "platform": { "const": "win32" },
+            "environment": {
+              "allOf": [
+                { "$ref": "#/$defs/acceptedArtifactEnvironment" },
+                {
+                  "type": "object",
+                  "properties": { "runnerOs": { "const": "Windows" } }
+                }
+              ]
+            },
+            "expectedTests": { "$ref": "#/$defs/win32Tests" },
+            "listedTests": { "$ref": "#/$defs/win32Tests" },
+            "executedTests": { "$ref": "#/$defs/win32Tests" },
+            "summary": {
+              "allOf": [
+                { "$ref": "#/$defs/summary" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "result": { "const": "ok" },
+                    "passed": { "const": 9 },
+                    "failed": { "const": 0 },
+                    "ignored": { "const": 0 },
+                    "measured": { "const": 0 }
+                  }
+                }
+              ]
+            }
           }
         }
       ]

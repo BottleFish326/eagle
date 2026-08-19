@@ -21,7 +21,7 @@
 - 三个 leg 无论成功失败都上传 90 天 JSON artifact，缺测试、ignored、非 GitHub-hosted 或 Windows symlink skip 都明确拒绝；
 - 新增独立 matrix 汇总器和 CI job，下载同一提交的三个 artifact、重新解析原始 Cargo 输出，并拒绝缺平台、重复平台、跨提交、跨 workflow run/attempt、产物改名或内容摘要异常；
 - 源/汇总 artifact 都绑定 run attempt，分别命名为 `p2-a12-source-<runner>-<sha>-attempt-<n>` 与 `p2-a12-matrix-<sha>-attempt-<n>`，避免 rerun 冲突或混入旧证据；只有汇总 JSON 为 `accepted=true` 且 `failures=[]` 时代表机器验收通过；
-- 新增最终汇总证据 JSON Schema，固定成功与失败报告、验证 job 环境、darwin/linux/win32 三个源 artifact 的精确顺序、摘要和测试 summary；重复或替换平台不能仅凭数组长度通过，跨文件一致性继续由重放汇总器判定；
+- 新增最终汇总证据 JSON Schema，固定成功与失败报告、验证 job 环境、darwin/linux/win32 三个源 artifact 的精确顺序、runner 身份、expected/listed/executed 测试全集和 10/12/9 通过数；重复/替换平台或缺少原生用例不能仅凭数组长度通过，跨文件一致性继续由重放汇总器判定；
 - 三个源报告与汇总 job 还必须共享 GitHub repository/server；最终报告从受校验字段生成稳定 workflow `runUrl`，正式归档不再依赖人工抄写链接；
 - 新增离线归档器：下载四个 artifact 文件后再次计算摘要和重放 matrix，确认受测 commit 是当前 HEAD 祖先，再把原始字节以目录级原子 rename 保存到固定证据目录；相同输入可幂等执行，差异输入绝不覆盖；
 - CI 支持 `workflow_dispatch` 显式触发；新增只读托管就绪预检，核对 GitHub CLI/认证、GitHub origin/默认分支、`main -> origin/main`、本地与远端精确 commit、tracked 清洁状态及手动触发入口，并生成绑定 commit/run attempt 的触发、定位、等待、下载和归档命令；

@@ -58,6 +58,14 @@ test("rejects boundary mutations in every P2 accepted-only receipt", () => {
       },
     ],
     [
+      "platform matrix incomplete native suite",
+      "platform-matrix-evidence.schema.json",
+      fixture.matrix,
+      (value) => {
+        value.artifacts[0].executedTests.pop();
+      },
+    ],
+    [
       "hosted run job duplicate",
       "p2-hosted-run-evidence.schema.json",
       fixture.hostedRun,
