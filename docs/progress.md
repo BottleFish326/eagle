@@ -9,7 +9,7 @@
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
 | 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
 | 阶段 2：可靠性与恢复 | In progress | P2-01 至 P2-05、P2-07 已完成本地验收；P2-06 等待 P2-A11 连续 8 小时，P2-08 等待 Windows/Linux 托管矩阵完成 P2-A12 |
-| 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出；P3-01 至 P3-06 的格式、查询、保存过滤器、批量、重复分析与拖放已完成实施准备 |
+| 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出；P3-01 至 P3-07 的完整实施准备均已收敛 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出 |
 
 ## 阶段 0 工作项
@@ -66,6 +66,7 @@
 | P3-04 批量工作流 | Design ready | 已固定精确全选快照、catalog revision、只读预检、协作取消、事务续传与剪贴板单次提交；阶段 2 退出前不计作 P3 开始，见 `reports/p3-04-readiness.md` |
 | P3-05 重复素材分析 | Design ready | 已固定大小/快速指纹/完整 SHA-256、当前文件重读、物理别名、视觉候选隔离和非破坏性报告；阶段 2 退出前不计作 P3 开始，见 `reports/p3-05-readiness.md` |
 | P3-06 拖放与剪贴板 | Design ready | 已固定原始文件/引用双拖柄、后端授权 native drag、Copy-only、Vault 内外有序引用和最小剪贴板权限；阶段 2 退出前不计作 P3 开始，见 `reports/p3-06-readiness.md` |
+| P3-07 生产级交互 | Design ready | 已固定后端排序、多密度虚拟网格、key-based 焦点、预览 session、命令面板、Tag 重命名、任务中心和 A10/A11 证据；阶段 2 退出前不计作 P3 开始，见 `reports/p3-07-readiness.md` |
 
 ## 已固定的关键决定
 
@@ -101,6 +102,7 @@
 - “全选当前结果”在后端物化精确有序快照，不能在执行时重新求值而纳入新素材；元数据批次沿用纯文件事务，取消后已提交项保持完整、未开始项可继续或条件恢复。
 - 重复分析只在运行期执行大小、快速指纹和当前文件完整 SHA-256 分层确认；硬链接别名、独立字节副本和视觉候选分开报告，不提供自动删除、合并或引用改写。
 - 原始文件拖出与引用拖放使用显式双模式；后端从精确选择快照解析并复核路径，本地 native adapter 固定 Copy 且不暴露任意路径 IPC，剪贴板只授予文本/HTML 写入。
+- 生产 UI 的查询与排序由 Rust catalog 唯一执行；虚拟网格按素材 key/revision 维护焦点与选择，三种密度、预览、命令面板和任务状态均保持可访问且不保存素材快照。
 
 ## 当前性能证据
 
@@ -126,6 +128,7 @@
 - [P3-04 批量工作流实施准备报告](reports/p3-04-readiness.md)
 - [P3-05 重复素材分析实施准备报告](reports/p3-05-readiness.md)
 - [P3-06 拖放与剪贴板实施准备报告](reports/p3-06-readiness.md)
+- [P3-07 生产级交互实施准备报告](reports/p3-07-readiness.md)
 - [平台差异记录](../specs/platform-notes.md)
 - 参考环境：Apple M4、16 GiB、APFS SSD、macOS 26.5.2；
 - L 数据集：100,000 个素材、20,000 个 sidecar；
