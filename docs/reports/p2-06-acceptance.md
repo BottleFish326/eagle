@@ -79,6 +79,8 @@ npm run test:resource-stability
 
 最终验收不能只读取 `accepted`。独立只读模块 `resource-stability-report.mjs` 中的 `inspectResourceStabilityReport` 会固定正式参数为 28,800/60/100,000/5/60，使用报告内的原始内部/原生样本、退出状态、stderr、环境和时间重新构造完整报告；重放结果必须继续通过并与磁盘 JSON 在语义上完全一致。正式任务加载的 `resource-stability-analysis.mjs`、`resource-stability-checkpoint.mjs` 与 `verify-resource-stability.mjs` 保持和受测 commit `c18e1ca` 逐字相同；最终重放和 partial 检查分别位于独立只读模块，不改变正在运行的生成器、检查点写入器或原始判定器。
 
+阶段退出时运行 `npm run audit:p2-soak-baseline`。该只读门禁固定基线 SHA 和上述三份运行时输入，同时检查 `Cargo.toml`、锁文件、Node 版本、全部产品 crate/应用/Obsidian Bridge、夹具生成器与 soak 负载；它覆盖从基线到当前工作树的 tracked 差异和 scope 内未跟踪文件，并要求当前 HEAD 是受测 commit 的后代。只有机器输出 `accepted=true`、两个 `changedPaths` 均为空时，才能证明后续证据链改动没有污染正在运行的受测实现。
+
 P2-A12 证据归档后，`verify-phase-2-external-gates.mjs` 会再次调用该重放器，并将最终 JSON 原始字节 SHA-256、受测 commit、参数、环境和 summary 写入统一外部门禁结论。该统一结论不替代本节 8 小时判据。
 
 ## 5. 尚未完成的验收
@@ -94,7 +96,7 @@ npm run ci
 ```
 
 - Rust：129 项测试；
-- Node 验收分析器、确定性最终重放、原子检查点与只读检查：10 项测试；
+- Node 验收分析器、确定性最终重放、原子检查点、只读检查与基线审计：13 项测试；
 - 桌面 TypeScript：46 项测试；
 - Obsidian Bridge：8 项测试；
 - Clippy、TypeScript 静态检查与格式检查：通过；

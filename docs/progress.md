@@ -52,10 +52,10 @@
 | P2-03 批量操作事务与恢复 | Completed locally | 全量预写计划、逐项原子提交、32 项检查点、摘要重建、继续/条件恢复、授权根复核与外部修改保护通过；见 `reports/p2-03-acceptance.md` |
 | P2-04 并发编辑与同步冲突 | Completed locally | mtime/大小/SHA-256 三元版本、Tag 显式三方合并、标量字段逐项选择、二次版本复核及同步冲突副本只读诊断通过；见 `reports/p2-04-acceptance.md` |
 | P2-05 缓存生命周期 | Completed locally | 20,000 项/1 GiB/30 天边界、LRU、解码器描述精确失效、扫描后孤立回收、手动回收及双崩溃点安全轮换通过；见 `reports/p2-05-acceptance.md` |
-| P2-06 资源与稳定性控制 | Acceptance pending | 统一限流、后台降级、协作期限、双有界队列与资源监控已通过短时 smoke；P2-A11 的 L 数据集连续 8 小时证据待生成，见 `reports/p2-06-acceptance.md` |
+| P2-06 资源与稳定性控制 | Acceptance pending | 统一限流、后台降级、协作期限、双有界队列与资源监控已通过短时 smoke；固定受测 SHA 的只读基线门禁可审计 tracked/untracked 漂移；P2-A11 的 L 数据集连续 8 小时证据待生成，见 `reports/p2-06-acceptance.md` |
 | P2-07 诊断和支持工具 | Completed locally | 1 MiB × 5 JSONL 滚动日志、路径值脱敏、Schema 2 错误/性能导出、512 条有界只读一致性报告和 UUID 素材追踪通过；见 `reports/p2-07-acceptance.md` |
 | P2-08 平台与文件系统兼容 | Acceptance pending | macOS 原生 10 项通过；三平台证据器精确要求 10/12/9 项，matrix 汇总器绑定同一 commit/run/attempt，离线归档器会再次重放并原子保存四个原始文件；P2-A12 首次远程运行仍待完成；见 `reports/p2-08-acceptance.md` |
-| 阶段 2 退出验收 | Draft / Not accepted | P2-A01 至 P2-A10 已汇总；A11/A12 统一重放、SHA-256 与 commit 顺序验证器已就绪；P2-A11 正式任务运行中，P2-A12 等待托管三平台结果；见 `reports/phase-2-acceptance.md` |
+| 阶段 2 退出验收 | Draft / Not accepted | P2-A01 至 P2-A10 已汇总；A11/A12 统一重放、SHA-256、commit 顺序和受测源码基线审计均已就绪；P2-A11 正式任务运行中，P2-A12 等待托管三平台结果；见 `reports/phase-2-acceptance.md` |
 
 ## 阶段 3 实施准备
 

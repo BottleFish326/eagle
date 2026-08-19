@@ -58,25 +58,13 @@ docs/reports/evidence/p2-06-resource-soak.json.partial
 
 partial 只证明任务仍可审计，不能提交、不能当作通过证据。当前 `inspect-resource-stability-checkpoint.mjs` 返回 healthy/no failures；该结论也不能替代 8 小时 complete sample。
 
-基线隔离可用以下命令直接复核；任何输出或非零退出都必须停止验收并解释差异：
+基线隔离使用以下只读门禁复核；非零退出或机器输出 `accepted=false` 都必须停止验收并解释差异：
 
 ```text
-git diff --exit-code c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21 -- \
-  tools/resource-stability-analysis.mjs \
-  tools/resource-stability-checkpoint.mjs \
-  tools/verify-resource-stability.mjs
+npm run audit:p2-soak-baseline
 ```
 
-正式任务使用的 Rust/桌面产品源码、夹具生成器与 soak 负载也必须保持无差异：
-
-```text
-git diff --exit-code c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21..HEAD -- \
-  Cargo.toml Cargo.lock .nvmrc \
-  crates apps integrations \
-  tools/fixture-generator tools/resource-soak
-```
-
-截至本报告，两条命令均无输出且退出码为 0；后续每次阶段 2 证据提交后都必须重跑，不能仅凭允许路径白名单推断“没有产品变化”。
+门禁固定受测 SHA，要求当前 HEAD 是其后代；第一组逐文件核对正式任务已经加载的分析器、检查点写入器和运行器，第二组核对 Rust/桌面产品源码、依赖锁定、夹具生成器与 soak 负载。两组都检查从基线到当前工作树的 tracked 差异和 scope 内未跟踪文件。截至本报告输出 `accepted=true` 且两个 `changedPaths` 均为空；后续每次阶段 2 证据提交后都必须重跑，不能仅凭允许路径白名单推断“没有产品变化”。
 
 ### 4.1 唯一通过判据
 
@@ -155,7 +143,7 @@ node tools/verify-phase-2-external-gates.mjs
 只有第 4、5 节证据都通过后，执行一次候选提交审计：
 
 1. 确认 P2-A11 final JSON、P2-A12 已归档 consolidated matrix/三个源 artifact/hosted logs 与实现 commit 可追溯，并生成 `p2-external-gates.json`；
-2. 执行第 4 节基线 diff，确认正式 soak 生成器和原始判定器逐字未变；另审计后续提交没有修改该任务已编译的产品代码，若存在则重新跑相应门禁；
+2. 执行 `npm run audit:p2-soak-baseline`，确认正式 soak 生成器、原始判定器和该任务已编译的产品代码均未变化；若任一 scope 出现差异则重新跑相应门禁；
 3. 检查 `git status` 只包含预期最终证据，没有 partial、临时 fixture、token 或本机路径；
 4. 更新 P2-06/P2-08、本报告、`docs/progress.md` 和 README 为实际结论；
 5. 运行文档/Schema 检查和最终快速质量门禁；
