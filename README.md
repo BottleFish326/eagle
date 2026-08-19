@@ -19,6 +19,7 @@
 - [P2-06 验收准备报告](docs/reports/p2-06-acceptance.md)
 - [P2-07 验收报告](docs/reports/p2-07-acceptance.md)
 - [P2-08 验收报告](docs/reports/p2-08-acceptance.md)
+- [阶段 2 验收报告（草案）](docs/reports/phase-2-acceptance.md)
 - [P3-01 扩展格式实施准备](docs/reports/p3-01-readiness.md)
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
