@@ -1,9 +1,18 @@
 import { spawn } from "node:child_process";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+
+import { buildResourceStabilityReport } from "./resource-stability-analysis.mjs";
 
 const runFile = promisify(execFile);
 const repository = path.resolve(import.meta.dirname, "..");
@@ -21,6 +30,7 @@ const defaults = {
   ),
 };
 const options = parseArguments(process.argv.slice(2));
+const repositoryState = await readRepositoryState();
 let workspace;
 let child;
 
@@ -114,7 +124,7 @@ try {
   );
   if (finalExternal !== undefined) externalSamples.push(finalExternal);
 
-  const report = buildReport({
+  const report = buildResourceStabilityReport({
     startedAt,
     exit,
     stderr: stderr.join(""),
@@ -122,9 +132,15 @@ try {
     externalSamples,
     sampleParseErrors,
     options,
+    gitCommit: repositoryState.gitCommit,
+    environment: {
+      platform: process.platform,
+      architecture: process.arch,
+      nodeVersion: process.version,
+    },
   });
   await mkdir(path.dirname(options.output), { recursive: true });
-  await writeFile(options.output, `${JSON.stringify(report, null, 2)}\n`);
+  await writeReportAtomic(options.output, report);
   if (!report.accepted) {
     throw new Error(
       `resource stability rejected: ${report.failures.join("; ")}`,
@@ -137,162 +153,6 @@ try {
   if (workspace !== undefined) {
     await rm(workspace, { recursive: true, force: true, maxRetries: 3 });
   }
-}
-
-function buildReport({
-  startedAt,
-  exit,
-  stderr,
-  internalSamples,
-  externalSamples,
-  sampleParseErrors,
-  options: runOptions,
-}) {
-  externalSamples.sort((left, right) => left.elapsedMs - right.elapsedMs);
-  const measured = externalSamples.filter(
-    (sample) => sample.elapsedMs >= runOptions.warmupSeconds * 1_000,
-  );
-  const resourceSamples = measured.length >= 2 ? measured : externalSamples;
-  const first = resourceSamples.at(0);
-  const last = resourceSamples.at(-1);
-  const finalInternal = internalSamples.at(-1);
-  const rssGrowthKiB =
-    first === undefined || last === undefined
-      ? null
-      : last.rssKiB - first.rssKiB;
-  const rssSlopeKiBPerMinute = linearSlope(resourceSamples, "rssKiB");
-  const handleGrowth =
-    first === undefined || last === undefined
-      ? null
-      : last.handles - first.handles;
-  const threadBaseline = first?.threads ?? null;
-  const maxThreads = maximum(resourceSamples, "threads");
-  const maxHandles = maximum(resourceSamples, "handles");
-  const minHandles = minimum(resourceSamples, "handles");
-  const maxCpuPercent = maximum(resourceSamples, "cpuPercent");
-  const failures = [];
-  if (exit.code !== 0)
-    failures.push(`resource soak exited with code ${String(exit.code)}`);
-  if (finalInternal?.status !== "complete")
-    failures.push("resource soak did not emit a complete sample");
-  if (sampleParseErrors.length > 0) {
-    failures.push(
-      `${String(sampleParseErrors.length)} internal samples were not valid JSON`,
-    );
-  }
-  if (finalInternal?.sourceAssets !== runOptions.fixtureCount) {
-    failures.push(
-      `scanned ${String(finalInternal?.sourceAssets)} assets, expected ${String(runOptions.fixtureCount)}`,
-    );
-  }
-  if (resourceSamples.length < 2)
-    failures.push("fewer than two native process samples were captured");
-  if (rssGrowthKiB !== null && rssGrowthKiB > 256 * 1_024) {
-    failures.push(`RSS growth ${String(rssGrowthKiB)} KiB exceeds 262144 KiB`);
-  }
-  if (rssSlopeKiBPerMinute !== null && rssSlopeKiBPerMinute > 8 * 1_024) {
-    failures.push(
-      `RSS slope ${String(rssSlopeKiBPerMinute)} KiB/min exceeds 8192 KiB/min`,
-    );
-  }
-  if (handleGrowth !== null && handleGrowth > 64) {
-    failures.push(`handle growth ${String(handleGrowth)} exceeds 64`);
-  }
-  if (
-    maxHandles !== null &&
-    minHandles !== null &&
-    maxHandles - minHandles > 128
-  ) {
-    failures.push(
-      `handle range ${String(maxHandles - minHandles)} exceeds 128`,
-    );
-  }
-  if (
-    maxThreads !== null &&
-    threadBaseline !== null &&
-    maxThreads > threadBaseline + 16
-  ) {
-    failures.push(`thread peak ${String(maxThreads)} exceeds baseline + 16`);
-  }
-  const foregroundLimit = finalInternal?.scheduler.foregroundLimit;
-  if (
-    maxCpuPercent !== null &&
-    foregroundLimit !== undefined &&
-    maxCpuPercent > foregroundLimit * 100 + 50
-  ) {
-    failures.push(
-      `CPU peak ${String(maxCpuPercent)} exceeds scheduler capacity envelope`,
-    );
-  }
-  for (const sample of internalSamples) {
-    if (sample.scheduler.activeTotal > sample.scheduler.foregroundLimit) {
-      failures.push("scheduler active work exceeded the foreground bound");
-      break;
-    }
-    if (sample.scheduler.waitingTotal > sample.scheduler.maxWaiters) {
-      failures.push("scheduler waiters exceeded the bounded queue");
-      break;
-    }
-    if (
-      sample.cache.entryCount > sample.cache.maxEntries ||
-      sample.cache.byteCount > sample.cache.maxBytes
-    ) {
-      failures.push("thumbnail cache exceeded its configured bound");
-      break;
-    }
-  }
-  if (
-    (finalInternal?.generatedEvents ?? 0) === 0 ||
-    (finalInternal?.watcherBatches ?? 0) === 0
-  ) {
-    failures.push("filesystem event activity was not observed");
-  }
-  if (
-    (finalInternal?.thumbnailRequests ?? 0) === 0 ||
-    (finalInternal?.hashRequests ?? 0) === 0
-  ) {
-    failures.push("decode or hash activity was not observed");
-  }
-  if (
-    runOptions.durationSeconds >= 240 &&
-    !internalSamples.some((sample) => sample.scheduler.mode === "background")
-  ) {
-    failures.push("background resource mode was not observed");
-  }
-  return {
-    schema: 1,
-    command: `node tools/verify-resource-stability.mjs --duration-seconds ${String(runOptions.durationSeconds)} --fixture-count ${String(runOptions.fixtureCount)}`,
-    startedAt: startedAt.toISOString(),
-    completedAt: new Date().toISOString(),
-    durationSeconds: runOptions.durationSeconds,
-    warmupSeconds: runOptions.warmupSeconds,
-    fixtureCount: runOptions.fixtureCount,
-    accepted: failures.length === 0,
-    failures,
-    summary: {
-      nativeSampleCount: resourceSamples.length,
-      internalSampleCount: internalSamples.length,
-      rssGrowthKiB,
-      rssSlopeKiBPerMinute: round(rssSlopeKiBPerMinute, 2),
-      maxRssKiB: maximum(resourceSamples, "rssKiB"),
-      handleGrowth,
-      maxHandles,
-      threadBaseline,
-      maxThreads,
-      maxCpuPercent,
-      scanPasses: finalInternal?.scanPasses ?? 0,
-      generatedEvents: finalInternal?.generatedEvents ?? 0,
-      watcherBatches: finalInternal?.watcherBatches ?? 0,
-      thumbnailRequests: finalInternal?.thumbnailRequests ?? 0,
-      hashRequests: finalInternal?.hashRequests ?? 0,
-      cacheEntries: finalInternal?.cache.entryCount ?? 0,
-      scheduler: finalInternal?.scheduler ?? null,
-    },
-    internalSamples,
-    externalSamples,
-    sampleParseErrors,
-    stderr: stderr.trim(),
-  };
 }
 
 async function sampleProcess(pid, elapsedMs) {
@@ -359,38 +219,31 @@ async function run(command, args) {
   });
 }
 
-function linearSlope(samples, key) {
-  if (samples.length < 2) return null;
-  const xMean =
-    samples.reduce((sum, sample) => sum + sample.elapsedMs, 0) / samples.length;
-  const yMean =
-    samples.reduce((sum, sample) => sum + sample[key], 0) / samples.length;
-  let numerator = 0;
-  let denominator = 0;
-  for (const sample of samples) {
-    const x = sample.elapsedMs - xMean;
-    numerator += x * (sample[key] - yMean);
-    denominator += x * x;
+async function readRepositoryState() {
+  const [{ stdout: revision }, { stdout: status }] = await Promise.all([
+    runFile("git", ["rev-parse", "HEAD"], { cwd: repository }),
+    runFile("git", ["status", "--porcelain", "--untracked-files=normal"], {
+      cwd: repository,
+    }),
+  ]);
+  if (status.trim() !== "") {
+    throw new Error(
+      "resource stability evidence requires a clean Git worktree; commit or remove local changes first",
+    );
   }
-  return denominator === 0 ? 0 : (numerator / denominator) * 60_000;
+  return { gitCommit: revision.trim() };
 }
 
-function maximum(samples, key) {
-  return samples.length === 0
-    ? null
-    : Math.max(...samples.map((sample) => sample[key]));
-}
-
-function minimum(samples, key) {
-  return samples.length === 0
-    ? null
-    : Math.min(...samples.map((sample) => sample[key]));
-}
-
-function round(value, digits) {
-  if (value === null) return null;
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
+async function writeReportAtomic(output, report) {
+  const temporary = `${output}.tmp-${String(process.pid)}-${String(Date.now())}`;
+  try {
+    await writeFile(temporary, `${JSON.stringify(report, null, 2)}\n`, {
+      flag: "wx",
+    });
+    await rename(temporary, output);
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
 
 function parseArguments(args) {

@@ -1,60 +1,91 @@
-import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
-const parent = await mkdtemp(path.join(os.tmpdir(), 'material-eagle-ci-'));
-const library = path.join(parent, 'library');
-const marker = path.join(library, '.eagle-fixture-manifest.json');
+const parent = await mkdtemp(path.join(os.tmpdir(), "material-eagle-ci-"));
+const library = path.join(parent, "library");
+const marker = path.join(library, ".eagle-fixture-manifest.json");
 
 try {
-  runCargo(['run', '--quiet', '--release', '-p', 'fixture-generator', '--', 'generate', library, '--scale', 'small']);
-  const manifest = JSON.parse(await readFile(marker, 'utf8'));
-  assert(manifest.count === 1_000, `fixture manifest count is ${manifest.count}`);
-  assert(manifest.sidecarCount === 200, `fixture sidecar count is ${manifest.sidecarCount}`);
+  runCargo([
+    "run",
+    "--quiet",
+    "--release",
+    "-p",
+    "fixture-generator",
+    "--",
+    "generate",
+    library,
+    "--scale",
+    "small",
+  ]);
+  const manifest = JSON.parse(await readFile(marker, "utf8"));
+  assert(
+    manifest.count === 1_000,
+    `fixture manifest count is ${manifest.count}`,
+  );
+  assert(
+    manifest.sidecarCount === 200,
+    `fixture sidecar count is ${manifest.sidecarCount}`,
+  );
 
   const files = await walkFiles(library);
-  const sample = files.find((file) => file.endsWith('.png'));
-  assert(sample !== undefined, 'fixture contains no PNG sample');
+  const sample = files.find((file) => file.endsWith(".png"));
+  assert(sample !== undefined, "fixture contains no PNG sample");
   const sampleDigestBefore = await sha256(sample);
 
   const scan = runCargo([
-    'run',
-    '--quiet',
-    '--release',
-    '-p',
-    'eagle-p0',
-    '--',
-    'scan',
+    "run",
+    "--quiet",
+    "--release",
+    "-p",
+    "eagle-p0",
+    "--",
+    "scan",
     library,
-    '--json',
+    "--json",
   ]);
   const report = JSON.parse(scan);
-  assert(report.assets.length === manifest.count, `scan returned ${report.assets.length} assets`);
-  assert(report.problems.length === 0, `scan reported ${report.problems.length} problems`);
-  const assetsWithDimensions = report.assets.filter((asset) => asset.dimensions !== null).length;
+  assert(
+    report.assets.length === manifest.count,
+    `scan returned ${report.assets.length} assets`,
+  );
+  assert(
+    report.problems.length === 0,
+    `scan reported ${report.problems.length} problems`,
+  );
+  const assetsWithDimensions = report.assets.filter(
+    (asset) => asset.dimensions !== null,
+  ).length;
   const damagedImages = report.assets.filter((asset) =>
-    asset.issues.some((issue) => issue.type === 'invalid-image-metadata'),
+    asset.issues.some((issue) => issue.type === "invalid-image-metadata"),
   ).length;
   assert(
     assetsWithDimensions === manifest.count - 1,
     `expected ${manifest.count - 1} dimension records, got ${assetsWithDimensions}`,
   );
-  assert(damagedImages === 1, `expected one isolated damaged image, got ${damagedImages}`);
+  assert(
+    damagedImages === 1,
+    `expected one isolated damaged image, got ${damagedImages}`,
+  );
   assert(
     report.assets.every(
       (asset) =>
-        typeof asset.relativePath === 'string' &&
-        typeof asset.size === 'number' &&
-        typeof asset.modifiedUnixMs === 'number',
+        typeof asset.relativePath === "string" &&
+        typeof asset.size === "number" &&
+        typeof asset.modifiedUnixMs === "number",
     ),
-    'formal AssetRecord fields are incomplete',
+    "formal AssetRecord fields are incomplete",
   );
-  assert((await sha256(sample)) === sampleDigestBefore, 'scan modified an original asset');
+  assert(
+    (await sha256(sample)) === sampleDigestBefore,
+    "scan modified an original asset",
+  );
   assert(
     files.every((file) => !/\.(?:db|sqlite|sqlite3)$/iu.test(file)),
-    'fixture contains a forbidden database file',
+    "fixture contains a forbidden database file",
   );
 
   console.log(
@@ -63,7 +94,16 @@ try {
 } finally {
   try {
     await stat(marker);
-    runCargo(['run', '--quiet', '--release', '-p', 'fixture-generator', '--', 'clean', library]);
+    runCargo([
+      "run",
+      "--quiet",
+      "--release",
+      "-p",
+      "fixture-generator",
+      "--",
+      "clean",
+      library,
+    ]);
   } catch {
     // The parent directory was created by mkdtemp in this process and is safe to remove below.
   }
@@ -71,16 +111,20 @@ try {
 }
 
 function runCargo(argumentsList) {
-  const result = spawnSync('cargo', argumentsList, {
-    cwd: path.resolve(import.meta.dirname, '..'),
-    encoding: 'utf8',
+  const result = spawnSync("cargo", argumentsList, {
+    cwd: path.resolve(import.meta.dirname, ".."),
+    encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
   if (result.error !== undefined) {
     throw new Error(`failed to launch cargo: ${result.error.message}`);
   }
   if (result.status !== 0) {
-    throw new Error(result.stderr || result.stdout || `cargo exited with status ${result.status}`);
+    throw new Error(
+      result.stderr ||
+        result.stdout ||
+        `cargo exited with status ${result.status}`,
+    );
   }
   return result.stdout;
 }
@@ -99,7 +143,9 @@ async function walkFiles(directory) {
 }
 
 async function sha256(filePath) {
-  return createHash('sha256').update(await readFile(filePath)).digest('hex');
+  return createHash("sha256")
+    .update(await readFile(filePath))
+    .digest("hex");
 }
 
 function assert(condition, message) {
