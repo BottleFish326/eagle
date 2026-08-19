@@ -13,9 +13,15 @@ import {
 } from "./p2-acceptance-test-fixtures.mjs";
 import {
   buildP2DataSafetyAuditReport,
+  inspectP2DataSafetyAuditReceipt,
   P2_DATA_SAFETY_REPORTS,
 } from "./p2-data-safety-audit.mjs";
-import { buildPhase2ExitGatesReport } from "./phase-2-exit-gates.mjs";
+import { inspectP2LocalFaultGatesReceipt } from "./p2-local-fault-gates.mjs";
+import {
+  buildPhase2ExitGatesReport,
+  inspectPhase2ExitGatesReceipt,
+} from "./phase-2-exit-gates.mjs";
+import { inspectPhase2ExternalGatesReceipt } from "./phase-2-external-gates.mjs";
 import { FORMAL_SOAK_BASELINE_COMMIT } from "./soak-baseline-audit.mjs";
 
 const repository = path.resolve(import.meta.dirname, "..");
@@ -44,6 +50,22 @@ test("validates generated P2 source and stage receipts", () => {
   validate("p2-local-fault-gates.schema.json", fixture.localFaults);
   validate("p2-data-safety-audit.schema.json", fixture.dataSafety);
   validate("phase-2-exit-evidence.schema.json", fixture.finalExit);
+});
+
+test("keeps P2 stage schemas aligned with independent runtime inspectors", () => {
+  const fixture = acceptedReceiptFixture();
+  const inspections = [
+    ["external", inspectPhase2ExternalGatesReceipt(fixture.external)],
+    ["local faults", inspectP2LocalFaultGatesReceipt(fixture.localFaults)],
+    ["data safety", inspectP2DataSafetyAuditReceipt(fixture.dataSafety)],
+    ["final exit", inspectPhase2ExitGatesReceipt(fixture.finalExit)],
+  ];
+  for (const [label, inspection] of inspections)
+    assert.equal(
+      inspection.accepted,
+      true,
+      `${label}: ${inspection.failures.join("; ")}`,
+    );
 });
 
 test("rejects boundary mutations in every P2 accepted-only receipt", () => {
