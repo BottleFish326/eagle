@@ -10,7 +10,10 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
-import { buildPhase2ExitGatesReport } from "./phase-2-exit-gates.mjs";
+import {
+  buildPhase2ExitGatesReport,
+  inspectPhase2ExitGatesReceipt,
+} from "./phase-2-exit-gates.mjs";
 import { buildPhase2ExternalGatesReport } from "./phase-2-external-gates.mjs";
 import { readPlatformMatrixBundle } from "./platform-matrix-bundle.mjs";
 import {
@@ -124,9 +127,18 @@ try {
     soakBaselineAudit,
     localCandidateDriftPaths,
   });
-  console.log(JSON.stringify(report, null, 2));
-  if (report.accepted) await writeExclusive(paths.output, report);
-  else process.exitCode = 1;
+  if (!report.accepted) {
+    console.log(JSON.stringify(report, null, 2));
+    process.exitCode = 1;
+  } else {
+    const receiptInspection = inspectPhase2ExitGatesReceipt(report);
+    if (!receiptInspection.accepted)
+      throw new Error(
+        `phase 2 exit receipt self-check failed: ${receiptInspection.failures.join("; ")}`,
+      );
+    await writeExclusive(paths.output, report);
+    console.log(JSON.stringify(report, null, 2));
+  }
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;

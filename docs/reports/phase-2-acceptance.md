@@ -142,7 +142,7 @@ npm run test:p2-local-fault-gates
 2. 缓存根改名后 abort，第二进程确认用户素材/Sidecar 不变并重建缓存；
 3. 新缓存根建立后 abort，第二进程做同样恢复与用户文件校验。
 
-任一进程状态、恢复输出、故障点数量、来源、二进制摘要或临时目录清理不满足时，命令返回非零、保留故障现场且不生成正式收据。全部满足后才删除本次精确创建的临时根，并以不可覆盖方式写入 `docs/reports/evidence/p2-local-fault-gates.json`；[`p2-local-fault-gates.schema.json`](../../schemas/p2-local-fault-gates.schema.json) 只接受成功/abort 状态、固定 317/1000 边界、固定顺序的两个缓存故障点和已清理状态。
+任一进程状态、恢复输出、故障点数量、来源、二进制摘要或临时目录清理不满足时，命令返回非零、保留故障现场且不生成正式收据。全部满足后才删除本次精确创建的临时根；报告还必须通过独立收据检查器，随后才以不可覆盖方式写入 `docs/reports/evidence/p2-local-fault-gates.json`。[`p2-local-fault-gates.schema.json`](../../schemas/p2-local-fault-gates.schema.json) 只接受成功/abort 状态、固定 317/1000 边界、固定顺序的两个缓存故障点和已清理状态。
 
 该命令会构建并运行 Rust 故障负载，因此不在 P2-A11 采样期间执行。当前执行器、Schema、离线严格检查器与七项纯判定测试已通过；正式候选收据仍 pending，必须等 soak 正常结束、partial 消失且候选证据提交后再运行。该本地收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
 
@@ -164,7 +164,7 @@ Git 侧还必须同时满足：
 4. 当前候选提交中已包含逐字相同的 `p2-local-fault-gates.json`；
 5. 本地故障执行后只有 `README.md` 与 `docs/` 可以变化，任何工具、Schema、工作流、依赖或产品源码变化都要求从新的干净提交重跑故障门禁。
 
-任一条件失败时只输出拒绝报告并返回非零。全部通过后才以不可覆盖方式生成 `docs/reports/evidence/p2-phase-2-exit.json`，其 accepted-only 结构由 [`phase-2-exit-evidence.schema.json`](../../schemas/phase-2-exit-evidence.schema.json) 固定，记录两个输入收据 SHA-256、四段提交关系、候选 SHA、来源基线和最小验收摘要。当前纯分析的成功、综合篡改和非法路径三项测试与 Schema 编译已通过；正式退出命令必须等待 A11/A12 和本地候选故障收据全部就位，当前不能生成 accepted 结果。
+任一条件失败时只输出拒绝报告并返回非零。全部通过后，生成的报告还要由一条不读取原始输入的独立检查路径核对精确字段、摘要格式、固定边界、来源提交与确定性时间；只有自检也接受，才以不可覆盖方式生成 `docs/reports/evidence/p2-phase-2-exit.json`。其 accepted-only 结构由 [`phase-2-exit-evidence.schema.json`](../../schemas/phase-2-exit-evidence.schema.json) 固定，记录两个输入收据 SHA-256、四段提交关系、候选 SHA、来源基线和最小验收摘要；归档后可运行 `npm run inspect:p2-exit` 再次离线检查。当前纯分析的成功、综合篡改、非法路径和存档篡改四项测试与 Schema 编译已通过；正式退出命令必须等待 A11/A12 和本地候选故障收据全部就位，当前不能生成 accepted 结果。
 
 ## 6. 产品不变量复核
 

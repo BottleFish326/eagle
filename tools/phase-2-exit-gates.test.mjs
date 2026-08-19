@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildP2LocalFaultGatesReport } from "./p2-local-fault-gates.mjs";
-import { buildPhase2ExitGatesReport } from "./phase-2-exit-gates.mjs";
+import {
+  buildPhase2ExitGatesReport,
+  inspectPhase2ExitGatesReceipt,
+} from "./phase-2-exit-gates.mjs";
 import { FORMAL_SOAK_BASELINE_COMMIT } from "./soak-baseline-audit.mjs";
 
 const candidateCommit = "d".repeat(40);
@@ -35,6 +38,8 @@ test("accepts replayed external evidence and committed local fault evidence in o
     "after-cache-rename",
     "after-cache-recreate",
   ]);
+  const inspection = inspectPhase2ExitGatesReceipt(report);
+  assert.equal(inspection.accepted, true, inspection.failures.join("; "));
 });
 
 test("rejects replay drift, local tampering, source drift, and missing commit bindings", () => {
@@ -83,6 +88,27 @@ test("rejects malformed path and candidate inputs", () => {
       "local fault candidate drift contains an invalid repository path",
     ),
   );
+});
+
+test("offline final receipt inspection rejects structural and summary tampering", () => {
+  const report = buildPhase2ExitGatesReport(acceptedInputs());
+  report.unexpected = true;
+  report.evidenceAt = "2026-08-20T04:00:00.000Z";
+  report.localCandidate.gitCommit = "e".repeat(40);
+  report.p2External.sha256 = "bad";
+  report.p2LocalFaults.environment.nodeVersion = "v25.0.0";
+  report.p2LocalFaults.cacheFaultPoints.reverse();
+  const inspection = inspectPhase2ExitGatesReceipt(report);
+  assert.equal(inspection.accepted, false);
+  for (const expected of [
+    "phase 2 exit receipt fields are invalid",
+    "phase 2 exit receipt local fault commits do not match",
+    "phase 2 exit receipt evidence time is not deterministic",
+    "phase 2 external receipt digest is invalid",
+    "phase 2 local fault environment Node.js is not 24.x",
+    "phase 2 local fault points are invalid",
+  ])
+    assert.ok(inspection.failures.includes(expected), expected);
 });
 
 function acceptedInputs() {

@@ -15,6 +15,7 @@ import path from "node:path";
 
 import {
   buildP2LocalFaultGatesReport,
+  inspectP2LocalFaultGatesReceipt,
   P2_CACHE_FAULT_POINTS,
   P2_TRANSACTION_ABORT_AFTER,
   P2_TRANSACTION_COUNT,
@@ -137,6 +138,11 @@ try {
   if (!report.accepted)
     throw new Error(
       `P2 local fault gates rejected: ${report.failures.join("; ")}`,
+    );
+  const receiptInspection = inspectP2LocalFaultGatesReceipt(report);
+  if (!receiptInspection.accepted)
+    throw new Error(
+      `P2 local fault receipt self-check failed: ${receiptInspection.failures.join("; ")}`,
     );
 
   await rm(temporaryRoot, { recursive: true });

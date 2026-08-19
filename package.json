@@ -15,6 +15,7 @@
     "collect:p2-hosted-evidence": "node tools/collect-p2-hosted-evidence.mjs",
     "test:p2-local-fault-gates": "node tools/verify-p2-local-fault-gates.mjs",
     "verify:p2-exit": "node tools/verify-phase-2-exit-gates.mjs",
+    "inspect:p2-exit": "node tools/inspect-phase-2-exit-evidence.mjs",
     "test:medium": "node tools/verify-m-fixture.mjs",
     "test:stability": "node tools/verify-ui-stability.mjs",
     "test:resource-stability": "node tools/verify-resource-stability.mjs",
