@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { inspectResourceStabilityCheckpoint } from "./resource-stability-checkpoint-inspection.mjs";
+import { FORMAL_RESOURCE_STABILITY_OPTIONS } from "./resource-stability-report.mjs";
 
 const repository = path.resolve(import.meta.dirname, "..");
 const checkpointPath = path.resolve(
@@ -15,6 +16,8 @@ const checkpointPath = path.resolve(
     ),
 );
 const checkpoint = JSON.parse(await readFile(checkpointPath, "utf8"));
-const inspection = inspectResourceStabilityCheckpoint(checkpoint);
+const inspection = inspectResourceStabilityCheckpoint(checkpoint, {
+  expectedOptions: FORMAL_RESOURCE_STABILITY_OPTIONS,
+});
 console.log(JSON.stringify(inspection, null, 2));
 if (!inspection.healthy) process.exitCode = 1;

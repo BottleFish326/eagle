@@ -83,7 +83,7 @@ npm run test:resource-stability
 
 运行期间及后续门禁切换统一使用 `npm run status:p2-exit`。该只读命令会识别 final/partial 冲突、重放健康 checkpoint、汇总托管环境与已存在证据，并在 `soak-running` 状态只给出等待/检查动作；它不会启动第二个 soak、构建 Rust、写入证据、推送提交或触发 GitHub workflow。
 
-P2-A12 证据归档后，`verify-phase-2-external-gates.mjs` 会再次调用该重放器，并将最终 JSON 原始字节 SHA-256、受测 commit、参数、环境和 summary 写入统一外部门禁结论。该统一结论不替代本节 8 小时判据。
+运行期间，partial 离线检查器会把五项运行参数逐项绑定到正式配置，并以 internal/native 两条采样流的较小 elapsed 计算目标、已覆盖、剩余毫秒和百分比；这只是健康进度，不替代最终原始样本重放。P2-A12 证据归档后，`verify-phase-2-external-gates.mjs` 会再次调用最终重放器，并将最终 JSON 原始字节 SHA-256、受测 commit、参数、环境和 summary 写入统一外部门禁结论。该统一结论不替代本节 8 小时判据。
 
 ## 5. 尚未完成的验收
 

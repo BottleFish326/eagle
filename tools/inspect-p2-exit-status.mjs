@@ -139,6 +139,7 @@ async function collectResourceState() {
       return failedResource(partialEvidence.error, finalEvidence);
     const inspection = inspectResourceStabilityCheckpoint(
       partialEvidence.value,
+      { expectedOptions: FORMAL_RESOURCE_STABILITY_OPTIONS },
     );
     return {
       gate: {

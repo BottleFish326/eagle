@@ -1,4 +1,7 @@
-export function inspectResourceStabilityCheckpoint(checkpoint) {
+export function inspectResourceStabilityCheckpoint(
+  checkpoint,
+  { expectedOptions = null } = {},
+) {
   const failures = [];
   if (!isRecord(checkpoint) || checkpoint.schema !== 1) {
     return unhealthy("checkpoint root or schema is invalid");
@@ -12,10 +15,35 @@ export function inspectResourceStabilityCheckpoint(checkpoint) {
   if (!/^v24\./u.test(checkpoint.environment?.nodeVersion ?? "")) {
     failures.push("checkpoint was not produced by Node.js 24");
   }
-  const intervalSeconds = checkpoint.options?.sampleIntervalSeconds;
+  const durationSeconds = checkpoint.options?.durationSeconds;
+  const warmupSeconds = checkpoint.options?.warmupSeconds;
   const fixtureCount = checkpoint.options?.fixtureCount;
-  if (!isPositiveInteger(intervalSeconds) || !isPositiveInteger(fixtureCount)) {
+  const intervalSeconds = checkpoint.options?.sampleIntervalSeconds;
+  const checkpointIntervalSeconds =
+    checkpoint.options?.checkpointIntervalSeconds;
+  if (
+    !isPositiveInteger(durationSeconds) ||
+    !isNonnegativeInteger(warmupSeconds) ||
+    !isPositiveInteger(fixtureCount) ||
+    !isPositiveInteger(intervalSeconds) ||
+    !isPositiveInteger(checkpointIntervalSeconds)
+  ) {
     failures.push("checkpoint sampling options are invalid");
+  }
+  if (expectedOptions !== null) {
+    for (const field of [
+      "durationSeconds",
+      "warmupSeconds",
+      "fixtureCount",
+      "sampleIntervalSeconds",
+      "checkpointIntervalSeconds",
+    ]) {
+      if (checkpoint.options?.[field] !== expectedOptions[field]) {
+        failures.push(
+          `checkpoint ${field} is ${String(checkpoint.options?.[field])}, expected ${String(expectedOptions[field])}`,
+        );
+      }
+    }
   }
   const internalSamples = Array.isArray(checkpoint.internalSamples)
     ? checkpoint.internalSamples
@@ -53,6 +81,10 @@ export function inspectResourceStabilityCheckpoint(checkpoint) {
   const validExternal = externalSamples.filter(isCheckpointExternalSample);
   const lastInternal = validInternal.at(-1);
   const lastExternal = validExternal.at(-1);
+  const coveredDurationMs = minimumElapsed(lastInternal, lastExternal);
+  const targetDurationMs = isPositiveInteger(durationSeconds)
+    ? durationSeconds * 1_000
+    : null;
   if (isPositiveInteger(intervalSeconds)) {
     requirePartialCoverage(
       failures,
@@ -124,6 +156,19 @@ export function inspectResourceStabilityCheckpoint(checkpoint) {
     summary: {
       updatedAt: checkpoint.updatedAt ?? null,
       gitCommit: checkpoint.gitCommit ?? null,
+      targetDurationMs,
+      coveredDurationMs,
+      remainingDurationMs:
+        targetDurationMs === null || coveredDurationMs === null
+          ? null
+          : Math.max(0, targetDurationMs - coveredDurationMs),
+      progressPercent:
+        targetDurationMs === null || coveredDurationMs === null
+          ? null
+          : Math.min(
+              100,
+              Number(((coveredDurationMs / targetDurationMs) * 100).toFixed(2)),
+            ),
       internalSampleCount: validInternal.length,
       nativeSampleCount: validExternal.length,
       latestInternalElapsedMs: lastInternal?.elapsedMs ?? null,
@@ -246,4 +291,13 @@ function hasMonotonicCounters(samples) {
 
 function maximum(values) {
   return values.length === 0 ? null : Math.max(...values);
+}
+
+function minimumElapsed(internal, external) {
+  if (
+    !isFiniteNonnegative(internal?.elapsedMs) ||
+    !isFiniteNonnegative(external?.elapsedMs)
+  )
+    return null;
+  return Math.min(internal.elapsedMs, external.elapsedMs);
 }

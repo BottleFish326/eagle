@@ -169,6 +169,17 @@ test("accepts healthy partial evidence and rejects bounded-resource violations",
   const healthy = inspectResourceStabilityCheckpoint(checkpoint);
   assert.equal(healthy.healthy, true);
   assert.deepEqual(healthy.failures, []);
+  assert.equal(healthy.summary.targetDurationMs, 100_000);
+  assert.equal(healthy.summary.coveredDurationMs, 100_000);
+  assert.equal(healthy.summary.remainingDurationMs, 0);
+  assert.equal(healthy.summary.progressPercent, 100);
+
+  checkpoint.externalSamples.pop();
+  const slowerNativeStream = inspectResourceStabilityCheckpoint(checkpoint);
+  assert.equal(slowerNativeStream.healthy, true);
+  assert.equal(slowerNativeStream.summary.coveredDurationMs, 95_000);
+  assert.equal(slowerNativeStream.summary.remainingDurationMs, 5_000);
+  assert.equal(slowerNativeStream.summary.progressPercent, 95);
 
   checkpoint.internalSamples[4].cache.entryCount =
     checkpoint.internalSamples[4].cache.maxEntries + 1;
@@ -180,6 +191,33 @@ test("accepts healthy partial evidence and rejects bounded-resource violations",
   );
   assert.ok(
     unhealthy.failures.some((failure) => failure.includes("monitor errors")),
+  );
+});
+
+test("binds a partial checkpoint to the requested formal options", () => {
+  const input = acceptedInput();
+  const checkpoint = createResourceStabilityCheckpoint({
+    startedAt: input.startedAt,
+    gitCommit: input.gitCommit,
+    environment: input.environment,
+    options: input.options,
+    childPid: 123,
+    internalSamples: input.internalSamples,
+    externalSamples: input.externalSamples,
+    sampleParseErrors: [],
+    monitorErrors: [],
+    stderr: "",
+  });
+
+  checkpoint.options.durationSeconds = 99;
+  const inspection = inspectResourceStabilityCheckpoint(checkpoint, {
+    expectedOptions: options,
+  });
+  assert.equal(inspection.healthy, false);
+  assert.ok(
+    inspection.failures.includes(
+      "checkpoint durationSeconds is 99, expected 100",
+    ),
   );
 });
 
