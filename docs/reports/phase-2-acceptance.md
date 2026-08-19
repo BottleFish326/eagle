@@ -70,7 +70,7 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 6. RSS 增长 ≤ 256 MiB、斜率 ≤ 8 MiB/min；handle 增长 ≤ 64、range ≤ 128；线程峰值 ≤ 预热基线 + 16；
 7. CPU 不超调度容量包络，active/waiting/cache 始终不越界；
 8. scan/event/hash/decode 和 background mode 全部实际出现；
-9. 手工复核 summary 与样本后，才更新 P2-06 报告和本报告，提交最终 JSON。
+9. 使用 `inspectResourceStabilityReport` 从原始样本确定性重放，重放报告与最终 JSON 语义完全一致；随后再人工复核异常趋势，更新 P2-06 报告和本报告并提交最终 JSON。
 
 任务非零退出、信号终止、机器睡眠造成采样不足或任一自动 failure 都必须保留失败证据并重新运行完整 8 小时；不得拼接两次运行或手工修改 JSON。
 

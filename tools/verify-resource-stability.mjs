@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import {
   assertResourceStabilityRuntime,
   buildResourceStabilityReport,
+  FORMAL_RESOURCE_STABILITY_OPTIONS,
 } from "./resource-stability-analysis.mjs";
 import {
   createResourceStabilityCheckpoint,
@@ -18,11 +19,7 @@ const runFile = promisify(execFile);
 const repository = path.resolve(import.meta.dirname, "..");
 assertResourceStabilityRuntime(process.versions.node);
 const defaults = {
-  durationSeconds: 28_800,
-  warmupSeconds: 60,
-  fixtureCount: 100_000,
-  sampleIntervalSeconds: 5,
-  checkpointIntervalSeconds: 60,
+  ...FORMAL_RESOURCE_STABILITY_OPTIONS,
   output: path.join(
     repository,
     "docs",

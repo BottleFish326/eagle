@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   assertResourceStabilityRuntime,
   buildResourceStabilityReport,
+  inspectResourceStabilityReport,
   linearSlope,
 } from "./resource-stability-analysis.mjs";
 import {
@@ -35,6 +36,36 @@ test("accepts a complete bounded run with representative sample coverage", () =>
   );
   assert.ok(
     report.summary.nativeSampleCount >= report.summary.minimumNativeSampleCount,
+  );
+});
+
+test("replays every raw sample before accepting a final report", () => {
+  const report = buildResourceStabilityReport(acceptedInput());
+  const inspection = inspectResourceStabilityReport(report, {
+    expectedOptions: options,
+  });
+  assert.equal(inspection.accepted, true);
+  assert.deepEqual(inspection.failures, []);
+  assert.deepEqual(inspection.replayedReport, report);
+});
+
+test("rejects a stored summary or formal option that does not match replay", () => {
+  const report = buildResourceStabilityReport(acceptedInput());
+  report.summary.scanPasses += 1;
+  report.durationSeconds = 99;
+  const inspection = inspectResourceStabilityReport(report, {
+    expectedOptions: options,
+  });
+  assert.equal(inspection.accepted, false);
+  assert.ok(
+    inspection.failures.some((failure) =>
+      failure.includes("durationSeconds is 99, expected 100"),
+    ),
+  );
+  assert.ok(
+    inspection.failures.includes(
+      "resource stability report does not equal its raw-sample replay",
+    ),
   );
 });
 
