@@ -898,20 +898,22 @@ tests/                           集成、端到端和性能测试
 | P2 | 有规避方式的功能错误、明显性能回退 | 评审并制定明确修复版本 |
 | P3 | 文案、轻微视觉或低频兼容问题 | 可进入后续计划 |
 
-## 14. 仍需在阶段 0 定案的问题
+## 14. 决策收敛登记表
 
-以下问题不得长期保留为隐含假设：
+原“阶段 0 待定问题”不得在已决议后继续显示为开放，也不得把后续阶段的决定伪装成已经完成。当前状态如下：
 
-1. 桌面端最终采用 Tauri/Rust 还是其他技术栈；
-2. Sidecar 使用 YAML 还是 JSON，以及手工编辑兼容策略；
-3. UUIDv7 与 ULID 的最终选择；
-4. 可选扫描快照是否落盘，以及允许包含哪些字段；
-5. Vault 外素材渲染采用资源 URL、对象 URL 还是受限流式代理；
-6. 插件如何在桌面应用未运行时高效解析稳定 ID；
-7. 视频、音频、PDF 的正式支持平台和编解码器来源；
-8. 保存过滤器属于单库文件还是用户级配置；
-9. 是否允许应用提供显式的文件移动/删除能力；若允许，必须单独设计并默认关闭；
-10. 第一公开版本支持的操作系统最低版本。
+| 决策 | 状态 | 权威依据 / 截止门禁 |
+|---|---|---|
+| 桌面技术栈 | Resolved | Tauri 2 + Rust + React/TypeScript/Vite；见 [ADR-006](../specs/adr/006-desktop-technology-stack.md) |
+| Sidecar 格式与手工编辑 | Resolved | UTF-8 YAML、JSON Schema、保留未知字段和原子写入；见 [ADR-002](../specs/adr/002-sidecar-format-and-identity.md) |
+| 稳定 ID | Resolved | UUIDv7；见 [ADR-002](../specs/adr/002-sidecar-format-and-identity.md) |
+| 扫描快照 | Resolved for current release | 当前不持久化扫描快照；若未来增加，只能是可删除、可重建且不含用户状态的派生缓存；见 [ADR-003](../specs/adr/003-derived-cache-policy.md) |
+| Vault 外渲染传输 | P4 decision required | UUID、授权根、realpath、MIME 和生命周期边界已由 [ADR-008](../specs/adr/008-external-asset-rendering-security.md) 固定；对象 URL 与受限流式代理的最终选择必须在 P4-04 实现前形成补充 ADR |
+| 桌面应用未运行时的稳定 ID 解析 | Contract resolved; implementation pending | 插件从授权根和 Sidecar 建立可重建最小索引；见 [ADR-005](../specs/adr/005-obsidian-reference-strategy.md)，具体索引与性能在 P4-02 前定案 |
+| 视频、音频、PDF 格式与 codec | Architecture resolved; packaging pending | 能力分层、worker 隔离和降级已由 [ADR-026](../specs/adr/026-capability-based-extended-format-pipeline.md) 固定；三平台依赖打包在 P3-01C 至 P3-01F 分片逐项关闭 |
+| 保存过滤器作用域 | P3 decision required | 必须在 P3-03 实现前决定单库文件或用户级配置，并形成 ADR 与 Schema；不得先写隐式持久化 |
+| 文件移动与删除 | Resolved for first public release | 应用只解释文件系统，不提供源素材移动或删除；重复分析只报告候选。未来若增加，必须单独 ADR、默认关闭，删除使用系统废纸篓 |
+| 最低操作系统版本 | Release decision required | 在三平台安装包和原生能力矩阵稳定后、首个发布候选前固定，并写入安装与兼容文档 |
 
 ## 15. 参考资料
 
