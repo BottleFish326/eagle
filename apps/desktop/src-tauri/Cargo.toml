@@ -20,6 +20,7 @@ asset-filesystem = { path = "../../../crates/filesystem" }
 asset-index = { path = "../../../crates/index" }
 asset-link-resolver = { path = "../../../crates/link-resolver" }
 asset-preview = { path = "../../../crates/preview" }
+asset-transactions = { path = "../../../crates/transactions" }
 metadata = { path = "../../../crates/metadata" }
 serde.workspace = true
 sha2.workspace = true
@@ -32,6 +33,7 @@ custom-protocol = ["tauri/custom-protocol"]
 
 [dev-dependencies]
 serde_json.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

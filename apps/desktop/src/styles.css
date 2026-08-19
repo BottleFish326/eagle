@@ -1269,6 +1269,60 @@ textarea:focus-visible {
   background: #fffefa;
 }
 
+.settings-card--transactions {
+  grid-column: 1 / -1;
+}
+
+.transaction-empty {
+  padding: 10px;
+  border-radius: 9px;
+  background: #f3f3ee;
+}
+
+.transaction-list {
+  display: grid;
+  gap: 7px;
+}
+
+.transaction-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px;
+  border: 1px solid #e4e4dc;
+  border-radius: 10px;
+  background: #faf9f5;
+}
+
+.transaction-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  margin-right: auto;
+}
+
+.transaction-copy strong {
+  color: #4e554e;
+  font-size: 0.7rem;
+}
+
+.transaction-copy span,
+.transaction-copy small {
+  color: #81847c;
+  font-size: 0.61rem;
+}
+
+.transaction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.text-action--danger {
+  color: var(--danger) !important;
+}
+
 .settings-card-heading {
   display: flex;
   align-items: flex-start;

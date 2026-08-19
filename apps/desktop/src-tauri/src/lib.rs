@@ -11,7 +11,7 @@ use app_config::{
 };
 use asset_catalog::{
     AssetCatalog, BatchMetadataEdit, BatchMetadataEditResult, CatalogRootReconciliation,
-    QueryAssetsInput, QueryAssetsResult,
+    EditFailureKind, MetadataEditFailure, QueryAssetsInput, QueryAssetsResult,
 };
 use asset_filesystem::{
     AddLibraryRoot, FilesystemError, FsChangeBatch, FsRescanReason, LibraryRoot,
@@ -27,6 +27,10 @@ use asset_link_resolver::{
 use asset_preview::{
     CacheClearReport, CacheStartupReport, PreviewError, ThumbnailOutcome, ThumbnailRequest,
     ThumbnailService,
+};
+use asset_transactions::{
+    MetadataTransactionStore, TransactionFailureKind, TransactionRecoveryResult,
+    TransactionScopeItem, TransactionSummary, TransactionTarget,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -71,6 +75,14 @@ struct RuntimeState {
 struct DerivedStateResetReport {
     cache: CacheClearReport,
     catalog_assets_removed: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchMetadataEditCommandResult {
+    updated: Vec<asset_core::AssetRecord>,
+    failures: Vec<MetadataEditFailure>,
+    transaction: Option<TransactionSummary>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1093,13 +1105,72 @@ fn stop_library_watch(
 fn edit_asset_metadata(
     input: BatchMetadataEdit,
     catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    transactions: State<'_, Arc<MetadataTransactionStore>>,
     diagnostics: State<'_, Arc<DiagnosticService>>,
-) -> Result<BatchMetadataEditResult, String> {
-    let result = catalog
-        .lock()
-        .map_err(|_| "asset catalog lock is poisoned".to_owned())?
-        .edit_metadata(&input)
-        .map_err(|error| error.to_string())?;
+) -> Result<BatchMetadataEditCommandResult, String> {
+    let targets = {
+        let catalog = catalog
+            .lock()
+            .map_err(|_| "asset catalog lock is poisoned".to_owned())?;
+        transaction_targets(&catalog, &input)
+    };
+    let result = if let Some(targets) = targets {
+        let execution = transactions
+            .execute(&targets, &input.patch)
+            .map_err(|error| error.to_string())?;
+        let mut catalog = catalog
+            .lock()
+            .map_err(|_| "asset catalog lock is poisoned".to_owned())?;
+        let updated = execution
+            .committed
+            .into_iter()
+            .filter_map(|committed| {
+                catalog.apply_committed_sidecar(
+                    &committed.key,
+                    committed.sidecar_path,
+                    committed.sidecar,
+                    committed.digest,
+                )
+            })
+            .collect();
+        BatchMetadataEditCommandResult {
+            updated,
+            failures: execution
+                .failures
+                .into_iter()
+                .map(|failure| MetadataEditFailure {
+                    key: failure.key,
+                    kind: match failure.kind {
+                        TransactionFailureKind::Conflict => EditFailureKind::Conflict,
+                        TransactionFailureKind::InvalidInput => EditFailureKind::InvalidInput,
+                        TransactionFailureKind::WriteFailed => EditFailureKind::WriteFailed,
+                    },
+                    message: failure.message,
+                })
+                .collect(),
+            transaction: Some(execution.summary),
+        }
+    } else if input.targets.len() >= 2 {
+        let catalog = catalog
+            .lock()
+            .map_err(|_| "asset catalog lock is poisoned".to_owned())?;
+        BatchMetadataEditCommandResult {
+            updated: Vec::new(),
+            failures: failed_batch_transaction_preflight(&catalog, &input),
+            transaction: None,
+        }
+    } else {
+        let BatchMetadataEditResult { updated, failures } = catalog
+            .lock()
+            .map_err(|_| "asset catalog lock is poisoned".to_owned())?
+            .edit_metadata(&input)
+            .map_err(|error| error.to_string())?;
+        BatchMetadataEditCommandResult {
+            updated,
+            failures,
+            transaction: None,
+        }
+    };
     record_diagnostic(
         diagnostics.inner(),
         if result.failures.is_empty() {
@@ -1115,6 +1186,180 @@ fn edit_asset_metadata(
         ],
     );
     Ok(result)
+}
+
+fn failed_batch_transaction_preflight(
+    catalog: &AssetCatalog,
+    input: &BatchMetadataEdit,
+) -> Vec<MetadataEditFailure> {
+    input
+        .targets
+        .iter()
+        .map(|target| match catalog.get(&target.key) {
+            None => MetadataEditFailure {
+                key: target.key.clone(),
+                kind: EditFailureKind::NotFound,
+                message: format!("asset was not found: {}", target.key),
+            },
+            Some(record) if record.root_id.is_none() => MetadataEditFailure {
+                key: target.key.clone(),
+                kind: EditFailureKind::WriteFailed,
+                message: "批量事务未启动：素材缺少授权根信息".into(),
+            },
+            Some(_) => MetadataEditFailure {
+                key: target.key.clone(),
+                kind: EditFailureKind::WriteFailed,
+                message: "批量事务未启动：至少一个目标已经不可用".into(),
+            },
+        })
+        .collect()
+}
+
+fn transaction_targets(
+    catalog: &AssetCatalog,
+    input: &BatchMetadataEdit,
+) -> Option<Vec<TransactionTarget>> {
+    if input.targets.len() < 2 {
+        return None;
+    }
+    input
+        .targets
+        .iter()
+        .map(|target| {
+            let record = catalog.get(&target.key)?;
+            TransactionTarget::from_record(record, target.expected_sidecar_digest.clone())
+        })
+        .collect()
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn list_metadata_transactions(
+    transactions: State<'_, Arc<MetadataTransactionStore>>,
+) -> Result<Vec<TransactionSummary>, String> {
+    transactions.list().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn continue_metadata_transaction(
+    id: Uuid,
+    transactions: State<'_, Arc<MetadataTransactionStore>>,
+    scans: State<'_, Arc<ScanCoordinator>>,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+) -> Result<TransactionRecoveryResult, String> {
+    ensure_transaction_scope_available(id, transactions.inner(), scans.inner(), &roots)?;
+    transactions
+        .continue_transaction(id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn restore_metadata_transaction(
+    id: Uuid,
+    transactions: State<'_, Arc<MetadataTransactionStore>>,
+    scans: State<'_, Arc<ScanCoordinator>>,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+) -> Result<TransactionRecoveryResult, String> {
+    ensure_transaction_scope_available(id, transactions.inner(), scans.inner(), &roots)?;
+    transactions
+        .restore_transaction(id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn dismiss_metadata_transaction(
+    id: Uuid,
+    transactions: State<'_, Arc<MetadataTransactionStore>>,
+) -> Result<(), String> {
+    transactions.dismiss(id).map_err(|error| error.to_string())
+}
+
+fn ensure_transaction_scope_available(
+    id: Uuid,
+    transactions: &MetadataTransactionStore,
+    scans: &ScanCoordinator,
+    roots: &Mutex<LibraryRootManager>,
+) -> Result<(), String> {
+    let scope = transactions.scope(id).map_err(|error| error.to_string())?;
+    let configured_roots = roots
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .roots();
+    for item in scope {
+        let root = configured_roots
+            .iter()
+            .find(|root| root.root.id == item.root_id)
+            .ok_or_else(|| format!("transaction library root was not found: {}", item.root_id))?;
+        if !root.root.enabled {
+            return Err(format!(
+                "transaction library root is disabled: {}",
+                item.root_id
+            ));
+        }
+        if root.access_status != RootAccessStatus::Available {
+            return Err(format!(
+                "transaction library root is not available ({}): {}",
+                root.access_status,
+                root.root.path.display()
+            ));
+        }
+        if scans.is_root_active(item.root_id) {
+            return Err(format!(
+                "library root is currently being scanned: {}",
+                item.root_id
+            ));
+        }
+        ensure_transaction_item_inside_root(&item, &root.root)?;
+    }
+    Ok(())
+}
+
+fn ensure_transaction_item_inside_root(
+    item: &TransactionScopeItem,
+    root: &LibraryRoot,
+) -> Result<(), String> {
+    if item.sidecar_path != metadata::sidecar_path_for(&item.asset_path) {
+        return Err(format!(
+            "transaction Sidecar path does not match asset path: {}",
+            item.asset_path.display()
+        ));
+    }
+    let parent = item.asset_path.parent().ok_or_else(|| {
+        format!(
+            "transaction asset has no parent: {}",
+            item.asset_path.display()
+        )
+    })?;
+    let canonical_parent = parent.canonicalize().map_err(|error| {
+        format!(
+            "transaction asset parent is unavailable ({}): {error}",
+            parent.display()
+        )
+    })?;
+    if !canonical_parent.starts_with(&root.path) {
+        return Err(format!(
+            "transaction asset is outside its library root: {}",
+            item.asset_path.display()
+        ));
+    }
+    if item.asset_path.is_file() {
+        let canonical_asset = item.asset_path.canonicalize().map_err(|error| {
+            format!(
+                "transaction asset is unavailable ({}): {error}",
+                item.asset_path.display()
+            )
+        })?;
+        if !canonical_asset.starts_with(&root.path) {
+            return Err(format!(
+                "transaction asset resolves outside its library root: {}",
+                item.asset_path.display()
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1395,6 +1640,9 @@ pub fn run() {
             app.manage(Arc::new(WatchCoordinator::default()));
             app.manage(Arc::new(ReconciliationCoordinator::default()));
             app.manage(Arc::new(Mutex::new(AssetCatalog::default())));
+            app.manage(Arc::new(MetadataTransactionStore::open(
+                config_directory.join("metadata-transactions-v1"),
+            )?));
             let previews = Arc::new(ThumbnailService::open(&cache_directory, 4)?);
             let cache_startup = previews.startup_report();
             app.manage(previews);
@@ -1441,6 +1689,10 @@ pub fn run() {
             start_library_watch,
             stop_library_watch,
             edit_asset_metadata,
+            list_metadata_transactions,
+            continue_metadata_transaction,
+            restore_metadata_transaction,
+            dismiss_metadata_transaction,
             query_assets,
             request_thumbnail,
             read_thumbnail,
@@ -1454,19 +1706,29 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+    use std::fs;
     use std::path::Path;
 
-    use asset_filesystem::{FsChange, FsChangeBatch, FsChangeKind, FsRescanReason};
+    use asset_catalog::{AssetCatalog, AssetEditTarget, BatchMetadataEdit, EditFailureKind};
+    use asset_core::{AssetRecord, SidecarState};
+    use asset_filesystem::{
+        FsChange, FsChangeBatch, FsChangeKind, FsRescanReason, LibraryRoot, RootScanSettings,
+    };
     use asset_preview::CacheClearReport;
+    use asset_transactions::{TransactionScopeItem, TransactionState, TransactionSummary};
+    use metadata::{MetadataPatch, sidecar_path_for};
+    use tempfile::tempdir;
     use uuid::Uuid;
 
     use asset_index::{QueryParseError, QueryParseErrorKind};
 
     use super::{
-        ApplicationPaths, DerivedStateResetReport, LibraryScanEvent, LibraryWatchEvent,
-        QueryAssetsError, ScanCancellation, ScanCoordinator, ThumbnailCommandError,
-        VaultReferenceFailureKind, WatchCoordinator, build_info, path_fingerprint,
-        vault_failure_kind,
+        ApplicationPaths, BatchMetadataEditCommandResult, DerivedStateResetReport,
+        LibraryScanEvent, LibraryWatchEvent, QueryAssetsError, ScanCancellation, ScanCoordinator,
+        ThumbnailCommandError, VaultReferenceFailureKind, WatchCoordinator, build_info,
+        ensure_transaction_item_inside_root, failed_batch_transaction_preflight, path_fingerprint,
+        transaction_targets, vault_failure_kind,
     };
 
     #[test]
@@ -1639,6 +1901,132 @@ mod tests {
         assert_eq!(paths["configDirectory"], "/app/config");
         assert_eq!(paths["cacheDirectory"], "/app/cache");
         assert_eq!(paths["logDirectory"], "/app/log");
+    }
+
+    #[test]
+    fn batch_transaction_summary_uses_the_frontend_wire_shape() {
+        let transaction_id = Uuid::now_v7();
+        let root_id = Uuid::now_v7();
+        let value = serde_json::to_value(BatchMetadataEditCommandResult {
+            updated: Vec::new(),
+            failures: Vec::new(),
+            transaction: Some(TransactionSummary {
+                id: transaction_id,
+                state: TransactionState::Active,
+                created_at: "2026-08-19T08:00:00.000Z".into(),
+                updated_at: "2026-08-19T08:01:00.000Z".into(),
+                item_count: 1_000,
+                applied_count: 317,
+                failed_count: 0,
+                conflict_count: 0,
+                restored_count: 0,
+                root_ids: vec![root_id],
+            }),
+        })
+        .expect("serialize batch transaction result");
+
+        assert_eq!(value["transaction"]["id"], transaction_id.to_string());
+        assert_eq!(value["transaction"]["state"], "active");
+        assert_eq!(value["transaction"]["itemCount"], 1_000);
+        assert_eq!(value["transaction"]["appliedCount"], 317);
+        assert_eq!(value["transaction"]["rootIds"][0], root_id.to_string());
+    }
+
+    #[test]
+    fn stale_batch_targets_still_enter_the_transaction_plan() {
+        let root_id = Uuid::now_v7();
+        let mut catalog = AssetCatalog::default();
+        let records = ["first", "second"].map(|key| {
+            let mut record = AssetRecord::untagged(
+                key.into(),
+                format!("/library/{key}.png").into(),
+                "image/png".into(),
+                1,
+                0,
+            );
+            record.root_id = Some(root_id);
+            record.sidecar_state = Some(SidecarState {
+                schema: 1,
+                digest: format!("current-{key}"),
+                updated_at: "2026-08-19T08:00:00.000Z".into(),
+            });
+            record
+        });
+        catalog.ingest(records);
+        let input = BatchMetadataEdit {
+            targets: vec![
+                AssetEditTarget {
+                    key: "first".into(),
+                    expected_sidecar_digest: Some("stale".into()),
+                },
+                AssetEditTarget {
+                    key: "second".into(),
+                    expected_sidecar_digest: Some("current-second".into()),
+                },
+            ],
+            patch: MetadataPatch {
+                add_tags: ["batch/test".into()].into(),
+                ..MetadataPatch::default()
+            },
+        };
+
+        let targets = transaction_targets(&catalog, &input).expect("transaction targets");
+
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].expected_sidecar_digest.as_deref(), Some("stale"));
+
+        let unavailable = BatchMetadataEdit {
+            targets: vec![
+                input.targets[0].clone(),
+                AssetEditTarget {
+                    key: "missing".into(),
+                    expected_sidecar_digest: None,
+                },
+            ],
+            patch: input.patch,
+        };
+        assert!(transaction_targets(&catalog, &unavailable).is_none());
+        let failures = failed_batch_transaction_preflight(&catalog, &unavailable);
+        assert_eq!(failures.len(), 2);
+        assert_eq!(failures[0].kind, EditFailureKind::WriteFailed);
+        assert_eq!(failures[1].kind, EditFailureKind::NotFound);
+    }
+
+    #[test]
+    fn transaction_scope_rejects_forged_or_outside_paths() {
+        let directory = tempdir().expect("tempdir");
+        let root_path = directory.path().join("library");
+        let outside_path = directory.path().join("outside.png");
+        fs::create_dir(&root_path).expect("root");
+        fs::write(&outside_path, b"outside").expect("outside asset");
+        let asset_path = root_path.join("inside.png");
+        fs::write(&asset_path, b"inside").expect("inside asset");
+        let root = LibraryRoot {
+            id: Uuid::now_v7(),
+            path: root_path.canonicalize().expect("canonical root"),
+            name: "Library".into(),
+            enabled: true,
+            scan: RootScanSettings::default(),
+            extra: BTreeMap::new(),
+        };
+        let valid = TransactionScopeItem {
+            root_id: root.id,
+            asset_path: asset_path.clone(),
+            sidecar_path: sidecar_path_for(&asset_path),
+        };
+        assert!(ensure_transaction_item_inside_root(&valid, &root).is_ok());
+
+        let forged_sidecar = TransactionScopeItem {
+            sidecar_path: directory.path().join("forged.asset.yml"),
+            ..valid.clone()
+        };
+        assert!(ensure_transaction_item_inside_root(&forged_sidecar, &root).is_err());
+        let outside = TransactionScopeItem {
+            root_id: root.id,
+            asset_path: outside_path.clone(),
+            sidecar_path: sidecar_path_for(&outside_path),
+        };
+        assert!(ensure_transaction_item_inside_root(&outside, &root).is_err());
     }
 
     #[test]

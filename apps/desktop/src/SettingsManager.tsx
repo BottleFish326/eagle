@@ -8,6 +8,7 @@ import {
   type RuntimeRecoveryStatus,
 } from "./application-runtime";
 import { Icon } from "./Icon";
+import type { MetadataTransactionSummary } from "./metadata-transactions";
 import { formatBytes } from "./ui-model";
 
 export function SettingsManager({
@@ -24,6 +25,11 @@ export function SettingsManager({
   onResetDerived,
   onExportDiagnostics,
   onCopyDiagnosticPath,
+  transactions,
+  transactionBusy,
+  onContinueTransaction,
+  onRestoreTransaction,
+  onDismissTransaction,
 }: {
   open: boolean;
   config?: ApplicationConfig;
@@ -33,18 +39,33 @@ export function SettingsManager({
   scanActive: boolean;
   resetBusy: boolean;
   diagnosticBusy: boolean;
+  transactions: readonly MetadataTransactionSummary[];
+  transactionBusy?: string;
   onClose: () => void;
   onResetView: () => void;
   onResetDerived: () => Promise<void>;
   onExportDiagnostics: () => Promise<void>;
   onCopyDiagnosticPath: () => Promise<void>;
+  onContinueTransaction: (
+    transaction: MetadataTransactionSummary,
+  ) => Promise<void>;
+  onRestoreTransaction: (
+    transaction: MetadataTransactionSummary,
+  ) => Promise<void>;
+  onDismissTransaction: (
+    transaction: MetadataTransactionSummary,
+  ) => Promise<void>;
 }) {
   const closeButton = useRef<HTMLButtonElement>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDismiss, setConfirmDismiss] = useState<string>();
 
   useEffect(() => {
     if (open) closeButton.current?.focus();
-    else setConfirmReset(false);
+    else {
+      setConfirmReset(false);
+      setConfirmDismiss(undefined);
+    }
   }, [open]);
 
   if (!open) return null;
@@ -99,6 +120,97 @@ export function SettingsManager({
             <button className="wide-action" onClick={onResetView} type="button">
               清除保存的视图条件
             </button>
+          </section>
+
+          <section className="settings-card settings-card--transactions">
+            <div className="settings-card-heading">
+              <span className="settings-card-icon">
+                <Icon name="refresh" size={17} />
+              </span>
+              <div>
+                <h3>批量事务恢复</h3>
+                <p>
+                  每次多选编辑先写入纯文件计划；继续和恢复都按 Sidecar
+                  摘要检查外部修改。
+                </p>
+              </div>
+            </div>
+            {transactions.length === 0 ? (
+              <p className="transaction-empty">当前没有保留的批量事务日志。</p>
+            ) : (
+              <div className="transaction-list">
+                {transactions.map((transaction) => (
+                  <article className="transaction-row" key={transaction.id}>
+                    <div className="transaction-copy">
+                      <strong>{transactionStateLabel(transaction)}</strong>
+                      <span>
+                        {transaction.itemCount} 项 · 已应用{" "}
+                        {transaction.appliedCount}
+                        {transaction.restoredCount > 0
+                          ? ` · 已恢复 ${transaction.restoredCount}`
+                          : ""}
+                        {transaction.failedCount > 0
+                          ? ` · 失败 ${transaction.failedCount}`
+                          : ""}
+                        {transaction.conflictCount > 0
+                          ? ` · 冲突 ${transaction.conflictCount}`
+                          : ""}
+                      </span>
+                      <small>
+                        {formatTransactionTime(transaction.updatedAt)}
+                      </small>
+                    </div>
+                    <div className="transaction-actions">
+                      {transaction.state === "active" ||
+                      transaction.state === "conflict" ? (
+                        <button
+                          className="text-action"
+                          disabled={scanActive || transactionBusy !== undefined}
+                          onClick={() =>
+                            void onContinueTransaction(transaction)
+                          }
+                          type="button"
+                        >
+                          继续安全项
+                        </button>
+                      ) : null}
+                      {transaction.appliedCount > 0 ? (
+                        <button
+                          className="text-action"
+                          disabled={scanActive || transactionBusy !== undefined}
+                          onClick={() => void onRestoreTransaction(transaction)}
+                          type="button"
+                        >
+                          安全恢复
+                        </button>
+                      ) : null}
+                      <button
+                        className={
+                          confirmDismiss === transaction.id
+                            ? "text-action text-action--danger"
+                            : "text-action"
+                        }
+                        disabled={transactionBusy !== undefined}
+                        onClick={() => {
+                          if (confirmDismiss !== transaction.id) {
+                            setConfirmDismiss(transaction.id);
+                            return;
+                          }
+                          setConfirmDismiss(undefined);
+                          void onDismissTransaction(transaction);
+                        }}
+                        type="button"
+                      >
+                        {confirmDismiss === transaction.id
+                          ? "确认仅删除日志"
+                          : "不再保留"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+            {scanActive ? <small>扫描结束后才能继续或恢复事务。</small> : null}
           </section>
 
           <section className="settings-card">
@@ -223,4 +335,31 @@ export function SettingsManager({
       </section>
     </div>
   );
+}
+
+function transactionStateLabel(
+  transaction: MetadataTransactionSummary,
+): string {
+  switch (transaction.state) {
+    case "active":
+      return "操作中断，可继续或恢复";
+    case "completed":
+      return "批量操作已完成";
+    case "restored":
+      return "已恢复到事务前状态";
+    case "conflict":
+      return "存在外部修改，未覆盖";
+  }
+}
+
+function formatTransactionTime(value: string): string {
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp)
+    ? value
+    : new Intl.DateTimeFormat("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(timestamp);
 }

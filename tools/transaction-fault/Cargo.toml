@@ -1,0 +1,16 @@
+[package]
+name = "transaction-fault"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+asset-transactions = { path = "../../crates/transactions", features = ["fault-injection"] }
+clap.workspace = true
+metadata = { path = "../../crates/metadata" }
+uuid.workspace = true
+
+[lints]
+workspace = true

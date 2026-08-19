@@ -14,7 +14,10 @@ use uuid::Uuid;
 
 mod edit;
 
-pub use edit::{MetadataEdit, MetadataPatch, edit_asset_metadata};
+pub use edit::{
+    MetadataEdit, MetadataPatch, PreparedMetadataEdit, commit_prepared_metadata_edit,
+    edit_asset_metadata, prepare_asset_metadata_edit,
+};
 
 pub const SIDECAR_SCHEMA_VERSION: u32 = 1;
 pub const QUICK_FINGERPRINT_ALGORITHM: &str = "sha256-sample-64k-v1";
@@ -316,19 +319,68 @@ pub fn write_sidecar_atomic(
 ) -> Result<WriteReceipt, SidecarError> {
     inject_fault("before-temp");
     sidecar.validate()?;
-    verify_expected_version(path, expected)?;
+    let serialized = serialize_sidecar(sidecar)?;
+    write_serialized_sidecar_atomic(path, serialized.as_bytes(), expected)
+}
 
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+/// Restores exact, validated Sidecar YAML bytes with optimistic concurrency control.
+///
+/// # Errors
+///
+/// Returns [`SidecarError`] when the content is invalid, the expected version changed,
+/// or the atomic write cannot be completed.
+pub fn restore_sidecar_content_atomic(
+    path: &Path,
+    content: &str,
+    expected: &ExpectedVersion,
+) -> Result<WriteReceipt, SidecarError> {
+    let sidecar: AssetSidecar =
+        serde_yaml_ng::from_str(content).map_err(|source| SidecarError::Parse {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    sidecar.validate()?;
+    write_serialized_sidecar_atomic(path, content.as_bytes(), expected)
+}
+
+/// Removes a Sidecar only if its digest is still the expected version.
+///
+/// # Errors
+///
+/// Returns [`SidecarError`] when the version changed or the file cannot be removed.
+pub fn remove_sidecar_if_version(
+    path: &Path,
+    expected: &ExpectedVersion,
+) -> Result<(), SidecarError> {
+    verify_expected_version(path, expected)?;
+    fs::remove_file(path).map_err(|source| SidecarError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    sync_parent(path.parent().unwrap_or_else(|| Path::new(".")))
+}
+
+fn serialize_sidecar(sidecar: &AssetSidecar) -> Result<String, SidecarError> {
     let mut serialized = serde_yaml_ng::to_string(sidecar)?;
     if !serialized.ends_with('\n') {
         serialized.push('\n');
     }
+    Ok(serialized)
+}
+
+fn write_serialized_sidecar_atomic(
+    path: &Path,
+    serialized: &[u8],
+    expected: &ExpectedVersion,
+) -> Result<WriteReceipt, SidecarError> {
+    verify_expected_version(path, expected)?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
 
     let mut temp = NamedTempFile::new_in(parent).map_err(|source| SidecarError::Io {
         path: parent.to_path_buf(),
         source,
     })?;
-    temp.write_all(serialized.as_bytes())
+    temp.write_all(serialized)
         .and_then(|()| temp.as_file().sync_all())
         .map_err(|source| SidecarError::Io {
             path: temp.path().to_path_buf(),
@@ -346,7 +398,7 @@ pub fn write_sidecar_atomic(
 
     Ok(WriteReceipt {
         path: path.to_path_buf(),
-        digest: digest_bytes(serialized.as_bytes()),
+        digest: digest_bytes(serialized),
     })
 }
 

@@ -209,6 +209,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "asset-transactions"
+version = "0.1.0"
+dependencies = [
+ "asset-core",
+ "chrono",
+ "metadata",
+ "serde",
+ "serde_yaml_ng",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "atk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2176,6 +2191,7 @@ dependencies = [
  "asset-index",
  "asset-link-resolver",
  "asset-preview",
+ "asset-transactions",
  "metadata",
  "serde",
  "serde_json",
@@ -2183,6 +2199,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",
+ "tempfile",
  "uuid",
 ]
 
@@ -4190,6 +4207,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "transaction-fault"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "asset-transactions",
+ "clap",
+ "metadata",
+ "uuid",
 ]
 
 [[package]]

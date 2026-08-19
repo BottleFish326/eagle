@@ -1,0 +1,26 @@
+[package]
+name = "asset-transactions"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[features]
+fault-injection = []
+
+[dependencies]
+asset-core = { path = "../asset-core" }
+chrono.workspace = true
+metadata = { path = "../metadata" }
+serde.workspace = true
+serde_yaml_ng.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

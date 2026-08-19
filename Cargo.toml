@@ -9,9 +9,11 @@ members = [
   "crates/link-resolver",
   "crates/metadata",
   "crates/preview",
+  "crates/transactions",
   "tools/eagle-p0",
   "tools/fixture-generator",
   "tools/sidecar-fault",
+  "tools/transaction-fault",
 ]
 resolver = "3"
 

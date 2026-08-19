@@ -32,3 +32,4 @@
 | [ADR-017](017-virtual-asset-grid-window.md) | 素材网格基础窗口化与阶段 1 规模门禁 | Accepted |
 | [ADR-018](018-bounded-filesystem-event-reconciliation.md) | 有界文件事件归一化与一致性扫描 | Accepted |
 | [ADR-019](019-stable-identity-and-explicit-relink.md) | 稳定身份扫描收敛与显式 Sidecar 重新关联 | Accepted |
+| [ADR-020](020-durable-batch-metadata-transactions.md) | 纯文件批量元数据事务与条件恢复 | Accepted |

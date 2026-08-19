@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use asset_core::{AssetIssue, AssetRecord, SidecarState};
 use asset_index::{AssetIndex, AssetQuery, QueryParseError, parse_query};
-use metadata::{MetadataPatch, SidecarError, edit_asset_metadata};
+use metadata::{AssetSidecar, MetadataPatch, SidecarError, edit_asset_metadata};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -207,6 +207,21 @@ impl AssetCatalog {
         self.index.query(query)
     }
 
+    /// Applies a Sidecar already committed by the durable transaction service.
+    #[must_use]
+    pub fn apply_committed_sidecar(
+        &mut self,
+        key: &str,
+        sidecar_path: std::path::PathBuf,
+        sidecar: AssetSidecar,
+        digest: String,
+    ) -> Option<AssetRecord> {
+        let mut record = self.index.get(key)?.clone();
+        merge_sidecar_into_record(&mut record, sidecar_path, sidecar, digest);
+        self.index.upsert(record.clone());
+        Some(record)
+    }
+
     /// Parses and executes a user-facing filter expression against the in-memory index.
     ///
     /// # Errors
@@ -279,24 +294,33 @@ impl AssetCatalog {
             target.expected_sidecar_digest.as_deref(),
             patch,
         )?;
-        record.id = Some(edit.sidecar.id);
-        record.sidecar_path = Some(edit.sidecar_path);
-        record.sidecar_state = Some(SidecarState {
-            schema: edit.sidecar.schema,
-            digest: edit.digest,
-            updated_at: edit.sidecar.updated_at.clone(),
-        });
-        record.tags = edit.sidecar.tags;
-        record.rating = edit.sidecar.rating;
-        record.favorite = edit.sidecar.favorite;
-        record.note = edit.sidecar.note;
-        record.aliases = edit.sidecar.aliases;
-        record
-            .issues
-            .retain(|issue| !matches!(issue, AssetIssue::InvalidSidecar(_)));
+        merge_sidecar_into_record(&mut record, edit.sidecar_path, edit.sidecar, edit.digest);
         self.index.upsert(record.clone());
         Ok(record)
     }
+}
+
+fn merge_sidecar_into_record(
+    record: &mut AssetRecord,
+    sidecar_path: std::path::PathBuf,
+    sidecar: AssetSidecar,
+    digest: String,
+) {
+    record.id = Some(sidecar.id);
+    record.sidecar_path = Some(sidecar_path);
+    record.sidecar_state = Some(SidecarState {
+        schema: sidecar.schema,
+        digest,
+        updated_at: sidecar.updated_at.clone(),
+    });
+    record.tags = sidecar.tags;
+    record.rating = sidecar.rating;
+    record.favorite = sidecar.favorite;
+    record.note = sidecar.note;
+    record.aliases = sidecar.aliases;
+    record
+        .issues
+        .retain(|issue| !matches!(issue, AssetIssue::InvalidSidecar(_)));
 }
 
 fn records_by_stable_id(records: &[AssetRecord]) -> BTreeMap<Uuid, Vec<&AssetRecord>> {

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type { AssetRecord } from "./scanner";
+import type { MetadataTransactionSummary } from "./metadata-transactions";
 
 export interface MetadataPatch {
   setTags?: string[];
@@ -31,6 +32,7 @@ export interface MetadataEditFailure {
 export interface BatchMetadataEditResult {
   updated: AssetRecord[];
   failures: MetadataEditFailure[];
+  transaction: MetadataTransactionSummary | null;
 }
 
 type Invoke = <T>(

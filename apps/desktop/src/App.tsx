@@ -20,6 +20,7 @@ import { Icon } from "./Icon";
 import { Inspector } from "./Inspector";
 import type { LibraryRootStatus } from "./library-roots";
 import type { MetadataPatch } from "./metadata-editor";
+import type { MetadataTransactionSummary } from "./metadata-transactions";
 import {
   copyVaultReference,
   referenceResolutionKeys,
@@ -104,6 +105,10 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const [vaultBusy, setVaultBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [diagnosticBusy, setDiagnosticBusy] = useState(false);
+  const [metadataTransactions, setMetadataTransactions] = useState<
+    MetadataTransactionSummary[]
+  >([]);
+  const [transactionBusy, setTransactionBusy] = useState<string>();
   const [vaultReferences, setVaultReferences] = useState<
     Map<string, VaultReference>
   >(() => new Map());
@@ -263,8 +268,9 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       api.listLibraryRoots(),
       api.listObsidianVaults(),
       api.getRuntimeRecoveryStatus(),
+      api.listMetadataTransactions(),
     ])
-      .then(([config, nextRoots, nextVaults, recovery]) => {
+      .then(([config, nextRoots, nextVaults, recovery, transactions]) => {
         if (!active) return;
         const preferredVault = nextVaults.find(
           (vault) =>
@@ -282,6 +288,17 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         setRoots(nextRoots);
         setVaults(nextVaults);
         setRecoveryStatus(recovery);
+        setMetadataTransactions(transactions);
+        const recoverableCount = transactions.filter(
+          (transaction) =>
+            transaction.state === "active" || transaction.state === "conflict",
+        ).length;
+        if (recoverableCount > 0) {
+          setNotice({
+            tone: "info",
+            message: `检测到 ${recoverableCount} 个待处理的批量事务，请在“设置与恢复”中选择继续或安全恢复。`,
+          });
+        }
         setPreferencesReady(true);
         setBooting(false);
         for (const root of nextRoots) {
@@ -618,6 +635,13 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         patch,
       });
       setAssets((current) => upsertAssets(current, result.updated));
+      if (result.transaction !== null) {
+        const transaction = result.transaction;
+        setMetadataTransactions((current) => [
+          transaction,
+          ...current.filter((item) => item.id !== transaction.id),
+        ]);
+      }
       if (result.failures.length > 0) {
         setNotice({
           tone: "error",
@@ -636,6 +660,68 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       });
     } finally {
       setEditBusy(false);
+    }
+  };
+
+  const recoverMetadataTransaction = async (
+    transaction: MetadataTransactionSummary,
+    action: "continue" | "restore",
+  ) => {
+    setTransactionBusy(transaction.id);
+    try {
+      const result =
+        action === "continue"
+          ? await api.continueMetadataTransaction(transaction.id)
+          : await api.restoreMetadataTransaction(transaction.id);
+      setMetadataTransactions((current) =>
+        current.map((item) =>
+          item.id === result.summary.id ? result.summary : item,
+        ),
+      );
+      const affectedRoots = result.summary.rootIds
+        .map((rootId) => rootsById.current.get(rootId))
+        .filter(
+          (root): root is LibraryRootStatus =>
+            root !== undefined &&
+            root.enabled &&
+            root.accessStatus === "available",
+        );
+      await Promise.all(affectedRoots.map(runScan));
+      setNotice({
+        tone: result.failures.length === 0 ? "info" : "error",
+        message:
+          result.failures.length === 0
+            ? action === "continue"
+              ? "批量事务已安全继续，正在重新扫描受影响目录。"
+              : "批量事务已恢复，正在重新扫描受影响目录。"
+            : `${result.failures.length} 项因外部修改或写入条件不满足而保持未覆盖。`,
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `批量事务操作失败：${errorMessage(error)}`,
+      });
+    } finally {
+      setTransactionBusy(undefined);
+    }
+  };
+
+  const dismissMetadataTransaction = async (
+    transaction: MetadataTransactionSummary,
+  ) => {
+    setTransactionBusy(transaction.id);
+    try {
+      await api.dismissMetadataTransaction(transaction.id);
+      setMetadataTransactions((current) =>
+        current.filter((item) => item.id !== transaction.id),
+      );
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `无法移除事务日志：${errorMessage(error)}`,
+      });
+    } finally {
+      setTransactionBusy(undefined);
     }
   };
 
@@ -1324,14 +1410,23 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         diagnosticReport={diagnosticReport}
         onClose={() => setSettingsOpen(false)}
         onCopyDiagnosticPath={copyDiagnosticPath}
+        onContinueTransaction={(transaction) =>
+          recoverMetadataTransaction(transaction, "continue")
+        }
+        onDismissTransaction={dismissMetadataTransaction}
         onExportDiagnostics={createDiagnosticExport}
         onResetDerived={rebuildDerivedState}
         onResetView={resetSavedView}
+        onRestoreTransaction={(transaction) =>
+          recoverMetadataTransaction(transaction, "restore")
+        }
         open={settingsOpen}
         recovery={recoveryStatus}
         resetBusy={resetBusy}
         resetReport={resetReport}
         scanActive={activeScans.length > 0}
+        transactionBusy={transactionBusy}
+        transactions={metadataTransactions}
       />
     </div>
   );

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AssetSidecar, ExpectedVersion, SidecarError, digest_file, fingerprint_asset, read_sidecar,
-    sidecar_path_for, write_sidecar_atomic,
+    serialize_sidecar, sidecar_path_for, write_sidecar_atomic,
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,6 +32,16 @@ pub struct MetadataEdit {
     pub changed: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreparedMetadataEdit {
+    pub sidecar_path: PathBuf,
+    pub sidecar: AssetSidecar,
+    pub expected: ExpectedVersion,
+    pub planned_content: String,
+    pub created: bool,
+    pub changed: bool,
+}
+
 /// Applies user metadata to an adjacent sidecar with optimistic concurrency control.
 ///
 /// `expected_digest` must be `None` when the caller observed no sidecar, or the exact
@@ -46,6 +56,23 @@ pub fn edit_asset_metadata(
     expected_digest: Option<&str>,
     patch: &MetadataPatch,
 ) -> Result<MetadataEdit, SidecarError> {
+    commit_prepared_metadata_edit(prepare_asset_metadata_edit(
+        asset_path,
+        expected_digest,
+        patch,
+    )?)
+}
+
+/// Prepares deterministic Sidecar content without writing it to disk.
+///
+/// # Errors
+///
+/// Returns [`SidecarError`] for invalid inputs, stale versions, or unreadable assets.
+pub fn prepare_asset_metadata_edit(
+    asset_path: &Path,
+    expected_digest: Option<&str>,
+    patch: &MetadataPatch,
+) -> Result<PreparedMetadataEdit, SidecarError> {
     validate_patch(patch)?;
     if !asset_path.is_file() {
         return Err(SidecarError::InvalidAsset(asset_path.to_path_buf()));
@@ -74,28 +101,61 @@ pub fn edit_asset_metadata(
     sidecar.fingerprint = Some(fingerprint_asset(asset_path)?);
     let changed = created || sidecar != before;
     if !changed {
-        let digest = expected_digest
-            .ok_or_else(|| SidecarError::Conflict {
-                path: sidecar_path.clone(),
-            })?
-            .to_owned();
-        return Ok(MetadataEdit {
+        return Ok(PreparedMetadataEdit {
             sidecar_path,
             sidecar,
-            digest,
+            expected,
+            planned_content: String::new(),
             created,
             changed,
         });
     }
 
     sidecar.touch();
-    let receipt = write_sidecar_atomic(&sidecar_path, &sidecar, &expected)?;
-    Ok(MetadataEdit {
+    let planned_content = serialize_sidecar(&sidecar)?;
+    Ok(PreparedMetadataEdit {
         sidecar_path,
         sidecar,
-        digest: receipt.digest,
+        expected,
+        planned_content,
         created,
         changed,
+    })
+}
+
+/// Commits a previously prepared edit using the prepared optimistic version.
+///
+/// # Errors
+///
+/// Returns [`SidecarError`] when the Sidecar changed or cannot be atomically written.
+pub fn commit_prepared_metadata_edit(
+    prepared: PreparedMetadataEdit,
+) -> Result<MetadataEdit, SidecarError> {
+    if !prepared.changed {
+        let ExpectedVersion::Digest(digest) = prepared.expected else {
+            return Err(SidecarError::Conflict {
+                path: prepared.sidecar_path,
+            });
+        };
+        return Ok(MetadataEdit {
+            sidecar_path: prepared.sidecar_path,
+            sidecar: prepared.sidecar,
+            digest,
+            created: prepared.created,
+            changed: false,
+        });
+    }
+    let receipt = write_sidecar_atomic(
+        &prepared.sidecar_path,
+        &prepared.sidecar,
+        &prepared.expected,
+    )?;
+    Ok(MetadataEdit {
+        sidecar_path: prepared.sidecar_path,
+        sidecar: prepared.sidecar,
+        digest: receipt.digest,
+        created: prepared.created,
+        changed: true,
     })
 }
 

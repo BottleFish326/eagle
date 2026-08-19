@@ -48,6 +48,16 @@ import {
   updateObsidianVault,
 } from "./obsidian-vaults";
 import { editAssetMetadata } from "./metadata-editor";
+import type {
+  MetadataTransactionRecoveryResult,
+  MetadataTransactionSummary,
+} from "./metadata-transactions";
+import {
+  continueMetadataTransaction,
+  dismissMetadataTransaction,
+  listMetadataTransactions,
+  restoreMetadataTransaction,
+} from "./metadata-transactions";
 import type { ReconciliationReport, RelinkReceipt } from "./reconciliation";
 import {
   confirmLibraryRelink,
@@ -90,6 +100,14 @@ export interface DesktopApi {
   stopLibraryWatch(watchId: string): Promise<boolean>;
   queryAssets(input: QueryAssetsInput): Promise<QueryAssetsResult>;
   editAssetMetadata(input: BatchMetadataEdit): Promise<BatchMetadataEditResult>;
+  listMetadataTransactions(): Promise<MetadataTransactionSummary[]>;
+  continueMetadataTransaction(
+    id: string,
+  ): Promise<MetadataTransactionRecoveryResult>;
+  restoreMetadataTransaction(
+    id: string,
+  ): Promise<MetadataTransactionRecoveryResult>;
+  dismissMetadataTransaction(id: string): Promise<void>;
   requestThumbnail(input: ThumbnailRequest): Promise<ThumbnailOutcome>;
   readThumbnail(cacheKey: string): Promise<ArrayBuffer>;
   clearThumbnailCache(): Promise<CacheClearReport>;
@@ -122,6 +140,10 @@ export const tauriDesktopApi: DesktopApi = {
   stopLibraryWatch,
   queryAssets,
   editAssetMetadata,
+  listMetadataTransactions,
+  continueMetadataTransaction,
+  restoreMetadataTransaction,
+  dismissMetadataTransaction,
   requestThumbnail,
   readThumbnail,
   clearThumbnailCache,

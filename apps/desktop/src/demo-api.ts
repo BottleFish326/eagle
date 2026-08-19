@@ -274,7 +274,23 @@ export function createDemoDesktopApi(
         assetsByKey.set(next.key, next);
         updated.push(structuredClone(next));
       }
-      return { updated, failures: [] } satisfies BatchMetadataEditResult;
+      return {
+        updated,
+        failures: [],
+        transaction: null,
+      } satisfies BatchMetadataEditResult;
+    },
+    async listMetadataTransactions() {
+      return [];
+    },
+    async continueMetadataTransaction() {
+      throw new Error("演示数据没有待继续事务");
+    },
+    async restoreMetadataTransaction() {
+      throw new Error("演示数据没有可恢复事务");
+    },
+    async dismissMetadataTransaction() {
+      return undefined;
     },
     async requestThumbnail(input) {
       const asset = assetsByKey.get(input.assetKey);
