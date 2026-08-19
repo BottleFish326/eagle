@@ -51,7 +51,7 @@ macOS ARM64 共 10 项通过：
 
 桌面 TypeScript 另有纯状态测试确认只有失败根切换为 permission-denied，其他根与配置记录保持不变。Rust wire test确认失败事件把 `rootAccessStatus` 序列化为稳定 kebab-case 值。
 
-单平台证据器使用 Node 24 执行 9 项纯分析测试，覆盖 macOS 10/Linux 12/Windows 9 项精确正例，以及缺项、非零、ignored、无摘要、Windows symlink skip 和非 hosted/commit mismatch 负例；全部通过。matrix 汇总器另有 10 项纯分析测试，覆盖三平台精确正例，以及缺/重复平台、跨 commit/run 或与汇总 job 不一致、原始输出或存储摘要篡改、非零进程、自托管 runner、Windows symlink 未强制、false verdict、错误 Node/工具链/命令/时间/摘要/产物名等负例；全部通过。
+单平台证据器使用 Node 24 执行 9 项纯分析测试，覆盖 macOS 10/Linux 12/Windows 9 项精确正例，以及缺项、非零、ignored、无摘要、Windows symlink skip 和非 hosted/commit mismatch 负例；全部通过。matrix 汇总器另有 10 项纯分析测试，覆盖三平台精确正例，以及缺/重复平台、跨 commit/run 或与汇总 job 不一致、原始输出或存储摘要篡改、非零进程、自托管 runner、Windows symlink 未强制、false verdict、错误 Node/工具链/命令/时间/摘要/产物名等负例；全部通过。2 项 CLI 端到端测试还实际创建三份隔离 artifact、调用汇总进程并复核 SHA-256/原子输出，同时确认缺一平台时退出非零且仍写出拒绝 JSON。
 
 本机真实 `cargo --list`/`cargo test` 输出交给同一单平台分析器后，得到 macOS expected/listed/executed 各 10 项、summary 10 passed/0 failed/0 ignored。以上只验证证据链实现，不替代 hosted P2-A12。
 
