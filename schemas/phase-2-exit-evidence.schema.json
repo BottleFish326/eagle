@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/phase-2-exit-evidence.schema.json",
+  "title": "Phase 2 final exit evidence",
+  "description": "Accepted-only receipt produced after replaying external gates, inspecting local crash evidence, and auditing candidate commit relationships and source drift.",
+  "type": "object",
+  "required": [
+    "schema",
+    "accepted",
+    "failures",
+    "evidenceAt",
+    "candidateCommit",
+    "workingTreeClean",
+    "commitOrderVerified",
+    "externalEvidenceInLocalCandidate",
+    "localEvidenceCommitted",
+    "soakBaseline",
+    "localCandidate",
+    "p2External",
+    "p2LocalFaults"
+  ],
+  "properties": {
+    "schema": { "const": 1 },
+    "accepted": { "const": true },
+    "failures": { "type": "array", "maxItems": 0 },
+    "evidenceAt": { "type": "string", "format": "date-time" },
+    "candidateCommit": { "$ref": "#/$defs/gitCommit" },
+    "workingTreeClean": { "const": true },
+    "commitOrderVerified": { "const": true },
+    "externalEvidenceInLocalCandidate": { "const": true },
+    "localEvidenceCommitted": { "const": true },
+    "soakBaseline": { "$ref": "#/$defs/soakBaseline" },
+    "localCandidate": { "$ref": "#/$defs/localCandidate" },
+    "p2External": { "$ref": "#/$defs/p2External" },
+    "p2LocalFaults": { "$ref": "#/$defs/p2LocalFaults" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "emptyPaths": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "soakBaseline": {
+      "type": "object",
+      "required": [
+        "verified",
+        "baselineCommit",
+        "loadedChangedPaths",
+        "productChangedPaths"
+      ],
+      "properties": {
+        "verified": { "const": true },
+        "baselineCommit": {
+          "const": "c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21"
+        },
+        "loadedChangedPaths": { "$ref": "#/$defs/emptyPaths" },
+        "productChangedPaths": { "$ref": "#/$defs/emptyPaths" }
+      },
+      "additionalProperties": false
+    },
+    "localCandidate": {
+      "type": "object",
+      "required": ["gitCommit", "allowedScopes", "driftPaths"],
+      "properties": {
+        "gitCommit": { "$ref": "#/$defs/gitCommit" },
+        "allowedScopes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [{ "const": "README.md" }, { "const": "docs" }],
+          "items": false
+        },
+        "driftPaths": { "$ref": "#/$defs/emptyPaths" }
+      },
+      "additionalProperties": false
+    },
+    "p2External": {
+      "type": "object",
+      "required": [
+        "fileName",
+        "sha256",
+        "evidenceAt",
+        "p2A11Commit",
+        "p2A12Commit",
+        "runUrl"
+      ],
+      "properties": {
+        "fileName": { "const": "p2-external-gates.json" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "evidenceAt": { "type": "string", "format": "date-time" },
+        "p2A11Commit": { "$ref": "#/$defs/gitCommit" },
+        "p2A12Commit": { "$ref": "#/$defs/gitCommit" },
+        "runUrl": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/actions/runs/[0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "localEnvironment": {
+      "type": "object",
+      "required": ["platform", "architecture", "nodeVersion", "rustc", "cargo"],
+      "properties": {
+        "platform": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "architecture": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "nodeVersion": { "type": "string", "pattern": "^v24\\." },
+        "rustc": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "cargo": { "type": "string", "minLength": 1, "maxLength": 256 }
+      },
+      "additionalProperties": false
+    },
+    "binaries": {
+      "type": "object",
+      "required": ["transactionFault", "cacheFault"],
+      "properties": {
+        "transactionFault": { "$ref": "#/$defs/sha256" },
+        "cacheFault": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "transaction": {
+      "type": "object",
+      "required": ["abortAfterApplied", "appliedAtDiscovery", "recoveredCount"],
+      "properties": {
+        "abortAfterApplied": { "const": 317 },
+        "appliedAtDiscovery": { "const": 317 },
+        "recoveredCount": { "const": 1000 }
+      },
+      "additionalProperties": false
+    },
+    "cacheFaultPoints": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "const": "after-cache-rename" },
+        { "const": "after-cache-recreate" }
+      ],
+      "items": false
+    },
+    "p2LocalFaults": {
+      "type": "object",
+      "required": [
+        "fileName",
+        "sha256",
+        "gitCommit",
+        "executedAt",
+        "environment",
+        "binaries",
+        "transaction",
+        "cacheFaultPoints",
+        "temporaryWorkspacesRemoved"
+      ],
+      "properties": {
+        "fileName": { "const": "p2-local-fault-gates.json" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "gitCommit": { "$ref": "#/$defs/gitCommit" },
+        "executedAt": { "type": "string", "format": "date-time" },
+        "environment": { "$ref": "#/$defs/localEnvironment" },
+        "binaries": { "$ref": "#/$defs/binaries" },
+        "transaction": { "$ref": "#/$defs/transaction" },
+        "cacheFaultPoints": { "$ref": "#/$defs/cacheFaultPoints" },
+        "temporaryWorkspacesRemoved": { "const": true }
+      },
+      "additionalProperties": false
+    }
+  }
+}

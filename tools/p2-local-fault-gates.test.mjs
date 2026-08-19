@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildP2LocalFaultGatesReport,
+  inspectP2LocalFaultGatesReceipt,
   P2_CACHE_FAULT_POINTS,
 } from "./p2-local-fault-gates.mjs";
 
@@ -46,6 +47,12 @@ test("accepts the 317 -> 1000 transaction crash and both cache crash boundaries"
   assert.equal(report.p2A04.recoveredCount, 1_000);
   assert.equal(report.p2A10.cases.length, 2);
   assert.ok(report.p2A10.cases.every((value) => value.recoveryVerified));
+});
+
+test("offline receipt inspection accepts the exact generated report", () => {
+  const report = buildP2LocalFaultGatesReport(structuredClone(base));
+  const inspection = inspectP2LocalFaultGatesReceipt(report);
+  assert.equal(inspection.accepted, true, inspection.failures.join("; "));
 });
 
 test("rejects a normal exit, wrong transaction count, and incomplete cache recovery", () => {
@@ -138,6 +145,37 @@ test("rejects contradictory abort state and extra cache cases", () => {
   );
   assert.ok(
     report.failures.includes("P2-A10 requires exactly two cache fault cases"),
+  );
+});
+
+test("offline receipt inspection rejects field, state, digest, and order tampering", () => {
+  const report = buildP2LocalFaultGatesReport(structuredClone(base));
+  report.unexpected = true;
+  report.build.binaries.cacheFault = "bad";
+  report.p2A04.abort = {
+    ...report.p2A04.abort,
+    status: 0,
+    signal: null,
+  };
+  report.p2A10.cases.reverse();
+  const inspection = inspectP2LocalFaultGatesReceipt(report);
+  assert.equal(inspection.accepted, false);
+  assert.ok(
+    inspection.failures.includes("local fault receipt fields are invalid"),
+  );
+  assert.ok(
+    inspection.failures.includes(
+      "local fault receipt binary digest is invalid: cacheFault",
+    ),
+  );
+  assert.ok(
+    inspection.failures.includes("P2-A04 abort process state is invalid"),
+  );
+  assert.equal(
+    inspection.failures.filter((failure) =>
+      failure.includes("receipt fault point is out of order"),
+    ).length,
+    2,
   );
 });
 

@@ -6,6 +6,8 @@ export const P2_CACHE_FAULT_POINTS = Object.freeze([
   "after-cache-rename",
   "after-cache-recreate",
 ]);
+export const P2_LOCAL_FAULT_BUILD_COMMAND =
+  "cargo build --locked --release -p transaction-fault -p cache-fault";
 
 export function buildP2LocalFaultGatesReport({
   gitCommit,
@@ -46,14 +48,208 @@ export function buildP2LocalFaultGatesReport({
     repositoryClean: repositoryClean === true,
     environment,
     build: {
-      command:
-        "cargo build --locked --release -p transaction-fault -p cache-fault",
+      command: P2_LOCAL_FAULT_BUILD_COMMAND,
       binaries: binarySha256,
     },
     p2A04: transactionSummary,
     p2A10: { cases: cacheSummaries },
     temporaryWorkspacesRemoved: temporaryWorkspacesRemoved === true,
   };
+}
+
+export function inspectP2LocalFaultGatesReceipt(value) {
+  const failures = [];
+  checkExactKeys(
+    value,
+    [
+      "schema",
+      "accepted",
+      "failures",
+      "gitCommit",
+      "executedAt",
+      "repositoryClean",
+      "environment",
+      "build",
+      "p2A04",
+      "p2A10",
+      "temporaryWorkspacesRemoved",
+    ],
+    failures,
+    "local fault receipt",
+  );
+  if (value?.schema !== 1)
+    failures.push("local fault receipt schema is invalid");
+  if (value?.accepted !== true)
+    failures.push("local fault receipt is not accepted");
+  if (!Array.isArray(value?.failures) || value.failures.length !== 0)
+    failures.push("local fault receipt failures are not empty");
+  if (!isCommit(value?.gitCommit))
+    failures.push("local fault receipt commit is invalid");
+  if (!isIsoInstant(value?.executedAt))
+    failures.push("local fault receipt execution time is invalid");
+  if (value?.repositoryClean !== true)
+    failures.push("local fault receipt does not attest a clean repository");
+
+  inspectEnvironment(value?.environment, failures);
+  inspectBuild(value?.build, failures);
+  inspectTransactionReceipt(value?.p2A04, failures);
+  inspectCacheReceipt(value?.p2A10, failures);
+  if (value?.temporaryWorkspacesRemoved !== true)
+    failures.push("local fault receipt retained temporary workspaces");
+
+  return { accepted: failures.length === 0, failures };
+}
+
+function inspectEnvironment(value, failures) {
+  checkExactKeys(
+    value,
+    ["platform", "architecture", "nodeVersion", "rustc", "cargo"],
+    failures,
+    "local fault environment",
+  );
+  for (const field of ["platform", "architecture", "rustc", "cargo"])
+    if (typeof value?.[field] !== "string" || value[field] === "")
+      failures.push(`local fault environment ${field} is invalid`);
+  if (value?.nodeVersion?.startsWith("v24.") !== true)
+    failures.push("local fault receipt Node.js version is not 24.x");
+}
+
+function inspectBuild(value, failures) {
+  checkExactKeys(value, ["command", "binaries"], failures, "local fault build");
+  if (value?.command !== P2_LOCAL_FAULT_BUILD_COMMAND)
+    failures.push("local fault receipt build command is invalid");
+  checkExactKeys(
+    value?.binaries,
+    ["transactionFault", "cacheFault"],
+    failures,
+    "local fault binaries",
+  );
+  for (const name of ["transactionFault", "cacheFault"])
+    if (!isSha256(value?.binaries?.[name]))
+      failures.push(`local fault receipt binary digest is invalid: ${name}`);
+}
+
+function inspectTransactionReceipt(value, failures) {
+  checkExactKeys(
+    value,
+    [
+      "count",
+      "abortAfterApplied",
+      "abort",
+      "recover",
+      "transactionId",
+      "discoveredState",
+      "appliedAtDiscovery",
+      "recoveredCount",
+    ],
+    failures,
+    "P2-A04 receipt",
+  );
+  if (value?.count !== P2_TRANSACTION_COUNT)
+    failures.push("P2-A04 receipt count is not 1000");
+  if (value?.abortAfterApplied !== P2_TRANSACTION_ABORT_AFTER)
+    failures.push("P2-A04 receipt abort boundary is not 317");
+  inspectProcessSummary(value?.abort, "abort", failures, "P2-A04 abort");
+  inspectProcessSummary(value?.recover, "success", failures, "P2-A04 recover");
+  if (!isUuidV7(value?.transactionId))
+    failures.push("P2-A04 receipt transaction ID is not UUIDv7");
+  if (value?.discoveredState !== "active")
+    failures.push("P2-A04 receipt did not discover an active transaction");
+  if (value?.appliedAtDiscovery !== P2_TRANSACTION_ABORT_AFTER)
+    failures.push("P2-A04 receipt discovery boundary is not 317");
+  if (value?.recoveredCount !== P2_TRANSACTION_COUNT)
+    failures.push("P2-A04 receipt recovery count is not 1000");
+}
+
+function inspectCacheReceipt(value, failures) {
+  checkExactKeys(value, ["cases"], failures, "P2-A10 receipt");
+  if (
+    !Array.isArray(value?.cases) ||
+    value.cases.length !== P2_CACHE_FAULT_POINTS.length
+  ) {
+    failures.push("P2-A10 receipt does not contain exactly two cases");
+    return;
+  }
+  for (const [index, faultPoint] of P2_CACHE_FAULT_POINTS.entries()) {
+    const entry = value.cases[index];
+    checkExactKeys(
+      entry,
+      [
+        "faultPoint",
+        "seed",
+        "abort",
+        "recover",
+        "seedVerified",
+        "recoveryVerified",
+      ],
+      failures,
+      `P2-A10 ${faultPoint}`,
+    );
+    if (entry?.faultPoint !== faultPoint)
+      failures.push(
+        `P2-A10 receipt fault point is out of order: ${faultPoint}`,
+      );
+    inspectProcessSummary(
+      entry?.seed,
+      "success",
+      failures,
+      `P2-A10 ${faultPoint} seed`,
+    );
+    inspectProcessSummary(
+      entry?.abort,
+      "abort",
+      failures,
+      `P2-A10 ${faultPoint} abort`,
+    );
+    inspectProcessSummary(
+      entry?.recover,
+      "success",
+      failures,
+      `P2-A10 ${faultPoint} recover`,
+    );
+    if (entry?.seedVerified !== true)
+      failures.push(`P2-A10 receipt seed is unverified: ${faultPoint}`);
+    if (entry?.recoveryVerified !== true)
+      failures.push(`P2-A10 receipt recovery is unverified: ${faultPoint}`);
+  }
+}
+
+function inspectProcessSummary(value, expectation, failures, label) {
+  checkExactKeys(
+    value,
+    ["status", "signal", "stdoutSha256", "stderrSha256"],
+    failures,
+    label,
+  );
+  const stateAccepted =
+    expectation === "success"
+      ? value?.status === 0 && value?.signal === null
+      : (value?.status === null && value?.signal === "SIGABRT") ||
+        (Number.isInteger(value?.status) &&
+          value.status !== 0 &&
+          value?.signal === null);
+  if (!stateAccepted) failures.push(`${label} process state is invalid`);
+  for (const field of ["stdoutSha256", "stderrSha256"])
+    if (!isSha256(value?.[field]))
+      failures.push(`${label} ${field} is invalid`);
+}
+
+function checkExactKeys(value, expected, failures, label) {
+  if (!isRecord(value)) {
+    failures.push(`${label} is not an object`);
+    return;
+  }
+  const actual = Object.keys(value).toSorted();
+  const wanted = [...expected].toSorted();
+  if (
+    actual.length !== wanted.length ||
+    actual.some((key, i) => key !== wanted[i])
+  )
+    failures.push(`${label} fields are invalid`);
+}
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function inspectTransactionFault(value, failures) {

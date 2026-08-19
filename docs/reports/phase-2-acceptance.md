@@ -144,7 +144,27 @@ npm run test:p2-local-fault-gates
 
 任一进程状态、恢复输出、故障点数量、来源、二进制摘要或临时目录清理不满足时，命令返回非零、保留故障现场且不生成正式收据。全部满足后才删除本次精确创建的临时根，并以不可覆盖方式写入 `docs/reports/evidence/p2-local-fault-gates.json`；[`p2-local-fault-gates.schema.json`](../../schemas/p2-local-fault-gates.schema.json) 只接受成功/abort 状态、固定 317/1000 边界、固定顺序的两个缓存故障点和已清理状态。
 
-该命令会构建并运行 Rust 故障负载，因此不在 P2-A11 采样期间执行。当前执行器、Schema 与五项纯判定测试已通过；正式候选收据仍 pending，必须等 soak 正常结束、partial 消失且候选证据提交后再运行。该本地收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
+该命令会构建并运行 Rust 故障负载，因此不在 P2-A11 采样期间执行。当前执行器、Schema、离线严格检查器与七项纯判定测试已通过；正式候选收据仍 pending，必须等 soak 正常结束、partial 消失且候选证据提交后再运行。该本地收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
+
+## 5.3 阶段 2 最终机器退出收据
+
+外部门禁、本地故障收据与实际结论更新都提交后，从完全干净的候选提交执行：
+
+```text
+npm run verify:p2-exit
+```
+
+最终验证器不把 `p2-external-gates.json` 当作不可复核的声明。它重新读取 A11 原始样本、A12 三个平台源 artifact/矩阵 artifact 和 hosted-run 收据，重建外部门禁并要求与已提交汇总逐字语义相同；随后用独立检查器验证 A04/A10 收据的完整字段、Node/Rust/Cargo 环境、二进制摘要、进程状态、317/1000 边界、两个缓存故障点顺序与临时目录清理。
+
+Git 侧还必须同时满足：
+
+1. `soak commit <= hosted matrix commit <= local fault commit <= final candidate HEAD`；
+2. A11 固定加载脚本和产品输入相对正式 soak 基线零漂移；
+3. 本地故障执行所绑定的干净提交中已包含当前逐字相同的 `p2-external-gates.json`；
+4. 当前候选提交中已包含逐字相同的 `p2-local-fault-gates.json`；
+5. 本地故障执行后只有 `README.md` 与 `docs/` 可以变化，任何工具、Schema、工作流、依赖或产品源码变化都要求从新的干净提交重跑故障门禁。
+
+任一条件失败时只输出拒绝报告并返回非零。全部通过后才以不可覆盖方式生成 `docs/reports/evidence/p2-phase-2-exit.json`，其 accepted-only 结构由 [`phase-2-exit-evidence.schema.json`](../../schemas/phase-2-exit-evidence.schema.json) 固定，记录两个输入收据 SHA-256、四段提交关系、候选 SHA、来源基线和最小验收摘要。当前纯分析的成功、综合篡改和非法路径三项测试与 Schema 编译已通过；正式退出命令必须等待 A11/A12 和本地候选故障收据全部就位，当前不能生成 accepted 结果。
 
 ## 6. 产品不变量复核
 
@@ -161,7 +181,7 @@ npm run test:p2-local-fault-gates
 
 | 条件 | 当前状态 |
 |---|---|
-| P2-A01 至 P2-A12 全部通过 | Pending：A11 running，A12 pending；统一外部门禁验证器已就绪 |
+| P2-A01 至 P2-A12 全部通过 | Pending：A11 running，A12 pending；外部与最终退出验证器均已就绪 |
 | 完整扫描与增量模型最终一致 | Pass locally |
 | 崩溃测试无截断 Sidecar | Pass locally；候选提交统一故障收据 pending |
 | 连续 8 小时无无界资源增长 | Pending |
@@ -176,10 +196,10 @@ npm run test:p2-local-fault-gates
 2. 执行 `npm run audit:p2-soak-baseline`，确认正式 soak 生成器、原始判定器和该任务已编译的产品代码均未变化；若任一 scope 出现差异则重新跑相应门禁；
 3. 提交所有候选代码与上述正式证据，确认没有 partial、临时 fixture、token 或本机路径，且 `git status` 完全干净；
 4. 执行 `npm run test:p2-local-fault-gates`，检查不可覆盖收据通过 Schema 并绑定该干净候选提交；失败时保留现场、修复后从新的干净提交完整重跑；
-5. 更新 P2-03/P2-05/P2-06/P2-08、本报告、`docs/progress.md` 和 README 为实际结论；
-6. 运行文档/Schema 检查和最终快速质量门禁，确认工作树只包含预期本地故障收据与结论更新；
-7. 提交阶段 2 退出证据，再把阶段 3 从 Not started 改为 In progress。
+5. 添加本地故障收据，更新 P2-03/P2-05/P2-06/P2-08、本报告、`docs/progress.md` 和 README，运行文档/Schema 检查与最终快速质量门禁，然后提交；此后不得修改 README/docs 之外的路径；
+6. 再次确认工作树完全干净，执行 `npm run verify:p2-exit`，要求输出 `accepted=true`、`failures=[]` 并通过最终 Schema；
+7. 把本报告改为实际 Accepted、添加最终退出收据并提交，再把阶段 3 从 Not started 改为 In progress。
 
 ## 9. 当前结论
 
-P2-A01 至 P2-A10 已有本地自动化/故障注入证据，A04/A10 的最终候选收据执行器已就绪但为隔离 soak 尚未运行。P2-A11 正在执行，P2-A12 仍受没有 Git remote 的外部托管矩阵阻塞。因此阶段 2 当前结论是 **Not accepted / In progress**，不得提前宣称完成。
+P2-A01 至 P2-A10 已有本地自动化/故障注入证据，A04/A10 的最终候选收据执行器和阶段 2 最终退出验证器已就绪，但为隔离 soak 尚未执行正式候选故障负载。P2-A11 正在执行，P2-A12 仍受没有 Git remote 的外部托管矩阵阻塞。因此阶段 2 当前结论是 **Not accepted / In progress**，不得提前宣称完成。
