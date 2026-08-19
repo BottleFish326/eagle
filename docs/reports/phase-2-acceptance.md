@@ -67,6 +67,17 @@ git diff --exit-code c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21 -- \
   tools/verify-resource-stability.mjs
 ```
 
+正式任务使用的 Rust/桌面产品源码、夹具生成器与 soak 负载也必须保持无差异：
+
+```text
+git diff --exit-code c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21..HEAD -- \
+  Cargo.toml Cargo.lock .nvmrc \
+  crates apps integrations \
+  tools/fixture-generator tools/resource-soak
+```
+
+截至本报告，两条命令均无输出且退出码为 0；后续每次阶段 2 证据提交后都必须重跑，不能仅凭允许路径白名单推断“没有产品变化”。
+
 ### 4.1 唯一通过判据
 
 进程正常结束后必须同时满足：
