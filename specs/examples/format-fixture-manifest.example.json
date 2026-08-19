@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "suite": {
+    "id": "example-only",
+    "version": 1
+  },
+  "fixtures": [
+    {
+      "id": "svg-minimal-normal",
+      "path": "sources/svg/minimal.svg",
+      "format": "svg",
+      "case": "normal",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "Project test fixture"
+      },
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 142,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "image/svg+xml",
+            "kind": "image",
+            "issueCodes": [],
+            "metadata": {
+              "status": "available",
+              "properties": {
+                "width": 64,
+                "height": 32,
+                "hasAlpha": true
+              }
+            },
+            "preview": {
+              "status": "available",
+              "referencePath": "references/svg/minimal-256.png",
+              "referenceSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "width": 256,
+              "height": 128
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 500,
+        "maxRssDeltaBytes": 33554432,
+        "maxPreviewBytes": 1048576
+      }
+    }
+  ]
+}

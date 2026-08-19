@@ -114,6 +114,8 @@ worker 请求只包含请求 ID、provider ID/version、已授权 canonical path
 
 夹具生成器只能清理带自身所有权 marker 的目录。恶意固定二进制放入 `fixtures/formats`，清单记录来源、许可证、期望识别结果、属性结果、预览结果和最大允许时间/内存。
 
+清单的机器可读字段、平台/provider profile、摘要和来源规则由 [`format-fixture-manifest.schema.json`](../schemas/format-fixture-manifest.schema.json) 与[夹具清单规范](format-fixture-manifest.md)定义。
+
 ## 8. 实施切片与验收
 
 ### P3-01A：注册表与通用卡片

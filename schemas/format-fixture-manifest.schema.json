@@ -1,0 +1,417 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eagle.local/schemas/format-fixture-manifest.schema.json",
+  "title": "Extended format fixture manifest",
+  "description": "Integrity, expected capability, and resource budgets for P3 format fixtures.",
+  "type": "object",
+  "required": ["schema", "suite", "fixtures"],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "suite": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "fixtures": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/fixture"
+      }
+    }
+  },
+  "$defs": {
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^<>:\"|?*\\\\/\\u0000-\\u001f]+(?:/[^<>:\"|?*\\\\/\\u0000-\\u001f]+)*$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "platform": {
+      "enum": ["windows", "macos", "linux"]
+    },
+    "capabilityStatus": {
+      "enum": [
+        "available",
+        "codec-unavailable",
+        "unsupported-feature",
+        "invalid-content",
+        "resource-limited",
+        "timed-out",
+        "source-changed",
+        "unreadable"
+      ]
+    },
+    "fixture": {
+      "type": "object",
+      "required": [
+        "id",
+        "path",
+        "format",
+        "case",
+        "source",
+        "sha256",
+        "size",
+        "expectations",
+        "budgets"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        },
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "format": {
+          "enum": [
+            "png",
+            "jpeg",
+            "gif",
+            "webp",
+            "svg",
+            "avif",
+            "heic",
+            "heif",
+            "mp4",
+            "mov",
+            "webm",
+            "mp3",
+            "wav",
+            "flac",
+            "pdf"
+          ]
+        },
+        "case": {
+          "enum": [
+            "normal",
+            "truncated",
+            "extension-mismatch",
+            "content-mismatch",
+            "oversized-declaration",
+            "resource-limit",
+            "hostile-reference",
+            "script-or-action",
+            "unknown-codec",
+            "encrypted"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expectations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/platformExpectation"
+          }
+        },
+        "budgets": {
+          "$ref": "#/$defs/budgets"
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["origin", "license"],
+      "properties": {
+        "origin": {
+          "enum": [
+            "generated-in-repository",
+            "public-domain",
+            "redistributable"
+          ]
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sourceUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "attribution": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "enum": ["public-domain", "redistributable"]
+              }
+            },
+            "required": ["origin"]
+          },
+          "then": {
+            "required": ["sourceUrl"],
+            "properties": {
+              "sourceUrl": true
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "platformExpectation": {
+      "type": "object",
+      "required": ["platforms", "providerProfile", "result"],
+      "properties": {
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/platform"
+          },
+          "uniqueItems": true
+        },
+        "providerProfile": {
+          "enum": ["core-only", "bundled-codecs"]
+        },
+        "result": {
+          "$ref": "#/$defs/expectedResult"
+        }
+      },
+      "additionalProperties": false
+    },
+    "expectedResult": {
+      "type": "object",
+      "required": [
+        "recognized",
+        "mime",
+        "kind",
+        "issueCodes",
+        "metadata",
+        "preview"
+      ],
+      "properties": {
+        "recognized": {
+          "type": "boolean"
+        },
+        "mime": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "kind": {
+          "type": ["string", "null"],
+          "enum": ["image", "video", "audio", "pdf", "other", null]
+        },
+        "issueCodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+          },
+          "uniqueItems": true
+        },
+        "metadata": {
+          "$ref": "#/$defs/metadataExpectation"
+        },
+        "preview": {
+          "$ref": "#/$defs/previewExpectation"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recognized": { "const": false }
+            },
+            "required": ["recognized"]
+          },
+          "then": {
+            "properties": {
+              "mime": { "const": null },
+              "kind": { "const": null }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "metadataExpectation": {
+      "type": "object",
+      "required": ["status", "properties"],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/capabilityStatus"
+        },
+        "reasonCode": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 },
+            "durationMs": { "type": "integer", "minimum": 0 },
+            "pageCount": { "type": "integer", "minimum": 0 },
+            "frameCount": { "type": "integer", "minimum": 0 },
+            "sampleRateHz": { "type": "integer", "minimum": 1 },
+            "channelCount": { "type": "integer", "minimum": 1 },
+            "bitDepth": { "type": "integer", "minimum": 1 },
+            "colorSpace": { "type": "string", "maxLength": 128 },
+            "codec": { "type": "string", "maxLength": 128 },
+            "hasAlpha": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": { "const": "available" }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "properties": {
+                "type": "object",
+                "minProperties": 1
+              }
+            }
+          },
+          "else": {
+            "required": ["reasonCode"],
+            "properties": {
+              "reasonCode": true,
+              "properties": {
+                "type": "object",
+                "maxProperties": 0
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "previewExpectation": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/capabilityStatus"
+        },
+        "reasonCode": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+        },
+        "referencePath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "referenceSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": { "const": "available" }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "required": [
+              "referencePath",
+              "referenceSha256",
+              "width",
+              "height"
+            ],
+            "properties": {
+              "referencePath": true,
+              "referenceSha256": true,
+              "width": true,
+              "height": true
+            }
+          },
+          "else": {
+            "required": ["reasonCode"],
+            "properties": {
+              "reasonCode": true,
+              "referencePath": false,
+              "referenceSha256": false,
+              "width": false,
+              "height": false
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "budgets": {
+      "type": "object",
+      "required": [
+        "scanMaxMs",
+        "previewMaxMs",
+        "maxRssDeltaBytes",
+        "maxPreviewBytes"
+      ],
+      "properties": {
+        "scanMaxMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000
+        },
+        "previewMaxMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "maxRssDeltaBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 268435456
+        },
+        "maxPreviewBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

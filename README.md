@@ -37,6 +37,7 @@
 - [应用配置与恢复协议](specs/application-recovery-protocol.md)
 - [文件事件与一致性扫描协议](specs/filesystem-event-protocol.md)
 - [扩展格式识别、属性与预览协议](specs/extended-format-protocol.md)
+- [扩展格式夹具清单规范](specs/format-fixture-manifest.md)
 - [架构决策记录](specs/adr/README.md)
 
 ## 核心原则
