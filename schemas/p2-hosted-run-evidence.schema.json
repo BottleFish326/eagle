@@ -29,7 +29,66 @@
       "type": "array",
       "minItems": 5,
       "maxItems": 5,
-      "items": { "$ref": "#/$defs/job" }
+      "prefixItems": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/job" },
+            {
+              "type": "object",
+              "properties": {
+                "name": { "const": "Path compatibility (ubuntu-24.04)" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/job" },
+            {
+              "type": "object",
+              "properties": {
+                "name": { "const": "Path compatibility (macos-15)" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/job" },
+            {
+              "type": "object",
+              "properties": {
+                "name": { "const": "Path compatibility (windows-2025)" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/job" },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "const": "Consolidate path compatibility evidence"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/job" },
+            {
+              "type": "object",
+              "properties": {
+                "name": { "const": "Format, test, and build" }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
     },
     "archive": { "$ref": "#/$defs/archive" },
     "temporaryDownloadRemoved": { "const": true }
@@ -133,7 +192,65 @@
           "type": "array",
           "minItems": 4,
           "maxItems": 4,
-          "items": { "$ref": "#/$defs/file" }
+          "items": { "$ref": "#/$defs/file" },
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "required": ["relativePath"],
+                "properties": {
+                  "relativePath": {
+                    "type": "string",
+                    "pattern": "^p2-a12-matrix-[0-9a-f]{40,64}-attempt-[1-9][0-9]*/p2-08-platform-matrix\\.json$"
+                  }
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["relativePath"],
+                "properties": {
+                  "relativePath": {
+                    "type": "string",
+                    "pattern": "^p2-a12-source-Linux-[0-9a-f]{40,64}-attempt-[1-9][0-9]*/p2-a12-platform-paths\\.json$"
+                  }
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["relativePath"],
+                "properties": {
+                  "relativePath": {
+                    "type": "string",
+                    "pattern": "^p2-a12-source-Windows-[0-9a-f]{40,64}-attempt-[1-9][0-9]*/p2-a12-platform-paths\\.json$"
+                  }
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["relativePath"],
+                "properties": {
+                  "relativePath": {
+                    "type": "string",
+                    "pattern": "^p2-a12-source-macOS-[0-9a-f]{40,64}-attempt-[1-9][0-9]*/p2-a12-platform-paths\\.json$"
+                  }
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
         }
       },
       "additionalProperties": false

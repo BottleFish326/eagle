@@ -182,7 +182,7 @@ Git 侧还必须同时满足：
 
 任一条件失败时只输出拒绝报告并返回非零。全部通过后，生成的报告还要由一条不读取原始输入的独立检查路径核对精确字段、摘要格式、固定边界、来源提交与确定性时间；只有自检也接受，才以不可覆盖方式生成 `docs/reports/evidence/p2-phase-2-exit.json`。其 accepted-only 结构由 [`phase-2-exit-evidence.schema.json`](../../schemas/phase-2-exit-evidence.schema.json) 固定，记录三份输入收据 SHA-256、五段提交关系、候选 SHA、来源基线和最小验收摘要；归档后可运行 `npm run inspect:p2-exit` 再次离线检查。
 
-根工作区锁定 Ajv 8.20.0 与 `ajv-formats` 3.0.1，CI 会先执行根级 `npm ci`，随后由 `npm run test:tools` 严格编译全部 15 个 Draft 2020-12 Schema。合约测试还使用正式构造器生成外部汇总、本地故障、数据安全与最终退出四类 accepted-only 收据，并分别注入时长、恢复数量、open P1 与 open P0 边界错误，确保 Schema 和运行时判定不会静默分叉。当前四项合约测试通过；正式退出命令仍必须等待 A11/A12、本地候选故障收据及其后的 reviewed 数据安全收据全部就位，当前不能生成 accepted 结果。
+根工作区锁定 Ajv 8.20.0 与 `ajv-formats` 3.0.1，CI 会先执行根级 `npm ci`，随后由 `npm run test:tools` 严格编译全部 15 个 Draft 2020-12 Schema。合约测试使用正式构造器生成平台矩阵、托管运行源收据，以及外部汇总、本地故障、数据安全与最终退出四类阶段收据；Schema 与运行时检查器都固定三平台、五个 hosted job、四个归档文件、九份控制报告和十项控制的精确成员，并拒绝重复/重排及正式时长、恢复数量、open P1/open P0 边界错误。当前四项合约测试通过；正式退出命令仍必须等待 A11/A12、本地候选故障收据及其后的 reviewed 数据安全收据全部就位，当前不能生成 accepted 结果。
 
 ## 6. 产品不变量复核
 

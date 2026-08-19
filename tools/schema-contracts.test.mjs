@@ -36,8 +36,10 @@ test("validates the tracked draft defect register", async () => {
   validate("defect-register.schema.json", register);
 });
 
-test("validates generated P2 external, local, data-safety, and exit receipts", () => {
+test("validates generated P2 source and stage receipts", () => {
   const fixture = acceptedReceiptFixture();
+  validate("platform-matrix-evidence.schema.json", fixture.matrix);
+  validate("p2-hosted-run-evidence.schema.json", fixture.hostedRun);
   validate("phase-2-external-gates.schema.json", fixture.external);
   validate("p2-local-fault-gates.schema.json", fixture.localFaults);
   validate("p2-data-safety-audit.schema.json", fixture.dataSafety);
@@ -48,6 +50,31 @@ test("rejects boundary mutations in every P2 accepted-only receipt", () => {
   const fixture = acceptedReceiptFixture();
   const mutations = [
     [
+      "platform matrix duplicate",
+      "platform-matrix-evidence.schema.json",
+      fixture.matrix,
+      (value) => {
+        value.artifacts[2] = structuredClone(value.artifacts[1]);
+      },
+    ],
+    [
+      "hosted run job duplicate",
+      "p2-hosted-run-evidence.schema.json",
+      fixture.hostedRun,
+      (value) => {
+        value.jobs[4] = structuredClone(value.jobs[3]);
+      },
+    ],
+    [
+      "hosted archive file duplicate",
+      "p2-hosted-run-evidence.schema.json",
+      fixture.hostedRun,
+      (value) => {
+        value.archive.files[3] = structuredClone(value.archive.files[0]);
+      },
+    ],
+    [
+      "external duration boundary",
       "phase-2-external-gates.schema.json",
       fixture.external,
       (value) => {
@@ -55,6 +82,15 @@ test("rejects boundary mutations in every P2 accepted-only receipt", () => {
       },
     ],
     [
+      "external hosted job duplicate",
+      "phase-2-external-gates.schema.json",
+      fixture.external,
+      (value) => {
+        value.p2A12.hostedJobs[4] = structuredClone(value.p2A12.hostedJobs[3]);
+      },
+    ],
+    [
+      "local recovery boundary",
       "p2-local-fault-gates.schema.json",
       fixture.localFaults,
       (value) => {
@@ -62,6 +98,7 @@ test("rejects boundary mutations in every P2 accepted-only receipt", () => {
       },
     ],
     [
+      "data-safety priority boundary",
       "p2-data-safety-audit.schema.json",
       fixture.dataSafety,
       (value) => {
@@ -69,6 +106,23 @@ test("rejects boundary mutations in every P2 accepted-only receipt", () => {
       },
     ],
     [
+      "data-safety report duplicate",
+      "p2-data-safety-audit.schema.json",
+      fixture.dataSafety,
+      (value) => {
+        value.reports[8] = structuredClone(value.reports[7]);
+      },
+    ],
+    [
+      "data-safety control order",
+      "p2-data-safety-audit.schema.json",
+      fixture.dataSafety,
+      (value) => {
+        value.controls.reverse();
+      },
+    ],
+    [
+      "final defect boundary",
       "phase-2-exit-evidence.schema.json",
       fixture.finalExit,
       (value) => {
@@ -76,12 +130,12 @@ test("rejects boundary mutations in every P2 accepted-only receipt", () => {
       },
     ],
   ];
-  for (const [fileName, original, mutate] of mutations) {
+  for (const [label, fileName, original, mutate] of mutations) {
     const changed = structuredClone(original);
     mutate(changed);
     const validator = validatorFor(fileName);
-    assert.equal(validator(changed), false, fileName);
-    assert.ok(validator.errors?.length > 0, fileName);
+    assert.equal(validator(changed), false, label);
+    assert.ok(validator.errors?.length > 0, label);
   }
 });
 
@@ -125,6 +179,64 @@ function compileSchemas(values) {
 
 function acceptedReceiptFixture() {
   const external = makeP2ExternalReceiptFixture();
+  const matrix = {
+    schema: 1,
+    accepted: true,
+    failures: [],
+    verifiedAt: external.p2A12.verifiedAt,
+    gitCommit: external.p2A12.gitCommit,
+    workflow: {
+      githubRunId: external.p2A12.verificationEnvironment.githubRunId,
+      githubRunAttempt: external.p2A12.verificationEnvironment.githubRunAttempt,
+      githubWorkflowRef:
+        external.p2A12.verificationEnvironment.githubWorkflowRef,
+      githubRepository: external.p2A12.verificationEnvironment.githubRepository,
+      githubServerUrl: external.p2A12.verificationEnvironment.githubServerUrl,
+      runUrl: external.p2A12.runUrl,
+    },
+    verificationEnvironment: structuredClone(
+      external.p2A12.verificationEnvironment,
+    ),
+    artifacts: structuredClone(external.p2A12.artifacts),
+  };
+  const hostedRun = {
+    schema: 1,
+    accepted: true,
+    failures: [],
+    repository: external.p2A12.verificationEnvironment.githubRepository,
+    verifiedAt: external.p2A12.hostedRunVerifiedAt,
+    run: {
+      databaseId: Number(external.p2A12.verificationEnvironment.githubRunId),
+      attempt: Number(external.p2A12.githubRunAttempt),
+      event: "workflow_dispatch",
+      headBranch: "main",
+      headSha: external.p2A12.gitCommit,
+      status: "completed",
+      conclusion: "success",
+      workflowName: "CI",
+      createdAt: "2026-08-20T02:00:00.000Z",
+      startedAt: "2026-08-20T02:01:00.000Z",
+      updatedAt: external.p2A12.hostedRunVerifiedAt,
+      url: external.p2A12.runUrl,
+    },
+    jobs: structuredClone(external.p2A12.hostedJobs),
+    archive: {
+      gitCommit: external.p2A12.gitCommit,
+      githubRunAttempt: external.p2A12.githubRunAttempt,
+      runUrl: external.p2A12.runUrl,
+      files: [
+        `p2-a12-matrix-${external.p2A12.gitCommit}-attempt-${external.p2A12.githubRunAttempt}/p2-08-platform-matrix.json`,
+        `p2-a12-source-Linux-${external.p2A12.gitCommit}-attempt-${external.p2A12.githubRunAttempt}/p2-a12-platform-paths.json`,
+        `p2-a12-source-Windows-${external.p2A12.gitCommit}-attempt-${external.p2A12.githubRunAttempt}/p2-a12-platform-paths.json`,
+        `p2-a12-source-macOS-${external.p2A12.gitCommit}-attempt-${external.p2A12.githubRunAttempt}/p2-a12-platform-paths.json`,
+      ].map((relativePath, index) => ({
+        relativePath,
+        sha256: String(index + 1).repeat(64),
+        bytes: 1_000 + index,
+      })),
+    },
+    temporaryDownloadRemoved: true,
+  };
   const localFaults = makeP2LocalFaultReceiptFixture();
   const defectRegister = {
     schema: 1,
@@ -179,7 +291,14 @@ function acceptedReceiptFixture() {
     localCandidateDriftPaths: [],
   });
   assert.equal(finalExit.accepted, true, finalExit.failures.join("; "));
-  return { external, localFaults, dataSafety, finalExit };
+  return {
+    matrix,
+    hostedRun,
+    external,
+    localFaults,
+    dataSafety,
+    finalExit,
+  };
 }
 
 function validatorFor(fileName) {

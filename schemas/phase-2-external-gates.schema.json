@@ -194,17 +194,117 @@
           "type": "array",
           "minItems": 3,
           "maxItems": 3,
-          "items": {
-            "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedArtifact"
-          }
+          "prefixItems": [
+            {
+              "allOf": [
+                {
+                  "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedArtifact"
+                },
+                {
+                  "type": "object",
+                  "properties": { "platform": { "const": "darwin" } }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedArtifact"
+                },
+                {
+                  "type": "object",
+                  "properties": { "platform": { "const": "linux" } }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedArtifact"
+                },
+                {
+                  "type": "object",
+                  "properties": { "platform": { "const": "win32" } }
+                }
+              ]
+            }
+          ],
+          "items": false
         },
         "hostedJobs": {
           "type": "array",
           "minItems": 5,
           "maxItems": 5,
-          "items": {
-            "$ref": "https://material-eagle.local/schemas/p2-hosted-run-evidence.schema.json#/$defs/job"
-          }
+          "prefixItems": [
+            {
+              "allOf": [
+                {
+                  "$ref": "https://material-eagle.local/schemas/p2-hosted-run-evidence.schema.json#/$defs/job"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": { "const": "Path compatibility (ubuntu-24.04)" }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "https://material-eagle.local/schemas/p2-hosted-run-evidence.schema.json#/$defs/job"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": { "const": "Path compatibility (macos-15)" }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "https://material-eagle.local/schemas/p2-hosted-run-evidence.schema.json#/$defs/job"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": { "const": "Path compatibility (windows-2025)" }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "https://material-eagle.local/schemas/p2-hosted-run-evidence.schema.json#/$defs/job"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "Consolidate path compatibility evidence"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "https://material-eagle.local/schemas/p2-hosted-run-evidence.schema.json#/$defs/job"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": { "const": "Format, test, and build" }
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
         }
       },
       "additionalProperties": false

@@ -59,7 +59,36 @@
             "type": "array",
             "minItems": 3,
             "maxItems": 3,
-            "items": { "$ref": "#/$defs/acceptedArtifact" }
+            "prefixItems": [
+              {
+                "allOf": [
+                  { "$ref": "#/$defs/acceptedArtifact" },
+                  {
+                    "type": "object",
+                    "properties": { "platform": { "const": "darwin" } }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  { "$ref": "#/$defs/acceptedArtifact" },
+                  {
+                    "type": "object",
+                    "properties": { "platform": { "const": "linux" } }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  { "$ref": "#/$defs/acceptedArtifact" },
+                  {
+                    "type": "object",
+                    "properties": { "platform": { "const": "win32" } }
+                  }
+                ]
+              }
+            ],
+            "items": false
           }
         }
       },

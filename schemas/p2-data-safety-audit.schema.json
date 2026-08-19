@@ -37,13 +37,183 @@
       "type": "array",
       "minItems": 9,
       "maxItems": 9,
-      "items": { "$ref": "#/$defs/report" }
+      "prefixItems": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/report" },
+            {
+              "type": "object",
+              "properties": {
+                "fileName": {
+                  "const": "docs/reports/phase-1-acceptance.md"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/report" },
+            {
+              "type": "object",
+              "properties": {
+                "fileName": { "const": "docs/reports/p2-01-acceptance.md" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/report" },
+            {
+              "type": "object",
+              "properties": {
+                "fileName": { "const": "docs/reports/p2-02-acceptance.md" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/report" },
+            {
+              "type": "object",
+              "properties": {
+                "fileName": { "const": "docs/reports/p2-03-acceptance.md" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/report" },
+            {
+              "type": "object",
+              "properties": {
+                "fileName": { "const": "docs/reports/p2-04-acceptance.md" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/report" },
+            {
+              "type": "object",
+              "properties": {
+                "fileName": { "const": "docs/reports/p2-05-acceptance.md" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/report" },
+            {
+              "type": "object",
+              "properties": {
+                "fileName": { "const": "docs/reports/p2-06-acceptance.md" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/report" },
+            {
+              "type": "object",
+              "properties": {
+                "fileName": { "const": "docs/reports/p2-07-acceptance.md" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/report" },
+            {
+              "type": "object",
+              "properties": {
+                "fileName": { "const": "docs/reports/p2-08-acceptance.md" }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
     },
     "controls": {
-      "type": "array",
-      "minItems": 10,
-      "maxItems": 10,
-      "items": { "$ref": "#/$defs/control" }
+      "const": [
+        {
+          "id": "DS-01",
+          "title": "original asset immutability",
+          "evidenceFiles": [
+            "docs/reports/phase-1-acceptance.md",
+            "docs/reports/p2-02-acceptance.md",
+            "docs/reports/p2-05-acceptance.md"
+          ]
+        },
+        {
+          "id": "DS-02",
+          "title": "atomic sidecar persistence and conflict protection",
+          "evidenceFiles": [
+            "docs/reports/phase-1-acceptance.md",
+            "docs/reports/p2-03-acceptance.md",
+            "docs/reports/p2-04-acceptance.md"
+          ]
+        },
+        {
+          "id": "DS-03",
+          "title": "recoverable batch transactions",
+          "evidenceFiles": ["docs/reports/p2-03-acceptance.md"]
+        },
+        {
+          "id": "DS-04",
+          "title": "external and synchronization conflict preservation",
+          "evidenceFiles": ["docs/reports/p2-04-acceptance.md"]
+        },
+        {
+          "id": "DS-05",
+          "title": "derived cache ownership and crash recovery",
+          "evidenceFiles": ["docs/reports/p2-05-acceptance.md"]
+        },
+        {
+          "id": "DS-06",
+          "title": "filesystem event convergence and offline isolation",
+          "evidenceFiles": [
+            "docs/reports/p2-01-acceptance.md",
+            "docs/reports/p2-08-acceptance.md"
+          ]
+        },
+        {
+          "id": "DS-07",
+          "title": "bounded resource and queue behavior",
+          "evidenceFiles": ["docs/reports/p2-06-acceptance.md"]
+        },
+        {
+          "id": "DS-08",
+          "title": "read-only and redacted diagnostics",
+          "evidenceFiles": ["docs/reports/p2-07-acceptance.md"]
+        },
+        {
+          "id": "DS-09",
+          "title": "authorized path and reference boundaries",
+          "evidenceFiles": [
+            "docs/reports/phase-1-acceptance.md",
+            "docs/reports/p2-08-acceptance.md"
+          ]
+        },
+        {
+          "id": "DS-10",
+          "title": "real-process crash and hosted platform evidence",
+          "evidenceFiles": [
+            "docs/reports/p2-03-acceptance.md",
+            "docs/reports/p2-05-acceptance.md",
+            "docs/reports/p2-06-acceptance.md",
+            "docs/reports/p2-08-acceptance.md"
+          ]
+        }
+      ]
     }
   },
   "additionalProperties": false,
@@ -163,22 +333,6 @@
           ]
         },
         "sha256": { "$ref": "#/$defs/sha256" }
-      },
-      "additionalProperties": false
-    },
-    "control": {
-      "type": "object",
-      "required": ["id", "title", "evidenceFiles"],
-      "properties": {
-        "id": { "type": "string", "pattern": "^DS-[0-9]{2}$" },
-        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-        "evidenceFiles": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 9,
-          "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
-        }
       },
       "additionalProperties": false
     }
