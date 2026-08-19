@@ -50,13 +50,21 @@ non-authoritative failure
 
 ## 5. P2-A12 自动化矩阵
 
-本地/托管统一命令：
+本地专项命令：
 
 ```text
 cargo test --locked -p asset-filesystem p2_platform
 ```
 
-GitHub Actions `platform-paths` job 使用 `ubuntu-24.04`、`macos-15` 和 `windows-2025`，`fail-fast: false`。纯路径、原生 Unicode、重叠根和禁止 `followSymlinks` 配置的夹具在三平台执行。Unix 执行权限撤销、拔盘模拟和符号链接循环；Linux 额外执行大小写同名素材并存和移动根目录掉线。Windows leg 显式启用长路径策略，必须成功创建原生符号链接，并执行 260+ UTF-16 路径扫描及同路径 Sidecar 原子替换；强制环境下符号链接夹具不得静默 skip。
+GitHub Actions `platform-paths` job 使用 `ubuntu-24.04`、`macos-15` 和 `windows-2025`，`fail-fast: false`。托管 leg 通过 Node 24 执行：
+
+```text
+node tools/verify-platform-paths.mjs --output <runner-temp>/p2-a12-platform-paths.json
+```
+
+证据器先 `--list` 再实际运行，要求 macOS 10、Linux 12、Windows 9 个精确具名测试全部列出且执行为 `ok`，0 failed/ignored/measured；缺项、新增未登记项、非零退出或摘要不一致都会拒绝。它还要求 clean Git、`GITHUB_SHA` 与 HEAD 一致、GitHub-hosted runner、runner OS/arch 可追溯；Windows 必须设置强制 symlink 环境且输出不得含 skip。每个 leg 即使失败也上传 90 天机器可读 JSON artifact，包含 commit、runner/runtime、命令、清单、实际执行项、summary 和原始进程输出。
+
+纯路径、原生 Unicode、重叠根和禁止 `followSymlinks` 配置的夹具在三平台执行。Unix 执行权限撤销、拔盘模拟和符号链接循环；Linux 额外执行大小写同名素材并存和移动根目录掉线。Windows leg 显式启用长路径策略，必须成功创建原生符号链接，并执行 260+ UTF-16 路径扫描及同路径 Sidecar 原子替换；强制环境下符号链接夹具不得静默 skip。
 
 ## 6. 失败语义
 

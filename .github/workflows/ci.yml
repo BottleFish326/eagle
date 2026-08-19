@@ -31,6 +31,12 @@ jobs:
       - name: Install Rust toolchain
         run: rustup toolchain install stable --profile minimal
 
+      - name: Install Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
       - name: Enable Windows long-path policy
         if: runner.os == 'Windows'
         shell: pwsh
@@ -45,7 +51,17 @@ jobs:
       - name: Run P2-A12 path compatibility suite
         env:
           MATERIAL_EAGLE_REQUIRE_WINDOWS_SYMLINK: ${{ runner.os == 'Windows' && '1' || '0' }}
-        run: cargo test --locked -p asset-filesystem p2_platform
+          MATERIAL_EAGLE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: node tools/verify-platform-paths.mjs --output "${{ runner.temp }}/p2-a12-platform-paths.json"
+
+      - name: Archive P2-A12 machine-readable evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p2-a12-${{ runner.os }}-${{ github.sha }}
+          path: ${{ runner.temp }}/p2-a12-platform-paths.json
+          if-no-files-found: error
+          retention-days: 90
 
   quality:
     name: Format, test, and build

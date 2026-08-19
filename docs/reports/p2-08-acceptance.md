@@ -17,6 +17,8 @@
 - 桌面后端在失败时恢复扫描前目录记录，扫描/监听失败事件携带实时根访问状态；
 - UI 把对应根标为 missing、permission-denied、not-directory 或 unavailable，保留根配置和原有素材视图并显示降级提示；
 - CI 新增独立三平台 `platform-paths` job，不要求 Linux 安装完整 Tauri 图形依赖即可执行核心路径套件；
+- 新增 P2-A12 机器可读证据器，精确核对每个平台应列出/执行的测试名、通过数、Git commit、Node/Rust/runner 环境和 hosted 来源；
+- 三个 leg 无论成功失败都上传 90 天 JSON artifact，缺测试、ignored、非 GitHub-hosted 或 Windows symlink skip 都明确拒绝；
 - Windows leg 显式启用长路径策略并要求原生符号链接夹具可创建，验证 260+ UTF-16 路径扫描、Sidecar 创建/替换和循环跳过；
 - Linux leg 增加大小写同名素材并存和扫描中移动根目录的非权威失败夹具，既有撤权夹具继续验证 permission-denied。
 
@@ -46,6 +48,8 @@ macOS ARM64 共 10 项通过：
 | 扫描中撤权 | 首批后撤销根权限，返回 `RootUnavailable(permission-denied)`，权限随后恢复 | Pass |
 
 桌面 TypeScript 另有纯状态测试确认只有失败根切换为 permission-denied，其他根与配置记录保持不变。Rust wire test确认失败事件把 `rootAccessStatus` 序列化为稳定 kebab-case 值。
+
+证据器使用 Node 24 执行 9 项纯分析测试，覆盖 macOS 10/Linux 12/Windows 9 项精确正例，以及缺项、非零、ignored、无摘要、Windows symlink skip 和非 hosted/commit mismatch 负例；全部通过。随后把本机真实 `cargo --list`/`cargo test` 输出交给同一分析器，得到 macOS expected/listed/executed 各 10 项、summary 10 passed/0 failed/0 ignored。该本机结果验证证据器，但仍不替代 hosted P2-A12。
 
 ## 3. P2 验收项结论
 
@@ -84,7 +88,8 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 ## 6. 后续验收动作
 
 1. 建立 Git 远程并推送当前工作流；
-2. 确认 `platform-paths` 的三个 matrix leg 均实际通过并保存运行链接/提交号；
+2. 确认 `platform-paths` 的三个 matrix leg 均实际通过，保存运行链接/提交号并下载三个 `p2-a12-<runner>-<sha>` JSON artifact；
 3. 确认 Windows leg 实际执行强制符号链接、260+ 路径扫描及 Sidecar 原子替换，不能以 skip 计为通过；
 4. 确认 Linux leg 实际执行大小写并存、权限撤销和移动根目录掉线；
-5. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。
+5. 确认三个 JSON 都是 `accepted=true`、`failures=[]`、同一 Git commit，且 expected/listed/executed 数组逐项一致；
+6. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。

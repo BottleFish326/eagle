@@ -79,13 +79,17 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 当前工作流 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 已定义 `ubuntu-24.04`、`macos-15`、`windows-2025` 三个独立 `platform-paths` leg，`fail-fast: false`。阶段退出需要用户先建立 Git remote 并触发真实 hosted run，然后归档：
 
 - remote URL、workflow run URL、commit SHA、runner image/version 和时间；
-- 三个 leg 均 success，测试数分别与该提交上的原生条件清单一致；
+- 三个 leg 均 success，并下载各自保留 90 天的 `p2-a12-<runner>-<sha>` JSON artifact；
+- 三个 JSON 都是 `accepted=true`、`failures=[]`、同一 commit，expected/listed/executed 逐项一致；
+- macOS/Linux/Windows 的精确通过数分别为 10/12/9，0 failed/ignored/measured；
 - Windows 明确创建强制符号链接，实际执行 260+ UTF-16 路径扫描和 Sidecar 原子替换，无 skip；
 - Linux 实际执行大小写同名并存、权限撤销和扫描中移动根目录，无 skip；
 - macOS 继续执行 Unicode、循环和离线状态回归；
 - job 日志/摘要可审计，不能用 cross-compile、条件编译或本机模拟替代。
 
 如果某个 leg 因 runner 权限无法创建 Windows symlink，结果是 infrastructure failure，不是 P2-A12 pass；必须调整受控 runner/策略并重新完整执行。
+
+证据生成由 `tools/verify-platform-paths.mjs` 完成。其纯分析测试与本机真实 macOS 10 项输出已经通过，只证明工具链可执行；它会拒绝非 GitHub-hosted 环境，因此本机不能生成 formal accepted artifact。
 
 ## 6. 产品不变量复核
 
