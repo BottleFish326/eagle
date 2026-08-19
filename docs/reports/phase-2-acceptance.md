@@ -104,7 +104,7 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 node tools/verify-phase-2-external-gates.mjs
 ```
 
-工具会从全部原始样本确定性重放 P2-A11，从归档的三个源 JSON 重放 P2-A12，并要求 Git 关系满足 `soak commit <= hosted matrix commit <= current HEAD`。通过结果以不可覆盖、相同输入可幂等复核的方式写入 `docs/reports/evidence/p2-external-gates.json`，包含两个证据的 SHA-256、精简 summary、run URL 和三个 runner 摘要，不复制大体积原始样本；拒绝结果只输出到终端并返回非零，不落下可能被误认成正式证据的文件。
+工具会从全部原始样本确定性重放 P2-A11，从归档的三个源 JSON 重放 P2-A12，并要求 Git 关系满足 `soak commit <= hosted matrix commit <= current HEAD`。通过结果以不可覆盖、相同输入可幂等复核的方式写入 `docs/reports/evidence/p2-external-gates.json`，字段由 [`phase-2-external-gates.schema.json`](../../schemas/phase-2-external-gates.schema.json) 固定，包含两个证据的 SHA-256、精简 summary、run URL 和三个 runner 摘要，不复制大体积原始样本；拒绝结果只输出到终端并返回非零，不落下可能被误认成正式证据的文件。
 
 只有统一报告 `accepted=true` 且 `failures=[]` 时，P2-A11/P2-A12 两项外部门禁才可一起视为满足。它不替代 P2-A01 至 P2-A10、完整质量门禁、数据安全复核或退出评审，因此不能单独把阶段 2 标成 Accepted。
 

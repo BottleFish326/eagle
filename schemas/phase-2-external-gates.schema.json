@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/phase-2-external-gates.schema.json",
+  "title": "Phase 2 external acceptance gates",
+  "description": "Deterministic accepted-only summary produced after replaying P2-A11 and P2-A12 evidence.",
+  "type": "object",
+  "required": [
+    "schema",
+    "accepted",
+    "failures",
+    "evidenceAt",
+    "commitOrderVerified",
+    "p2A11",
+    "p2A12"
+  ],
+  "properties": {
+    "schema": { "const": 1 },
+    "accepted": { "const": true },
+    "failures": { "type": "array", "maxItems": 0 },
+    "evidenceAt": { "type": "string", "format": "date-time" },
+    "commitOrderVerified": { "const": true },
+    "p2A11": { "$ref": "#/$defs/p2A11" },
+    "p2A12": { "$ref": "#/$defs/p2A12" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "p2A11": {
+      "type": "object",
+      "required": [
+        "accepted",
+        "fileName",
+        "sha256",
+        "gitCommit",
+        "startedAt",
+        "completedAt",
+        "durationSeconds",
+        "fixtureCount",
+        "environment",
+        "summary"
+      ],
+      "properties": {
+        "accepted": { "const": true },
+        "fileName": { "const": "p2-06-resource-soak.json" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "gitCommit": { "$ref": "#/$defs/gitCommit" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "durationSeconds": { "const": 28800 },
+        "fixtureCount": { "const": 100000 },
+        "environment": { "$ref": "#/$defs/resourceEnvironment" },
+        "summary": { "$ref": "#/$defs/resourceSummary" }
+      },
+      "additionalProperties": false
+    },
+    "resourceEnvironment": {
+      "type": "object",
+      "required": ["platform", "architecture", "nodeVersion"],
+      "properties": {
+        "platform": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "architecture": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "nodeVersion": { "type": "string", "pattern": "^v24\\." }
+      },
+      "additionalProperties": false
+    },
+    "resourceSummary": {
+      "type": "object",
+      "required": [
+        "nativeSampleCount",
+        "minimumNativeSampleCount",
+        "internalSampleCount",
+        "minimumInternalSampleCount",
+        "invalidInternalSampleCount",
+        "invalidExternalSampleCount",
+        "rssGrowthKiB",
+        "rssSlopeKiBPerMinute",
+        "maxRssKiB",
+        "handleGrowth",
+        "maxHandles",
+        "threadBaseline",
+        "maxThreads",
+        "maxCpuPercent",
+        "scanPasses",
+        "generatedEvents",
+        "watcherBatches",
+        "thumbnailRequests",
+        "hashRequests",
+        "cacheEntries",
+        "scheduler"
+      ],
+      "properties": {
+        "nativeSampleCount": { "$ref": "#/$defs/nonnegativeInteger" },
+        "minimumNativeSampleCount": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "internalSampleCount": { "$ref": "#/$defs/nonnegativeInteger" },
+        "minimumInternalSampleCount": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "invalidInternalSampleCount": { "const": 0 },
+        "invalidExternalSampleCount": { "const": 0 },
+        "rssGrowthKiB": { "type": "number", "maximum": 262144 },
+        "rssSlopeKiBPerMinute": { "type": "number", "maximum": 8192 },
+        "maxRssKiB": { "$ref": "#/$defs/nonnegativeNumber" },
+        "handleGrowth": { "type": "integer", "maximum": 64 },
+        "maxHandles": { "$ref": "#/$defs/nonnegativeInteger" },
+        "threadBaseline": { "$ref": "#/$defs/nonnegativeInteger" },
+        "maxThreads": { "$ref": "#/$defs/nonnegativeInteger" },
+        "maxCpuPercent": { "$ref": "#/$defs/nonnegativeNumber" },
+        "scanPasses": { "type": "integer", "minimum": 1 },
+        "generatedEvents": { "type": "integer", "minimum": 1 },
+        "watcherBatches": { "type": "integer", "minimum": 1 },
+        "thumbnailRequests": { "type": "integer", "minimum": 1 },
+        "hashRequests": { "type": "integer", "minimum": 1 },
+        "cacheEntries": { "$ref": "#/$defs/nonnegativeInteger" },
+        "scheduler": {
+          "type": "object",
+          "required": [
+            "mode",
+            "activeTotal",
+            "waitingTotal",
+            "foregroundLimit",
+            "maxWaiters"
+          ],
+          "properties": {
+            "mode": { "enum": ["foreground", "background"] },
+            "activeTotal": { "$ref": "#/$defs/nonnegativeInteger" },
+            "waitingTotal": { "$ref": "#/$defs/nonnegativeInteger" },
+            "foregroundLimit": { "$ref": "#/$defs/nonnegativeInteger" },
+            "maxWaiters": { "$ref": "#/$defs/nonnegativeInteger" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "p2A12": {
+      "type": "object",
+      "required": [
+        "accepted",
+        "matrixArtifactName",
+        "matrixSha256",
+        "gitCommit",
+        "verifiedAt",
+        "githubRunAttempt",
+        "runUrl",
+        "verificationEnvironment",
+        "artifacts"
+      ],
+      "properties": {
+        "accepted": { "const": true },
+        "matrixArtifactName": {
+          "type": "string",
+          "pattern": "^p2-a12-matrix-[0-9a-f]{40,64}-attempt-[1-9][0-9]*$"
+        },
+        "matrixSha256": { "$ref": "#/$defs/sha256" },
+        "gitCommit": { "$ref": "#/$defs/gitCommit" },
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "githubRunAttempt": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "runUrl": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/actions/runs/[0-9]+$"
+        },
+        "verificationEnvironment": {
+          "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedVerificationEnvironment"
+        },
+        "artifacts": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedArtifact"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "nonnegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nonnegativeNumber": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}
