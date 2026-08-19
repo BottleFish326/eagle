@@ -12,6 +12,7 @@ export const P2_EXIT_STAGES = Object.freeze([
   "local-faults-pending",
   "local-faults-invalid",
   "local-faults-uncommitted",
+  "data-safety-review-pending",
   "data-safety-pending",
   "data-safety-invalid",
   "data-safety-uncommitted",
@@ -26,6 +27,7 @@ export function buildP2ExitStatus({
   hostedReadiness,
   externalGates,
   localFaults,
+  dataSafetyReadiness,
   dataSafety,
   finalExit,
 }) {
@@ -35,6 +37,7 @@ export function buildP2ExitStatus({
     hostedReadiness,
     externalGates,
     localFaults,
+    dataSafetyReadiness,
     dataSafety,
     finalExit,
   });
@@ -58,6 +61,7 @@ export function buildP2ExitStatus({
         externalGates: inputs.externalGates,
       },
       localFaults: inputs.localFaults,
+      dataSafetyReadiness: inputs.dataSafetyReadiness,
       dataSafety: inputs.dataSafety,
       finalExit: inputs.finalExit,
     },
@@ -72,6 +76,7 @@ function decide(inputs) {
     hostedReadiness,
     externalGates,
     localFaults,
+    dataSafetyReadiness,
     dataSafety,
     finalExit,
   } = inputs;
@@ -212,14 +217,24 @@ function decide(inputs) {
       "npm run inspect:p2-data-safety",
       "Do not overwrite the receipt; inspect the defect register and bound evidence.",
     );
-  if (dataSafety.state === "missing")
+  if (dataSafety.state === "missing") {
+    if (dataSafetyReadiness.ready)
+      return decision(
+        "data-safety-pending",
+        [],
+        "verify-data-safety",
+        "npm run verify:p2-data-safety",
+        "Generate the immutable data safety receipt from the reviewed, committed inputs.",
+      );
+    const action = dataSafetyReviewAction(dataSafetyReadiness);
     return decision(
-      "data-safety-pending",
+      "data-safety-review-pending",
       [],
-      "verify-data-safety",
-      "npm run verify:p2-data-safety",
-      "Review the defect register after all gates, then generate the immutable data safety receipt.",
+      action.kind,
+      action.command,
+      action.message,
     );
+  }
   if (dataSafety.committed !== true)
     return decision(
       "data-safety-uncommitted",
@@ -266,8 +281,54 @@ function normalizeInputs(value) {
       "invalid",
     ]),
     localFaults: normalizeReceipt(value.localFaults),
+    dataSafetyReadiness: normalizeDataSafetyReadiness(
+      value.dataSafetyReadiness,
+    ),
     dataSafety: normalizeReceipt(value.dataSafety),
     finalExit: normalizeReceipt(value.finalExit),
+  };
+}
+
+function normalizeDataSafetyReadiness(value) {
+  return {
+    ready: value?.ready === true,
+    registerState: ["missing", "draft", "reviewed", "invalid"].includes(
+      value?.registerState,
+    )
+      ? value.registerState
+      : "invalid",
+    registerCommitted: value?.registerCommitted === true,
+    reportsCommitted: value?.reportsCommitted === true,
+    candidateClean: value?.candidateClean === true,
+    failures: stringArray(value?.failures),
+    summary: value?.summary ?? null,
+  };
+}
+
+function dataSafetyReviewAction(readiness) {
+  if (["missing", "draft", "invalid"].includes(readiness.registerState))
+    return {
+      kind: "review-defect-register",
+      command: null,
+      message:
+        "Review every final finding in docs/defects.json, then set a canonical reviewedAt after the gate evidence.",
+    };
+  if (
+    !readiness.registerCommitted ||
+    !readiness.reportsCommitted ||
+    !readiness.candidateClean
+  )
+    return {
+      kind: "commit-data-safety-inputs",
+      command: "git status --short",
+      message:
+        "Commit the reviewed defect register and all fixed safety reports in a clean candidate.",
+    };
+  return {
+    kind: "resolve-data-safety-findings",
+    command: null,
+    message:
+      "Resolve the reported defect-register findings before generating an accepted receipt.",
   };
 }
 

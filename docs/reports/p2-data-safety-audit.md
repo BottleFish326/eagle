@@ -45,6 +45,8 @@ npm run verify:p2-data-safety
 npm run inspect:p2-data-safety
 ```
 
+操作过程中先运行 `npm run status:p2-exit`。状态机会区分登记册 missing/draft/reviewed/invalid，验证审核不早于两份上游证据且不晚于包含它的 candidate commit，检查登记册与九份报告逐字存在于 HEAD，并分别给出 `review-defect-register`、`commit-data-safety-inputs`、`resolve-data-safety-findings` 或 `verify-data-safety`；不会在 draft 状态误导执行必然失败的正式生成命令。
+
 生成器要求 Node.js 24、无参数、全部输入逐字存在于当前提交，并验证 `A11 commit <= A12 commit <= local fault commit <= data-safety candidate`。失败只输出拒绝原因，不写正式文件；成功报告先经过不读取原始输入的独立检查器，再以不可覆盖、相同输入可幂等复核的方式写入 `docs/reports/evidence/p2-data-safety-audit.json`。收据由 [`p2-data-safety-audit.schema.json`](../../schemas/p2-data-safety-audit.schema.json) 固定。
 
 收据提交后，`verify:p2-exit` 不信任其中的摘要：它从收据绑定的历史 candidate commit 重新读取登记册、外部/本地收据和九份报告，再生成逐字相同的审计结论。这样既允许最终收据之后按既定范围更新文档，也不能用后改的文件伪造原审计。

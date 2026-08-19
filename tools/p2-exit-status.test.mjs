@@ -100,6 +100,53 @@ test("routes accepted external evidence through local faults and a clean final c
     "npm run verify:p2-data-safety",
   );
 
+  const reviewDraft = structuredClone(safetyMissing);
+  reviewDraft.dataSafetyReadiness = {
+    ready: false,
+    registerState: "draft",
+    registerCommitted: true,
+    reportsCommitted: true,
+    candidateClean: true,
+    failures: ["status is not reviewed"],
+  };
+  const reviewDraftReport = buildP2ExitStatus(reviewDraft);
+  assert.equal(reviewDraftReport.stage, "data-safety-review-pending");
+  assert.equal(reviewDraftReport.nextAction.kind, "review-defect-register");
+  assert.equal(reviewDraftReport.nextAction.command, null);
+
+  const reviewUncommitted = structuredClone(safetyMissing);
+  reviewUncommitted.dataSafetyReadiness = {
+    ready: false,
+    registerState: "reviewed",
+    registerCommitted: false,
+    reportsCommitted: true,
+    candidateClean: false,
+    failures: ["register is not committed"],
+  };
+  const reviewUncommittedReport = buildP2ExitStatus(reviewUncommitted);
+  assert.equal(
+    reviewUncommittedReport.nextAction.kind,
+    "commit-data-safety-inputs",
+  );
+  assert.equal(
+    reviewUncommittedReport.nextAction.command,
+    "git status --short",
+  );
+
+  const reviewBlocked = structuredClone(safetyMissing);
+  reviewBlocked.dataSafetyReadiness = {
+    ready: false,
+    registerState: "reviewed",
+    registerCommitted: true,
+    reportsCommitted: true,
+    candidateClean: true,
+    failures: ["one or more P0/P1 defects remain open"],
+  };
+  assert.equal(
+    buildP2ExitStatus(reviewBlocked).nextAction.kind,
+    "resolve-data-safety-findings",
+  );
+
   const safetyInvalid = base();
   safetyInvalid.dataSafety = {
     state: "invalid",
@@ -193,6 +240,15 @@ function base() {
       state: "accepted",
       failures: [],
       committed: true,
+      summary: null,
+    },
+    dataSafetyReadiness: {
+      ready: true,
+      registerState: "reviewed",
+      registerCommitted: true,
+      reportsCommitted: true,
+      candidateClean: true,
+      failures: [],
       summary: null,
     },
     finalExit: {

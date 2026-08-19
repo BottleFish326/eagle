@@ -159,7 +159,7 @@ npm run verify:p2-data-safety
 npm run inspect:p2-data-safety
 ```
 
-生成器严格检查缺陷字段、ID 唯一性、优先级退出规则、九份固定控制报告 SHA-256、外部与本地收据、全部输入已提交、工作树清洁以及 `A11 <= A12 <= local faults <= data-safety candidate`。成功报告先由独立路径自检，再以不可覆盖方式生成 `p2-data-safety-audit.json`；其 accepted-only 结构由 [`p2-data-safety-audit.schema.json`](../../schemas/p2-data-safety-audit.schema.json) 固定。完整规则和十项控制见 [数据安全缺陷审计](p2-data-safety-audit.md)。当前实现与篡改测试已通过，但正式输入未齐，因此登记册保持 draft、正式收据 pending。
+状态编排器会先区分登记册 missing/draft/reviewed/invalid，核对审核时间、提交归属和九份报告，再依次要求人工复核、提交审核输入、解决阻断项或运行正式命令，不会在 draft 时直接建议生成收据。生成器严格检查缺陷字段、ID 唯一性、优先级退出规则、九份固定控制报告 SHA-256、外部与本地收据、全部输入已提交、工作树清洁以及 `A11 <= A12 <= local faults <= data-safety candidate`。成功报告先由独立路径自检，再以不可覆盖方式生成 `p2-data-safety-audit.json`；其 accepted-only 结构由 [`p2-data-safety-audit.schema.json`](../../schemas/p2-data-safety-audit.schema.json) 固定。完整规则和十项控制见 [数据安全缺陷审计](p2-data-safety-audit.md)。当前实现与篡改测试已通过，但正式输入未齐，因此登记册保持 draft、正式收据 pending。
 
 ## 5.4 阶段 2 最终机器退出收据
 

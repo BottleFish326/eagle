@@ -7,7 +7,11 @@ import { collectP2HostedReadinessInputs } from "./p2-hosted-environment.mjs";
 import { buildP2HostedReadiness } from "./p2-hosted-readiness.mjs";
 import { inspectP2HostedRunReceipt } from "./p2-hosted-run-receipt.mjs";
 import { inspectP2LocalFaultGatesReceipt } from "./p2-local-fault-gates.mjs";
-import { inspectP2DataSafetyAuditReceipt } from "./p2-data-safety-audit.mjs";
+import {
+  inspectDefectRegister,
+  inspectP2DataSafetyAuditReceipt,
+  P2_DATA_SAFETY_REPORTS,
+} from "./p2-data-safety-audit.mjs";
 import { buildP2ExitStatus } from "./p2-exit-status.mjs";
 import { inspectPhase2ExitGatesReceipt } from "./phase-2-exit-gates.mjs";
 import { buildPhase2ExternalGatesReport } from "./phase-2-external-gates.mjs";
@@ -32,11 +36,13 @@ const files = {
   external: path.join(evidenceDirectory, "p2-external-gates.json"),
   localFaults: path.join(evidenceDirectory, "p2-local-fault-gates.json"),
   dataSafety: path.join(evidenceDirectory, "p2-data-safety-audit.json"),
+  defectRegister: path.join(repository, "docs", "defects.json"),
   finalExit: path.join(evidenceDirectory, "p2-phase-2-exit.json"),
 };
 const repositoryFiles = {
   localFaults: "docs/reports/evidence/p2-local-fault-gates.json",
   dataSafety: "docs/reports/evidence/p2-data-safety-audit.json",
+  defectRegister: "docs/defects.json",
   finalExit: "docs/reports/evidence/p2-phase-2-exit.json",
 };
 const invalidStages = new Set([
@@ -65,6 +71,11 @@ try {
     hostedRun,
   });
   const localFaults = await collectLocalFaultState(git.currentCommit);
+  const dataSafetyReadiness = await collectDataSafetyReadiness({
+    gitState: git,
+    externalGates,
+    localFaults,
+  });
   const dataSafety = await collectDataSafetyState(git.currentCommit);
   const finalExit = await collectFinalExitState(git.currentCommit);
   const report = buildP2ExitStatus({
@@ -73,6 +84,7 @@ try {
     hostedReadiness,
     externalGates,
     localFaults,
+    dataSafetyReadiness,
     dataSafety,
     finalExit,
   });
@@ -289,6 +301,7 @@ async function collectExternalState({ git, resource, platform, hostedRun }) {
         ],
     summary: accepted
       ? {
+          evidenceAt: replay.evidenceAt,
           p2A11Commit: replay.p2A11.gitCommit,
           p2A12Commit: replay.p2A12.gitCommit,
           runUrl: replay.p2A12.runUrl,
@@ -330,6 +343,81 @@ async function collectLocalFaultState(currentCommit) {
           executedAt: evidence.value.executedAt,
         }
       : null,
+  };
+}
+
+async function collectDataSafetyReadiness({
+  gitState,
+  externalGates,
+  localFaults,
+}) {
+  const evidence = await readOptionalJson(files.defectRegister, 1024 * 1024);
+  const reportsCommitted = P2_DATA_SAFETY_REPORTS.every((fileName) =>
+    gitPathExists(gitState.currentCommit, fileName),
+  );
+  if (!evidence.exists)
+    return {
+      ready: false,
+      registerState: "missing",
+      registerCommitted: false,
+      reportsCommitted,
+      candidateClean: gitState.cleanAll,
+      failures: ["defect register is missing"],
+      summary: null,
+    };
+  if (evidence.error !== null)
+    return {
+      ready: false,
+      registerState: "invalid",
+      registerCommitted: false,
+      reportsCommitted,
+      candidateClean: gitState.cleanAll,
+      failures: [evidence.error],
+      summary: null,
+    };
+
+  const minimumReviewedAt = laterIsoInstant(
+    externalGates.summary?.evidenceAt,
+    localFaults.summary?.executedAt,
+  );
+  const inspection = inspectDefectRegister(evidence.value, {
+    requireReviewed: true,
+    minimumReviewedAt,
+    maximumReviewedAt: commitTime(gitState.currentCommit),
+  });
+  const registerCommitted = gitBlobEquals(
+    gitState.currentCommit,
+    repositoryFiles.defectRegister,
+    evidence.bytes,
+  );
+  const failures = [...inspection.failures];
+  if (!registerCommitted) failures.push("defect register is not committed");
+  if (!reportsCommitted)
+    failures.push("one or more data safety reports are not committed");
+  if (!gitState.cleanAll)
+    failures.push("data safety candidate working tree is not clean");
+  const upstreamReady =
+    externalGates.state === "accepted" &&
+    localFaults.state === "accepted" &&
+    localFaults.committed === true;
+  return {
+    ready:
+      upstreamReady &&
+      inspection.accepted &&
+      registerCommitted &&
+      reportsCommitted &&
+      gitState.cleanAll,
+    registerState: ["draft", "reviewed"].includes(evidence.value?.status)
+      ? evidence.value.status
+      : "invalid",
+    registerCommitted,
+    reportsCommitted,
+    candidateClean: gitState.cleanAll,
+    failures,
+    summary: {
+      reviewedAt: evidence.value?.reviewedAt ?? null,
+      counts: inspection.counts,
+    },
   };
 }
 
@@ -461,6 +549,33 @@ function gitBlobEquals(commit, filePath, expected) {
     result.status === 0 &&
     Buffer.isBuffer(result.stdout) &&
     result.stdout.equals(expected)
+  );
+}
+
+function gitPathExists(commit, filePath) {
+  return gitStatus(["cat-file", "-e", `${commit}:${filePath}`]);
+}
+
+function commitTime(commit) {
+  const value = git(["show", "-s", "--format=%cI", commit]).trim();
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp))
+    throw new Error(`cannot read commit time for ${commit}`);
+  return new Date(timestamp).toISOString();
+}
+
+function laterIsoInstant(...values) {
+  const candidates = values.filter(isIsoInstant);
+  return candidates.length === 0
+    ? null
+    : candidates.toSorted((a, b) => Date.parse(a) - Date.parse(b)).at(-1);
+}
+
+function isIsoInstant(value) {
+  if (typeof value !== "string") return false;
+  const timestamp = Date.parse(value);
+  return (
+    Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value
   );
 }
 

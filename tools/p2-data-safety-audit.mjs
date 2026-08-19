@@ -234,7 +234,7 @@ export function inspectDefectRegister(
     maximumReviewedAt !== null &&
     isIsoInstant(maximumReviewedAt) &&
     isIsoInstant(value?.reviewedAt) &&
-    Date.parse(value.reviewedAt) > Date.parse(maximumReviewedAt)
+    Date.parse(value.reviewedAt) > Date.parse(maximumReviewedAt) + 999
   )
     failures.push("review postdates the candidate commit");
 
@@ -327,7 +327,7 @@ export function inspectP2DataSafetyAuditReceipt(value) {
     isIsoInstant(value?.defectRegister?.reviewedAt) &&
     isIsoInstant(value?.candidateCommittedAt) &&
     Date.parse(value.defectRegister.reviewedAt) >
-      Date.parse(value.candidateCommittedAt)
+      Date.parse(value.candidateCommittedAt) + 999
   )
     failures.push("data safety review postdates the candidate commit");
 
