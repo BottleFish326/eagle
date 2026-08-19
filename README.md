@@ -93,6 +93,8 @@ npm run audit:p2-hosted-readiness
 
 `npm run ci` 依次执行格式检查、Rust/TypeScript 静态检查、全部单元测试、S 数据集跨模块测试、Tauri 桌面端构建和 Obsidian 插件构建。`npm run test:medium` 在受标记保护的临时目录生成 10,000 项 M 夹具，验证扫描、复合查询和原始素材摘要后安全清理，用于阶段/每日规模回归，不放入每次提交的快速 CI。`npm run test:stability` 使用独立 Chrome 对同规模界面预热 60 秒并连续滚动、筛选 30 分钟，自动拒绝堆增长、主线程阻塞、全量卡片挂载、对象 URL 越界、错误结果、页面重载和采集超时；默认需要 macOS Google Chrome，可用 `-- --chrome <path>` 覆盖浏览器路径。`npm run test:resource-stability` 默认生成 L 数据集并运行 8 小时原生负载，采集 RSS、CPU、线程、句柄、调度与缓存曲线；它是 P2-A11 的阶段验收，不属于每次提交的快速 CI。`npm run audit:p2-soak-baseline` 只读核对正式长稳任务固定的受测 SHA、已加载脚本和产品输入，用于最终证据提交前排除源码漂移。`npm run audit:p2-hosted-readiness` 只读检查 P2-A12 的 GitHub CLI、origin/默认分支、已发布 commit 和手动工作流入口，并生成绑定该 commit/run attempt 的触发与证据下载命令。
 
+P2-A12 的托管运行成功后，执行 `npm run collect:p2-hosted-evidence -- --run-id <run-id> --attempt <attempt>`。该命令拒绝模糊的“最新运行”，复核指定运行的状态、事件、workflow、分支、commit 和 URL，随后精确下载、离线重放并归档四份机器证据。
+
 ## 阶段 0 原型单独验证
 
 Rust 核心原型：

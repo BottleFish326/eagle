@@ -25,6 +25,7 @@
 - 三个源报告与汇总 job 还必须共享 GitHub repository/server；最终报告从受校验字段生成稳定 workflow `runUrl`，正式归档不再依赖人工抄写链接；
 - 新增离线归档器：下载四个 artifact 文件后再次计算摘要和重放 matrix，确认受测 commit 是当前 HEAD 祖先，再把原始字节以目录级原子 rename 保存到固定证据目录；相同输入可幂等执行，差异输入绝不覆盖；
 - CI 支持 `workflow_dispatch` 显式触发；新增只读托管就绪预检，核对 GitHub CLI/认证、GitHub origin/默认分支、`main -> origin/main`、本地与远端精确 commit、tracked 清洁状态及手动触发入口，并生成绑定 commit/run attempt 的触发、定位、等待、下载和归档命令；
+- 新增指定运行证据采集器：只接受显式 `run-id`/`attempt`，重新读取 GitHub 运行元数据并要求 completed/success、`workflow_dispatch`、`CI`、`main`、候选 SHA 和规范 run URL 全部精确匹配；随后在受保护临时目录下载该 attempt 的两个 artifact 模式、调用既有四文件重放归档器，只有归档成功才清理下载目录，失败现场保留并报告路径；
 - Windows leg 显式启用长路径策略并要求原生符号链接夹具可创建，验证 260+ UTF-16 路径扫描、Sidecar 创建/替换和循环跳过；
 - Linux leg 增加大小写同名素材并存和扫描中移动根目录的非权威失败夹具，既有撤权夹具继续验证 permission-denied。
 
@@ -60,6 +61,8 @@ macOS ARM64 共 10 项通过：
 归档器另有 2 项真实文件测试，覆盖四文件重放、原始字节保存、目录级原子发布、幂等复核，以及 matrix 字段或源文件字节改变时写前拒绝。
 
 托管就绪预检另有 3 项纯测试，覆盖已发布且作为 GitHub 默认分支的 `main` 完整正例、工具/远端/默认分支/本地分支/上游/commit/工作树/工作流缺口的拒绝，以及 HTTPS、SCP 风格 SSH 和 `ssh://` 三种 GitHub origin 规范化。
+
+指定运行采集器另有 4 项测试，覆盖成功运行元数据与 artifact pattern、九种运行身份/状态错配、download → archive → cleanup 严格顺序，以及运行拒绝时零下载、归档失败时保留临时证据。
 
 阶段退出统一验证器另有 2 项测试，以完整 28,800 秒采样数量的合成证据同时重放 P2-A11/P2-A12、生成确定性结论并验证幂等写入；soak summary 篡改或 commit 顺序未经证明时均拒绝。
 
@@ -103,11 +106,11 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 
 1. 建立 GitHub origin、安装并认证 GitHub CLI，把当前 `main` 推送为 `origin/main`；
 2. 运行 `npm run audit:p2-hosted-readiness`，只有输出 `ready=true` 时才使用报告内的 commit-bound 命令触发 `ci.yml`；该预检只读，不创建仓库、不推送、不触发 workflow；
-3. 确认 `platform-paths` 的三个 matrix leg 和 `platform-matrix-evidence` 均实际通过，核对汇总 JSON 内的 `runUrl`、提交号和 run attempt，并用报告给出的显式 run ID 命令下载同一 run 的汇总及三个源 artifact；
+3. 确认 `platform-paths` 的三个 matrix leg 和 `platform-matrix-evidence` 均实际通过，核对 CLI 返回的 run ID/attempt 后执行 `npm run collect:p2-hosted-evidence -- --run-id <run-id> --attempt <attempt>`；采集器会再次验证运行身份，精确下载并调用归档器，不能改用“最新运行”；
 4. 确认 Windows leg 实际执行强制符号链接、260+ 路径扫描及 Sidecar 原子替换，不能以 skip 计为通过；
 5. 确认 Linux leg 实际执行大小写并存、权限撤销和移动根目录掉线；
 6. 确认最终 `p2-08-platform-matrix.json` 是 `accepted=true`、`failures=[]`、同一 Git commit/run/attempt，且三个源 artifact 的 SHA-256、expected/listed/executed 和 summary 均被重放核对；
-7. 对四个解压 artifact 运行 `archive-platform-matrix-evidence.mjs`，提交固定证据目录；
+7. 确认采集器输出 `collected=true`、内部归档结果 `archived=true`，提交其生成的固定证据目录；
 8. 运行 `verify-phase-2-external-gates.mjs`，只有统一报告 `accepted=true` 后才评估阶段 2 退出；
 9. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。
 

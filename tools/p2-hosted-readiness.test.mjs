@@ -28,9 +28,8 @@ test("accepts one clean published main commit and emits commit-bound commands", 
   assert.match(report.commands[0], /gh workflow run ci\.yml --ref main/u);
   assert.match(report.commands[1], new RegExp(commit, "u"));
   assert.match(report.commands[1], /--json attempt,databaseId/u);
-  assert.match(report.commands[3], new RegExp(commit, "u"));
-  assert.match(report.commands[3], /attempt-<attempt>/u);
-  assert.equal(report.commands.length, 5);
+  assert.match(report.commands[3], /--run-id <run-id> --attempt <attempt>/u);
+  assert.equal(report.commands.length, 4);
 });
 
 test("rejects missing tooling, mismatched publication, and a dirty workflow", () => {

@@ -85,8 +85,7 @@ function buildCommands({ repositorySlug, currentCommit }) {
     `gh workflow run ci.yml --ref main -R ${repositorySlug}`,
     `gh run list --workflow ci.yml --branch main --commit ${currentCommit} --event workflow_dispatch --limit 1 --json attempt,databaseId,headSha,status,conclusion,url -R ${repositorySlug}`,
     `gh run watch <run-id> --exit-status --compact -R ${repositorySlug}`,
-    `gh run download <run-id> -R ${repositorySlug} -p 'p2-a12-source-*-${currentCommit}-attempt-<attempt>' -p 'p2-a12-matrix-${currentCommit}-attempt-<attempt>' -D <download-directory>`,
-    "node tools/archive-platform-matrix-evidence.mjs --input-directory <download-directory>",
+    "npm run collect:p2-hosted-evidence -- --run-id <run-id> --attempt <attempt>",
   ];
 }
 
