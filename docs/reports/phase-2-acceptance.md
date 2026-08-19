@@ -84,7 +84,13 @@ npm run audit:p2-soak-baseline
 
 ## 5. P2-A12 托管矩阵关闭流程
 
-当前工作流 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 已定义 `ubuntu-24.04`、`macos-15`、`windows-2025` 三个独立 `platform-paths` leg，`fail-fast: false`，并定义依赖三者的 `platform-matrix-evidence` 汇总 job。阶段退出需要用户先建立 Git remote 并触发真实 hosted run，然后归档：
+当前工作流 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 已定义 `ubuntu-24.04`、`macos-15`、`windows-2025` 三个独立 `platform-paths` leg，`fail-fast: false`，并定义依赖三者的 `platform-matrix-evidence` 汇总 job；`workflow_dispatch` 允许在工作流进入默认分支后显式运行。阶段退出需要用户先建立 GitHub origin、安装并认证 GitHub CLI、把候选 `main` 推送到 `origin/main`，然后执行：
+
+```text
+npm run audit:p2-hosted-readiness
+```
+
+预检不会创建仓库、推送或触发 workflow。它要求 CLI/认证/remote/默认分支/本地分支/upstream/远端 commit/tracked 清洁状态和手动入口全部匹配，并输出绑定当前 SHA 与 run attempt 的 `gh workflow run`、`gh run list/watch/download` 与本地归档命令。只有 `ready=true` 时才按输出触发真实 hosted run，然后归档：
 
 - remote URL、汇总 JSON 自动生成的 workflow `runUrl`、commit SHA、runner image/version 和时间；
 - 三个 leg 均 success，并下载各自保留 90 天的 `p2-a12-source-<runner>-<sha>-attempt-<n>` JSON artifact；
@@ -102,7 +108,7 @@ npm run audit:p2-soak-baseline
 
 逐平台证据由 `tools/verify-platform-paths.mjs` 生成；最终结论由 `tools/verify-platform-matrix.mjs` 对三个 JSON 的原始输出、摘要、SHA-256、commit、run/attempt、workflow 和 hosted 身份重新核对后生成。两层纯分析测试与本机真实 macOS 10 项输出已经通过，只证明工具链可执行；正式分析会拒绝非 GitHub-hosted 环境，因此本机不能生成 accepted matrix artifact。
 
-下载四个 artifact 后运行 `node tools/archive-platform-matrix-evidence.mjs --input-directory <downloaded-artifacts>`。归档器会再次重放、确认受测 commit 是当前 HEAD 祖先，并把原始字节目录级原子保存到 `docs/reports/evidence/p2-a12-platform-evidence/`；不得用手工复制结果替代该步骤。
+下载四个 artifact 后运行预检报告最后给出的 `node tools/archive-platform-matrix-evidence.mjs --input-directory <download-directory>`。归档器会再次重放、确认受测 commit 是当前 HEAD 祖先，并把原始字节目录级原子保存到 `docs/reports/evidence/p2-a12-platform-evidence/`；不得省略显式 run ID、改用“最新 artifact”或手工复制结果替代该步骤。
 
 ## 5.1 P2-A11/P2-A12 统一机器结论
 
