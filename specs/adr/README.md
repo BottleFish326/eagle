@@ -39,3 +39,4 @@
 | [ADR-024](024-bounded-privacy-safe-support-diagnostics.md) | 有界、脱敏的支持诊断 | Accepted |
 | [ADR-025](025-platform-path-and-offline-root-semantics.md) | 平台路径身份与离线根目录语义 | Accepted |
 | [ADR-026](026-capability-based-extended-format-pipeline.md) | 能力驱动的扩展格式管线 | Accepted |
+| [ADR-027](027-user-profile-saved-filters.md) | 用户级保存过滤器与显式 Tag 重命名 | Accepted |

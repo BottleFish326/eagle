@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/saved-filters.schema.json",
+  "title": "Material Eagle Saved Filters",
+  "type": "object",
+  "required": ["schema", "filters"],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "filters": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "$ref": "#/$defs/savedFilter"
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "uuidV7": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "savedFilter": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "query",
+        "scope",
+        "sort",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uuidV7"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^\\S(?:.{0,126}\\S)?$"
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 4096,
+          "pattern": "^[^\\r\\n]*$"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "sort": {
+          "$ref": "#/$defs/sort"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    },
+    "scope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "const": "all-enabled-roots"
+            },
+            "rootIds": false
+          },
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": ["kind", "rootIds"],
+          "properties": {
+            "kind": {
+              "const": "selected-roots"
+            },
+            "rootIds": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "items": {
+                "$ref": "#/$defs/uuid"
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "sort": {
+      "type": "object",
+      "required": ["field", "direction"],
+      "properties": {
+        "field": {
+          "enum": [
+            "file-name",
+            "modified-at",
+            "created-at",
+            "file-size",
+            "rating",
+            "asset-kind"
+          ]
+        },
+        "direction": {
+          "enum": ["ascending", "descending"]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

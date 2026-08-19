@@ -61,6 +61,7 @@
 | 准备项 | 状态 | 证据 |
 |---|---|---|
 | P3-01 扩展格式能力管线 | Design ready | 已固定识别/属性/预览三层能力、codec 缺失降级、worker 隔离、格式矩阵、资源限额、恶意夹具要求、严格夹具 Schema 和六个实施切片；阶段 2 退出前不计作 P3 开始，见 `reports/p3-01-readiness.md` |
+| P3-03 保存过滤器 | Persistence design ready | 已固定用户级独立 YAML、根 ID 作用域、无素材快照、乐观并发及显式 Tag 重命名影响处理；阶段 2 退出前不计作 P3 开始，见 `../specs/adr/027-user-profile-saved-filters.md` |
 
 ## 已固定的关键决定
 
