@@ -144,6 +144,7 @@ jobs:
 
       - name: Install JavaScript dependencies
         run: |
+          npm ci
           npm ci --prefix apps/desktop
           npm ci --prefix integrations/obsidian-bridge
 

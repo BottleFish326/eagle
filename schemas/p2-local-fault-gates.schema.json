@@ -91,6 +91,7 @@
       "allOf": [
         { "$ref": "#/$defs/process" },
         {
+          "type": "object",
           "properties": {
             "status": { "const": 0 },
             "signal": { "const": null }
@@ -102,14 +103,17 @@
       "allOf": [
         { "$ref": "#/$defs/process" },
         {
+          "type": "object",
           "oneOf": [
             {
+              "type": "object",
               "properties": {
                 "status": { "const": null },
                 "signal": { "const": "SIGABRT" }
               }
             },
             {
+              "type": "object",
               "properties": {
                 "status": {
                   "type": "integer",
@@ -162,6 +166,7 @@
               "allOf": [
                 { "$ref": "#/$defs/cacheCase" },
                 {
+                  "type": "object",
                   "properties": {
                     "faultPoint": { "const": "after-cache-rename" }
                   }
@@ -172,6 +177,7 @@
               "allOf": [
                 { "$ref": "#/$defs/cacheCase" },
                 {
+                  "type": "object",
                   "properties": {
                     "faultPoint": { "const": "after-cache-recreate" }
                   }

@@ -42,23 +42,31 @@
   "additionalProperties": false,
   "allOf": [
     {
-      "if": { "properties": { "accepted": { "const": true } } },
+      "if": {
+        "type": "object",
+        "properties": { "accepted": { "const": true } }
+      },
       "then": {
+        "type": "object",
         "properties": {
-          "failures": { "maxItems": 0 },
+          "failures": { "type": "array", "maxItems": 0 },
           "gitCommit": { "$ref": "#/$defs/gitCommit" },
           "workflow": { "$ref": "#/$defs/acceptedWorkflow" },
           "verificationEnvironment": {
             "$ref": "#/$defs/acceptedVerificationEnvironment"
           },
           "artifacts": {
+            "type": "array",
             "minItems": 3,
             "maxItems": 3,
             "items": { "$ref": "#/$defs/acceptedArtifact" }
           }
         }
       },
-      "else": { "properties": { "failures": { "minItems": 1 } } }
+      "else": {
+        "type": "object",
+        "properties": { "failures": { "type": "array", "minItems": 1 } }
+      }
     }
   ],
   "$defs": {
@@ -234,6 +242,7 @@
       "allOf": [
         { "$ref": "#/$defs/artifact" },
         {
+          "type": "object",
           "properties": {
             "artifactName": {
               "type": "string",
@@ -291,6 +300,7 @@
       "allOf": [
         { "$ref": "#/$defs/artifactEnvironment" },
         {
+          "type": "object",
           "properties": {
             "architecture": { "type": "string", "minLength": 1 },
             "nodeVersion": { "type": "string", "pattern": "^v24\\." },
