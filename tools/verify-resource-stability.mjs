@@ -12,10 +12,14 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { buildResourceStabilityReport } from "./resource-stability-analysis.mjs";
+import {
+  assertResourceStabilityRuntime,
+  buildResourceStabilityReport,
+} from "./resource-stability-analysis.mjs";
 
 const runFile = promisify(execFile);
 const repository = path.resolve(import.meta.dirname, "..");
+assertResourceStabilityRuntime(process.versions.node);
 const defaults = {
   durationSeconds: 28_800,
   warmupSeconds: 60,

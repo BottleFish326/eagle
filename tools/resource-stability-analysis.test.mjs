@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assertResourceStabilityRuntime,
   buildResourceStabilityReport,
   linearSlope,
 } from "./resource-stability-analysis.mjs";
@@ -63,6 +64,7 @@ test("rejects sparse native monitoring even when endpoint values look bounded", 
 test("rejects untraceable revision, signaled exit, invalid shape, and overflow", () => {
   const input = acceptedInput();
   input.gitCommit = "dirty";
+  input.environment.nodeVersion = "v25.9.0";
   input.exit = { code: null, signal: "SIGTERM" };
   input.internalSamples[3].scheduler.waitingTotal = "unknown";
   input.internalSamples[4].cache.entryCount =
@@ -72,6 +74,7 @@ test("rejects untraceable revision, signaled exit, invalid shape, and overflow",
 
   assert.equal(report.accepted, false);
   assert.ok(report.failures.some((failure) => failure.includes("Git commit")));
+  assert.ok(report.failures.some((failure) => failure.includes("Node.js 24")));
   assert.ok(report.failures.some((failure) => failure.includes("SIGTERM")));
   assert.ok(
     report.failures.some((failure) => failure.includes("invalid shape")),
@@ -80,6 +83,14 @@ test("rejects untraceable revision, signaled exit, invalid shape, and overflow",
     report.failures.some((failure) =>
       failure.includes("thumbnail cache exceeded"),
     ),
+  );
+});
+
+test("requires the repository Node.js major before starting expensive work", () => {
+  assert.doesNotThrow(() => assertResourceStabilityRuntime("24.19.0"));
+  assert.throws(
+    () => assertResourceStabilityRuntime("25.9.0"),
+    /requires Node\.js 24\.x/u,
   );
 });
 

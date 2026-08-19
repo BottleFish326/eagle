@@ -58,6 +58,11 @@ export function buildResourceStabilityReport({
   if (!/^[0-9a-f]{40,64}$/u.test(gitCommit)) {
     failures.push("resource soak Git commit was missing or invalid");
   }
+  if (!/^v24\./u.test(environment?.nodeVersion ?? "")) {
+    failures.push(
+      "resource soak must run on the repository Node.js 24 runtime",
+    );
+  }
   if (exit?.code !== 0) {
     failures.push(`resource soak exited with code ${String(exit?.code)}`);
   }
@@ -243,6 +248,15 @@ export function buildResourceStabilityReport({
     sampleParseErrors,
     stderr: stderr.trim(),
   };
+}
+
+export function assertResourceStabilityRuntime(nodeVersion) {
+  const major = Number.parseInt(nodeVersion.split(".", 1)[0], 10);
+  if (major !== 24) {
+    throw new Error(
+      `resource stability evidence requires Node.js 24.x, received ${nodeVersion}`,
+    );
+  }
 }
 
 export function linearSlope(samples, key) {
