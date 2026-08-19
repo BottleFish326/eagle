@@ -1,6 +1,6 @@
 # 缩略图协议
 
-本文档定义 P1-06 的桌面端缩略图请求、缓存与错误协议。缩略图是可删除派生数据，任何调用都不得修改原始素材或相邻 Sidecar。
+本文档定义 P1-06 与 P2-05 的桌面端缩略图请求、缓存、生命周期与错误协议。缩略图是可删除派生数据，任何调用都不得修改原始素材或相邻 Sidecar。
 
 ## 1. 调用顺序
 
@@ -103,11 +103,64 @@ decoder version
     .material-eagle-thumbnail-cache
     ab/
       ab...64hex.png
+      ab...64hex.json
 ```
 
-键命中前会验证缓存图片。源文件大小或 mtime 改变、请求尺寸改变或解码器升级都会得到新键，不复用旧 PNG；IPC 中的 `sourceModifiedUnixMs` 只用于界面显示，缓存键使用文件系统可提供的完整时间精度。
+JSON 描述文件只包含 Schema、缓存键、不可逆源令牌、解码器版本和请求长边：
 
-## 5. 清理
+```json
+{
+  "schema": 1,
+  "cacheKey": "64-lowercase-hex-characters",
+  "sourceToken": "64-lowercase-hex-characters",
+  "decoderVersion": "image-0.25.9-triangle-png-v1",
+  "maxEdge": 256
+}
+```
+
+`sourceToken` 是路径键、稳定 ID、大小和完整 mtime 的不可逆 SHA-256，不保存原路径。键命中前同时验证描述与缓存图片，并更新 PNG mtime 作为最后使用时间。源文件大小或 mtime 改变、请求尺寸改变或解码器升级都会得到新键，不复用旧 PNG；IPC 中的 `sourceModifiedUnixMs` 只用于界面显示，缓存键使用文件系统可提供的完整时间精度。
+
+PNG 与 JSON 均使用同分片临时文件、文件同步和原子持久化。只有文件对完整、描述匹配且 PNG 可解码时才命中；进程中断留下的临时文件或半项会在维护时回收。
+
+## 5. 生命周期维护
+
+默认策略：
+
+| 边界 | 默认值 |
+|---|---:|
+| 条目数 | 20,000 |
+| 总空间 | 1 GiB，包含 PNG 与 JSON，不含保护标记 |
+| 最后使用后保留 | 30 天 |
+
+容量估计超过边界时立即维护；其他写入按最多 64 次的间隔维护。应用启动时维护损坏、旧解码器、过期和超容量项；所有启用且可用的素材根都至少完成一次完整扫描、且当前并行扫描全部结束后，才使用内存目录源令牌集合继续回收孤立项。扫描失败或取消不建立该根的目录权威。扫描期间不执行目录快照孤立回收，避免把未完成扫描当作真相。
+
+Tauri 命令：`maintain_thumbnail_cache`，无参数；活动扫描期间返回 `recovery-busy`。
+
+```json
+{
+  "removedEntries": 3,
+  "removedFiles": 6,
+  "removedBytes": 8192,
+  "incompatibleEntries": 1,
+  "orphanEntries": 1,
+  "expiredEntries": 1,
+  "capacityEntries": 0,
+  "stats": {
+    "layoutVersion": 2,
+    "fileCount": 4,
+    "entryCount": 2,
+    "byteCount": 4096,
+    "maxEntries": 20000,
+    "maxBytes": 1073741824,
+    "retentionDays": 30,
+    "decoderVersion": "image-0.25.9-triangle-png-v1"
+  }
+}
+```
+
+维护按以下优先级归类并删除：不完整/无法识别项、旧解码器项、孤立项、过期项、LRU 容量项。报告是派生计数，不成为第二份目录或数据库。
+
+## 6. 全量清理与中断恢复
 
 Tauri 命令：`clear_thumbnail_cache`，无参数。
 
@@ -118,9 +171,11 @@ Tauri 命令：`clear_thumbnail_cache`，无参数。
 }
 ```
 
-清理与读取/写入互斥，只处理应用缓存目录中的固定 `thumbnails-v1`。返回计数不包含保护标记。素材、Sidecar、根目录配置和内存目录不在删除边界内；下一次可见请求会重新生成 PNG。
+清理与读取/写入互斥，只处理应用缓存目录中的固定 `thumbnails-v1`。返回计数包含 PNG 和 JSON，不包含保护标记。素材、Sidecar、根目录配置和内存目录不在删除边界内；下一次可见请求会重新生成 PNG。
 
-## 6. 命令级错误
+清理先写入 tombstone 所有权标记，再把活动根原子改名为同级 `.material-eagle-thumbnail-cache-gc-<UUIDv7>`，建立新的带标记空根，最后回收旧根。启动只删除名称 UUID 合法且所有权标记匹配的 tombstone；相似名称的未标记目录不删除。进程在根改名后或新根建立后中断，重启都能继续运行并按需重建。
+
+## 7. 命令级错误
 
 命令调用失败时返回以下可区分结构；素材自身的正常降级仍使用 `placeholder`，不是命令错误。
 
@@ -129,6 +184,8 @@ asset-not-found  assetKey 未出现在内存目录
 invalid-request  尺寸或缓存键不合法
 cache            缓存边界、读取或写入失败
 internal         任务或共享状态失败
+recovery-busy    活动素材扫描尚未形成完整目录快照
+recovery-incomplete 仍有可用素材根尚未完成一次完整扫描
 ```
 
 前端应保留 `kind`，显示 `message`；不得把命令错误静默转换为成功占位。

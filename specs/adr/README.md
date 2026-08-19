@@ -34,3 +34,4 @@
 | [ADR-019](019-stable-identity-and-explicit-relink.md) | 稳定身份扫描收敛与显式 Sidecar 重新关联 | Accepted |
 | [ADR-020](020-durable-batch-metadata-transactions.md) | 纯文件批量元数据事务与条件恢复 | Accepted |
 | [ADR-021](021-explicit-metadata-and-sync-conflicts.md) | 显式元数据合并与同步冲突副本诊断 | Accepted |
+| [ADR-022](022-bounded-thumbnail-cache-lifecycle.md) | 有界缩略图缓存生命周期与中断安全清理 | Accepted |

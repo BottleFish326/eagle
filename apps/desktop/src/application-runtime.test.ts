@@ -59,4 +59,14 @@ describe("application recovery command wire", () => {
       }),
     ).toBe("发现旧版缓存，已自动重建并移除 42 项");
   });
+
+  it("describes startup lifecycle maintenance", () => {
+    expect(
+      cacheStartupLabel({
+        disposition: "maintained",
+        removedFiles: 6,
+        removedBytes: 8192,
+      }),
+    ).toBe("启动时已回收 6 个无效缓存文件");
+  });
 });

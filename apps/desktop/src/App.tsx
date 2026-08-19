@@ -36,6 +36,7 @@ import { RootManager } from "./RootManager";
 import type { ReconciliationReport, RelinkCandidate } from "./reconciliation";
 import { SettingsManager } from "./SettingsManager";
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
+import type { CacheMaintenanceReport } from "./thumbnail";
 import {
   composeAssetQuery,
   cycleTagFilter,
@@ -108,6 +109,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const [rootBusy, setRootBusy] = useState(false);
   const [vaultBusy, setVaultBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
+  const [cacheMaintenanceBusy, setCacheMaintenanceBusy] = useState(false);
   const [diagnosticBusy, setDiagnosticBusy] = useState(false);
   const [metadataTransactions, setMetadataTransactions] = useState<
     MetadataTransactionSummary[]
@@ -129,6 +131,8 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     useState<ApplicationConfig>();
   const [recoveryStatus, setRecoveryStatus] = useState<RuntimeRecoveryStatus>();
   const [resetReport, setResetReport] = useState<DerivedStateResetReport>();
+  const [cacheMaintenanceReport, setCacheMaintenanceReport] =
+    useState<CacheMaintenanceReport>();
   const [diagnosticReport, setDiagnosticReport] =
     useState<DiagnosticExportReport>();
   const [preferencesReady, setPreferencesReady] = useState(false);
@@ -962,6 +966,29 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     }
   };
 
+  const reclaimThumbnailCache = async () => {
+    if (activeScans.length > 0) return;
+    setCacheMaintenanceBusy(true);
+    try {
+      const report = await api.maintainThumbnailCache();
+      setCacheMaintenanceReport(report);
+      setRecoveryStatus((current) =>
+        current ? { ...current, cacheStats: report.stats } : current,
+      );
+      setNotice({
+        tone: "info",
+        message: `已回收 ${report.removedEntries} 个无效缓存条目，当前保留 ${report.stats.entryCount} 项`,
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `缓存回收失败：${errorMessage(error)}`,
+      });
+    } finally {
+      setCacheMaintenanceBusy(false);
+    }
+  };
+
   const createDiagnosticExport = async () => {
     setDiagnosticBusy(true);
     try {
@@ -1485,6 +1512,8 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         vaults={vaults}
       />
       <SettingsManager
+        cacheMaintenanceBusy={cacheMaintenanceBusy}
+        cacheMaintenanceReport={cacheMaintenanceReport}
         config={displayedApplicationConfig}
         diagnosticBusy={diagnosticBusy}
         diagnosticReport={diagnosticReport}
@@ -1495,6 +1524,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         }
         onDismissTransaction={dismissMetadataTransaction}
         onExportDiagnostics={createDiagnosticExport}
+        onMaintainCache={reclaimThumbnailCache}
         onResetDerived={rebuildDerivedState}
         onResetView={resetSavedView}
         onRestoreTransaction={(transaction) =>

@@ -72,11 +72,13 @@ import type { AssetRecord, LibraryScanEvent } from "./scanner";
 import { cancelLibraryScan, startLibraryScan } from "./scanner";
 import type {
   CacheClearReport,
+  CacheMaintenanceReport,
   ThumbnailOutcome,
   ThumbnailRequest,
 } from "./thumbnail";
 import {
   clearThumbnailCache,
+  maintainThumbnailCache,
   readThumbnail,
   requestThumbnail,
 } from "./thumbnail";
@@ -121,6 +123,7 @@ export interface DesktopApi {
   requestThumbnail(input: ThumbnailRequest): Promise<ThumbnailOutcome>;
   readThumbnail(cacheKey: string): Promise<ArrayBuffer>;
   clearThumbnailCache(): Promise<CacheClearReport>;
+  maintainThumbnailCache(): Promise<CacheMaintenanceReport>;
   listObsidianVaults(): Promise<ObsidianVaultStatus[]>;
   addObsidianVault(input: AddObsidianVaultInput): Promise<ObsidianVaultStatus>;
   updateObsidianVault(
@@ -159,6 +162,7 @@ export const tauriDesktopApi: DesktopApi = {
   requestThumbnail,
   readThumbnail,
   clearThumbnailCache,
+  maintainThumbnailCache,
   listObsidianVaults,
   addObsidianVault,
   updateObsidianVault,

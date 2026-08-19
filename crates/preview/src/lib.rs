@@ -1,6 +1,7 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use asset_core::{AssetKind, AssetRecord};
 use serde::{Deserialize, Serialize};
@@ -16,9 +17,29 @@ mod decoder;
 mod limiter;
 
 pub const THUMBNAIL_DECODER_VERSION: &str = "image-0.25.9-triangle-png-v1";
-pub const THUMBNAIL_CACHE_LAYOUT_VERSION: u32 = 1;
+pub const THUMBNAIL_CACHE_LAYOUT_VERSION: u32 = 2;
 pub const MIN_THUMBNAIL_EDGE: u32 = 16;
 pub const MAX_THUMBNAIL_EDGE: u32 = 2_048;
+pub const DEFAULT_CACHE_MAX_BYTES: u64 = 1_073_741_824;
+pub const DEFAULT_CACHE_MAX_ENTRIES: u64 = 20_000;
+pub const DEFAULT_CACHE_RETENTION_DAYS: u64 = 30;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CachePolicy {
+    pub max_bytes: u64,
+    pub max_entries: u64,
+    pub max_age: Duration,
+}
+
+impl Default for CachePolicy {
+    fn default() -> Self {
+        Self {
+            max_bytes: DEFAULT_CACHE_MAX_BYTES,
+            max_entries: DEFAULT_CACHE_MAX_ENTRIES,
+            max_age: Duration::from_secs(DEFAULT_CACHE_RETENTION_DAYS * 24 * 60 * 60),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,6 +101,7 @@ pub struct CacheClearReport {
 pub enum CacheStartupDisposition {
     Created,
     Reused,
+    Maintained,
     RebuiltMissingMarker,
     RebuiltIncompatible,
 }
@@ -89,6 +111,7 @@ impl std::fmt::Display for CacheStartupDisposition {
         formatter.write_str(match self {
             Self::Created => "created",
             Self::Reused => "reused",
+            Self::Maintained => "maintained",
             Self::RebuiltMissingMarker => "rebuilt-missing-marker",
             Self::RebuiltIncompatible => "rebuilt-incompatible",
         })
@@ -108,7 +131,25 @@ pub struct CacheStartupReport {
 pub struct CacheStats {
     pub layout_version: u32,
     pub file_count: u64,
+    pub entry_count: u64,
     pub byte_count: u64,
+    pub max_entries: u64,
+    pub max_bytes: u64,
+    pub retention_days: u64,
+    pub decoder_version: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheMaintenanceReport {
+    pub removed_entries: u64,
+    pub removed_files: u64,
+    pub removed_bytes: u64,
+    pub incompatible_entries: u64,
+    pub orphan_entries: u64,
+    pub expired_entries: u64,
+    pub capacity_entries: u64,
+    pub stats: CacheStats,
 }
 
 #[derive(Debug, Error)]
@@ -119,6 +160,8 @@ pub enum PreviewError {
     InvalidMaxEdge(u32),
     #[error("thumbnail concurrency must be between 1 and 32, got {0}")]
     InvalidConcurrency(usize),
+    #[error("invalid thumbnail cache policy: {0}")]
+    InvalidCachePolicy(String),
     #[error("unsafe thumbnail cache root: {0}")]
     UnsafeCacheRoot(PathBuf),
     #[error("thumbnail cache I/O error at {path}: {source}")]
@@ -127,6 +170,8 @@ pub enum PreviewError {
         #[source]
         source: std::io::Error,
     },
+    #[error("thumbnail cache metadata error at {path}: {message}")]
+    CacheMetadata { path: PathBuf, message: String },
     #[error("invalid thumbnail cache key: {0}")]
     InvalidCacheKey(String),
     #[error("thumbnail cache entry does not exist: {0}")]
@@ -153,7 +198,28 @@ impl ThumbnailService {
         if !(1..=32).contains(&max_concurrent) {
             return Err(PreviewError::InvalidConcurrency(max_concurrent));
         }
-        let (cache, startup) = ThumbnailCache::open(base_cache_directory)?;
+        Self::open_with_policy(base_cache_directory, max_concurrent, CachePolicy::default())
+    }
+
+    /// Opens the cache with explicit lifecycle bounds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PreviewError`] when the policy is empty or the cache is unsafe.
+    pub fn open_with_policy(
+        base_cache_directory: &Path,
+        max_concurrent: usize,
+        policy: CachePolicy,
+    ) -> Result<Self, PreviewError> {
+        if !(1..=32).contains(&max_concurrent) {
+            return Err(PreviewError::InvalidConcurrency(max_concurrent));
+        }
+        if policy.max_bytes == 0 || policy.max_entries == 0 || policy.max_age.is_zero() {
+            return Err(PreviewError::InvalidCachePolicy(
+                "max bytes, max entries, and max age must all be positive".into(),
+            ));
+        }
+        let (cache, startup) = ThumbnailCache::open(base_cache_directory, policy)?;
         Ok(Self {
             cache,
             limiter: DecodeLimiter::new(max_concurrent),
@@ -185,7 +251,7 @@ impl ThumbnailService {
             ));
         }
 
-        let _cache_guard = self.cache.read_guard()?;
+        let cache_guard = self.cache.read_guard()?;
         let Some(mut version) = read_source_version(&record.path) else {
             return Ok(placeholder(
                 record,
@@ -194,7 +260,8 @@ impl ThumbnailService {
             ));
         };
         let mut key = thumbnail_key(record, &version, max_edge);
-        if let Some(entry) = self.cache.lookup(&key)? {
+        let mut source_identity = source_token(record, &version);
+        if let Some(entry) = self.cache.lookup(&key, &source_identity, max_edge)? {
             return Ok(ready(
                 record,
                 key,
@@ -216,8 +283,9 @@ impl ThumbnailService {
         if latest != version {
             version = latest;
             key = thumbnail_key(record, &version, max_edge);
+            source_identity = source_token(record, &version);
         }
-        if let Some(entry) = self.cache.lookup(&key)? {
+        if let Some(entry) = self.cache.lookup(&key, &source_identity, max_edge)? {
             return Ok(ready(
                 record,
                 key,
@@ -239,15 +307,12 @@ impl ThumbnailService {
                 "asset changed while its thumbnail was being generated".into(),
             ));
         }
-        self.cache.store(&key, &decoded.bytes)?;
-        Ok(ready(
-            record,
-            key,
-            decoded.width,
-            decoded.height,
-            &version,
-            false,
-        ))
+        self.cache
+            .store(&key, &source_identity, max_edge, &decoded.bytes)?;
+        let outcome = ready(record, key, decoded.width, decoded.height, &version, false);
+        drop(cache_guard);
+        self.cache.maintain_if_due()?;
+        Ok(outcome)
     }
 
     /// Reads a validated cached PNG as raw bytes for efficient IPC transfer.
@@ -280,6 +345,24 @@ impl ThumbnailService {
     /// Returns [`PreviewError`] if the cache boundary or marker is no longer safe.
     pub fn cache_stats(&self) -> Result<CacheStats, PreviewError> {
         self.cache.stats()
+    }
+
+    /// Reclaims entries that cannot belong to the current in-memory catalog.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PreviewError`] if the cache boundary becomes unsafe or maintenance fails.
+    pub fn maintain(
+        &self,
+        records: &[AssetRecord],
+    ) -> Result<CacheMaintenanceReport, PreviewError> {
+        let active_sources = records
+            .iter()
+            .filter_map(|record| {
+                read_source_version(&record.path).map(|version| source_token(record, &version))
+            })
+            .collect::<BTreeSet<_>>();
+        self.cache.maintain(Some(&active_sources))
     }
 }
 
@@ -335,6 +418,22 @@ fn thumbnail_key(record: &AssetRecord, version: &SourceVersion, max_edge: u32) -
     format!("{:x}", digest.finalize())
 }
 
+fn source_token(record: &AssetRecord, version: &SourceVersion) -> String {
+    let mut digest = Sha256::new();
+    for part in [
+        format!("path:{}", record.key),
+        record
+            .id
+            .map_or_else(|| "id:none".into(), |id| format!("id:{id}")),
+        version.size.to_string(),
+        version.modified_unix_ns.to_string(),
+    ] {
+        digest.update(part.as_bytes());
+        digest.update([0]);
+    }
+    format!("{:x}", digest.finalize())
+}
+
 fn ready(
     record: &AssetRecord,
     cache_key: String,
@@ -372,13 +471,13 @@ fn placeholder(
 
 #[cfg(test)]
 mod tests {
-    use std::fs::{self, File};
+    use std::fs::{self, File, FileTimes, OpenOptions};
     use std::io::BufWriter;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Barrier};
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     use asset_core::{AssetKind, AssetRecord};
     use image::codecs::gif::{GifEncoder, Repeat};
@@ -387,8 +486,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        CacheStartupDisposition, DecodeLimiter, ThumbnailOutcome, ThumbnailPlaceholderReason,
-        ThumbnailService,
+        CachePolicy, CacheStartupDisposition, DecodeLimiter, ThumbnailOutcome,
+        ThumbnailPlaceholderReason, ThumbnailService,
     };
 
     #[test]
@@ -495,7 +594,7 @@ mod tests {
 
         let report = service.clear().expect("clear cache");
 
-        assert_eq!(report.removed_files, 1);
+        assert_eq!(report.removed_files, 2);
         assert!(report.removed_bytes > 0);
         assert!(service.read(&thumbnail.cache_key).is_err());
         assert_eq!(
@@ -504,6 +603,164 @@ mod tests {
         );
         assert_eq!(fs::read(&sidecar).expect("sidecar after"), sidecar_contents);
         assert_eq!(png_files(service.cache.root()), 0);
+    }
+
+    #[test]
+    fn capacity_uses_recent_access_and_keeps_the_entry_bound() {
+        let directory = tempdir().expect("tempdir");
+        let assets = directory.path().join("assets");
+        fs::create_dir(&assets).expect("asset directory");
+        let records = (0..3)
+            .map(|index| {
+                let path = assets.join(format!("asset-{index}.png"));
+                write_solid_image(&path, ImageFormat::Png, 80, 40, [index * 40, 0, 255, 255]);
+                record(&path)
+            })
+            .collect::<Vec<_>>();
+        let service = ThumbnailService::open_with_policy(
+            &directory.path().join("cache"),
+            1,
+            CachePolicy {
+                max_bytes: u64::MAX,
+                max_entries: 2,
+                max_age: Duration::from_secs(60 * 60),
+            },
+        )
+        .expect("service");
+
+        let first = expect_ready(service.request(&records[0], 32).expect("first"));
+        let second = expect_ready(service.request(&records[1], 32).expect("second"));
+        thread::sleep(Duration::from_millis(20));
+        assert!(expect_ready(service.request(&records[0], 32).expect("touch first")).cache_hit);
+        let third = expect_ready(service.request(&records[2], 32).expect("third"));
+
+        assert_eq!(service.cache_stats().expect("stats").entry_count, 2);
+        assert!(service.read(&first.cache_key).is_ok());
+        assert!(service.read(&second.cache_key).is_err());
+        assert!(service.read(&third.cache_key).is_ok());
+    }
+
+    #[test]
+    fn maintenance_reclaims_expired_incompatible_and_orphan_entries() {
+        let directory = tempdir().expect("tempdir");
+        let assets = directory.path().join("assets");
+        fs::create_dir(&assets).expect("asset directory");
+        let records = (0..4)
+            .map(|index| {
+                let path = assets.join(format!("asset-{index}.png"));
+                write_image(&path, ImageFormat::Png);
+                record(&path)
+            })
+            .collect::<Vec<_>>();
+        let service = ThumbnailService::open_with_policy(
+            &directory.path().join("cache"),
+            1,
+            CachePolicy {
+                max_bytes: u64::MAX,
+                max_entries: 100,
+                max_age: Duration::from_secs(60),
+            },
+        )
+        .expect("service");
+        let thumbnails = records
+            .iter()
+            .map(|record| expect_ready(service.request(record, 32).expect("thumbnail")))
+            .collect::<Vec<_>>();
+
+        let expired = cache_entry_path(&service, &thumbnails[0].cache_key, "png");
+        OpenOptions::new()
+            .write(true)
+            .open(&expired)
+            .expect("open expired entry")
+            .set_times(FileTimes::new().set_modified(SystemTime::now() - Duration::from_secs(120)))
+            .expect("age cache entry");
+        let incompatible = cache_entry_path(&service, &thumbnails[1].cache_key, "json");
+        let mut descriptor: serde_json::Value =
+            serde_json::from_slice(&fs::read(&incompatible).expect("descriptor"))
+                .expect("descriptor json");
+        descriptor["decoderVersion"] = "retired-decoder".into();
+        fs::write(
+            &incompatible,
+            serde_json::to_vec(&descriptor).expect("descriptor bytes"),
+        )
+        .expect("write incompatible descriptor");
+
+        let report = service.maintain(&records[..3]).expect("maintenance");
+
+        assert_eq!(report.removed_entries, 3);
+        assert_eq!(report.removed_files, 6);
+        assert_eq!(report.expired_entries, 1);
+        assert_eq!(report.incompatible_entries, 1);
+        assert_eq!(report.orphan_entries, 1);
+        assert_eq!(report.capacity_entries, 0);
+        assert_eq!(report.stats.entry_count, 1);
+        assert!(service.read(&thumbnails[0].cache_key).is_err());
+        assert!(service.read(&thumbnails[1].cache_key).is_err());
+        assert!(service.read(&thumbnails[2].cache_key).is_ok());
+        assert!(service.read(&thumbnails[3].cache_key).is_err());
+    }
+
+    #[test]
+    fn startup_recovers_partial_entries_and_an_interrupted_rotating_clear() {
+        let directory = tempdir().expect("tempdir");
+        let asset = directory.path().join("asset.png");
+        let cache = directory.path().join("cache");
+        write_image(&asset, ImageFormat::Png);
+        let sidecar = sidecar_path_for(&asset);
+        fs::write(&sidecar, "user metadata").expect("sidecar");
+        let asset_digest = digest_file(&asset).expect("asset digest");
+        let sidecar_contents = fs::read(&sidecar).expect("sidecar contents");
+        let service = ThumbnailService::open(&cache, 1).expect("service");
+        let thumbnail = expect_ready(service.request(&record(&asset), 32).expect("thumbnail"));
+        let root = service.cache.root().to_path_buf();
+        fs::remove_file(cache_entry_path(&service, &thumbnail.cache_key, "json"))
+            .expect("remove descriptor");
+        drop(service);
+
+        let recovered = ThumbnailService::open(&cache, 1).expect("recover partial entry");
+        assert_eq!(
+            recovered.startup_report().disposition,
+            CacheStartupDisposition::Maintained
+        );
+        assert_eq!(recovered.cache_stats().expect("stats").entry_count, 0);
+        drop(recovered);
+
+        fs::write(
+            root.join(".material-eagle-thumbnail-cache-tombstone"),
+            "material-eagle-thumbnail-cache-tombstone-v1\n",
+        )
+        .expect("tombstone ownership marker");
+        let tombstone =
+            cache.join(".material-eagle-thumbnail-cache-gc-0198a9b2-43c0-7cb0-a733-6dc58f829814");
+        fs::rename(&root, &tombstone).expect("simulate interrupted clear");
+        let reopened = ThumbnailService::open(&cache, 1).expect("recover interrupted clear");
+
+        assert!(!tombstone.exists());
+        assert_eq!(reopened.cache_stats().expect("stats").entry_count, 0);
+        assert_eq!(
+            digest_file(&asset).expect("asset digest after"),
+            asset_digest
+        );
+        assert_eq!(fs::read(&sidecar).expect("sidecar after"), sidecar_contents);
+        let rebuilt = expect_ready(reopened.request(&record(&asset), 32).expect("rebuild"));
+        assert!(!rebuilt.cache_hit);
+    }
+
+    #[test]
+    fn startup_does_not_delete_an_unowned_tombstone_named_directory() {
+        let directory = tempdir().expect("tempdir");
+        let cache = directory.path().join("cache");
+        let service = ThumbnailService::open(&cache, 1).expect("service");
+        drop(service);
+        let unowned =
+            cache.join(".material-eagle-thumbnail-cache-gc-0198a9b2-43c0-7cb0-a733-6dc58f829814");
+        fs::create_dir(&unowned).expect("unowned directory");
+        fs::write(unowned.join("private.txt"), "not cache data").expect("unowned content");
+
+        let reopened = ThumbnailService::open(&cache, 1).expect("reopen service");
+
+        assert!(unowned.join("private.txt").is_file());
+        assert_eq!(reopened.cache_stats().expect("stats").entry_count, 0);
     }
 
     #[test]
@@ -754,6 +1011,14 @@ mod tests {
             ThumbnailOutcome::Ready { thumbnail } => thumbnail,
             ThumbnailOutcome::Placeholder { message, .. } => panic!("placeholder: {message}"),
         }
+    }
+
+    fn cache_entry_path(service: &ThumbnailService, cache_key: &str, extension: &str) -> PathBuf {
+        service
+            .cache
+            .root()
+            .join(&cache_key[..2])
+            .join(format!("{cache_key}.{extension}"))
     }
 
     fn png_files(root: &Path) -> usize {

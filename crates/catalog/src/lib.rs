@@ -145,6 +145,19 @@ impl AssetCatalog {
             .collect()
     }
 
+    /// Returns a stable snapshot of every derived catalog record.
+    ///
+    /// Callers use this to reconcile other rebuildable state, such as thumbnail
+    /// cache entries, without exposing or persisting an additional index.
+    #[must_use]
+    pub fn records(&self) -> Vec<AssetRecord> {
+        self.index
+            .query(&AssetQuery::default())
+            .into_iter()
+            .filter_map(|key| self.index.get(&key).cloned())
+            .collect()
+    }
+
     /// Atomically replaces one root's derived records after a completed scan and
     /// reports stable-ID path changes for transient UI state reconciliation.
     pub fn reconcile_root(

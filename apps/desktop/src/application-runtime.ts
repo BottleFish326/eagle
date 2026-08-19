@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 
+import type { CacheStats } from "./thumbnail";
+
 export type SavedTagFilterState = "include" | "exclude";
 
 export interface UiPreferences {
@@ -21,7 +23,11 @@ export interface ApplicationPaths {
 }
 
 export type CacheStartupDisposition =
-  "created" | "reused" | "rebuilt-missing-marker" | "rebuilt-incompatible";
+  | "created"
+  | "reused"
+  | "maintained"
+  | "rebuilt-missing-marker"
+  | "rebuilt-incompatible";
 
 export interface CacheStartupReport {
   disposition: CacheStartupDisposition;
@@ -32,6 +38,7 @@ export interface CacheStartupReport {
 export interface RuntimeRecoveryStatus {
   paths: ApplicationPaths;
   cacheStartup: CacheStartupReport;
+  cacheStats: CacheStats;
 }
 
 export interface DerivedStateResetReport {
@@ -113,6 +120,8 @@ export function cacheStartupLabel(report: CacheStartupReport): string {
       return "已创建兼容缓存";
     case "reused":
       return "缓存版本兼容，已复用";
+    case "maintained":
+      return `启动时已回收 ${report.removedFiles} 个无效缓存文件`;
     case "rebuilt-missing-marker":
       return `发现无版本缓存，已自动重建并移除 ${report.removedFiles} 项`;
     case "rebuilt-incompatible":

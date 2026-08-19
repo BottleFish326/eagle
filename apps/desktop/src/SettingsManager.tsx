@@ -9,20 +9,24 @@ import {
 } from "./application-runtime";
 import { Icon } from "./Icon";
 import type { MetadataTransactionSummary } from "./metadata-transactions";
+import type { CacheMaintenanceReport } from "./thumbnail";
 import { formatBytes } from "./ui-model";
 
 export function SettingsManager({
   open,
   config,
   recovery,
+  cacheMaintenanceReport,
   resetReport,
   diagnosticReport,
   scanActive,
   resetBusy,
+  cacheMaintenanceBusy,
   diagnosticBusy,
   onClose,
   onResetView,
   onResetDerived,
+  onMaintainCache,
   onExportDiagnostics,
   onCopyDiagnosticPath,
   transactions,
@@ -34,16 +38,19 @@ export function SettingsManager({
   open: boolean;
   config?: ApplicationConfig;
   recovery?: RuntimeRecoveryStatus;
+  cacheMaintenanceReport?: CacheMaintenanceReport;
   resetReport?: DerivedStateResetReport;
   diagnosticReport?: DiagnosticExportReport;
   scanActive: boolean;
   resetBusy: boolean;
+  cacheMaintenanceBusy: boolean;
   diagnosticBusy: boolean;
   transactions: readonly MetadataTransactionSummary[];
   transactionBusy?: string;
   onClose: () => void;
   onResetView: () => void;
   onResetDerived: () => Promise<void>;
+  onMaintainCache: () => Promise<void>;
   onExportDiagnostics: () => Promise<void>;
   onCopyDiagnosticPath: () => Promise<void>;
   onContinueTransaction: (
@@ -227,6 +234,41 @@ export function SettingsManager({
                 </p>
               </div>
             </div>
+            {recovery ? (
+              <dl className="settings-facts">
+                <div>
+                  <dt>缓存条目</dt>
+                  <dd>
+                    {recovery.cacheStats.entryCount} /{" "}
+                    {recovery.cacheStats.maxEntries}
+                  </dd>
+                </div>
+                <div>
+                  <dt>缓存空间</dt>
+                  <dd>
+                    {formatBytes(recovery.cacheStats.byteCount)} /{" "}
+                    {formatBytes(recovery.cacheStats.maxBytes)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>保留周期</dt>
+                  <dd>{recovery.cacheStats.retentionDays} 天</dd>
+                </div>
+                <div>
+                  <dt>解码器</dt>
+                  <dd>{recovery.cacheStats.decoderVersion}</dd>
+                </div>
+              </dl>
+            ) : null}
+            {cacheMaintenanceReport ? (
+              <p className="settings-result" role="status">
+                上次回收移除 {cacheMaintenanceReport.removedEntries}{" "}
+                个缓存条目（
+                {formatBytes(
+                  cacheMaintenanceReport.removedBytes,
+                )}），当前保留 {cacheMaintenanceReport.stats.entryCount} 项。
+              </p>
+            ) : null}
             {resetReport ? (
               <p className="settings-result" role="status">
                 上次重建移除 {resetReport.cache.removedFiles} 个缓存文件（
@@ -235,6 +277,15 @@ export function SettingsManager({
                 {resetReport.catalogAssetsRemoved} 项素材。
               </p>
             ) : null}
+            <button
+              className="wide-action"
+              disabled={cacheMaintenanceBusy || resetBusy || scanActive}
+              onClick={() => void onMaintainCache()}
+              type="button"
+            >
+              <Icon name="refresh" size={15} />
+              {cacheMaintenanceBusy ? "正在回收…" : "立即回收无效缓存"}
+            </button>
             <button
               className={`wide-action${confirmReset ? " wide-action--danger" : ""}`}
               disabled={resetBusy || scanActive}

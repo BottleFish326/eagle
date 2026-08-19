@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   clearThumbnailCache,
+  maintainThumbnailCache,
   readThumbnail,
   requestThumbnail,
   type ThumbnailOutcome,
@@ -50,5 +51,31 @@ describe("thumbnail commands", () => {
 
     await expect(clearThumbnailCache(call)).resolves.toEqual(report);
     expect(call).toHaveBeenCalledWith("clear_thumbnail_cache");
+  });
+
+  it("reclaims cache entries through the lifecycle command", async () => {
+    const report = {
+      removedEntries: 3,
+      removedFiles: 6,
+      removedBytes: 8192,
+      incompatibleEntries: 1,
+      orphanEntries: 1,
+      expiredEntries: 1,
+      capacityEntries: 0,
+      stats: {
+        layoutVersion: 2,
+        fileCount: 4,
+        entryCount: 2,
+        byteCount: 4096,
+        maxEntries: 20_000,
+        maxBytes: 1_073_741_824,
+        retentionDays: 30,
+        decoderVersion: "test-v2",
+      },
+    };
+    const call = vi.fn().mockResolvedValue(report);
+
+    await expect(maintainThumbnailCache(call)).resolves.toEqual(report);
+    expect(call).toHaveBeenCalledWith("maintain_thumbnail_cache");
   });
 });

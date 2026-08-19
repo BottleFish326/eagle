@@ -46,6 +46,16 @@ export function createDemoDesktopApi(
       removedFiles: 0,
       removedBytes: 0,
     },
+    cacheStats: {
+      layoutVersion: 2,
+      fileCount: 0,
+      entryCount: 0,
+      byteCount: 0,
+      maxEntries: 20_000,
+      maxBytes: 1_073_741_824,
+      retentionDays: 30,
+      decoderVersion: "demo-preview-v1",
+    },
   };
   const previewKeys = new Map<string, string>();
   const previewBytes = new Map<string, Promise<ArrayBuffer>>();
@@ -64,6 +74,9 @@ export function createDemoDesktopApi(
       return structuredClone(applicationConfig);
     },
     async getRuntimeRecoveryStatus() {
+      recoveryStatus.cacheStats.entryCount = previewKeys.size;
+      recoveryStatus.cacheStats.fileCount = previewKeys.size * 2;
+      recoveryStatus.cacheStats.byteCount = previewKeys.size * 4096;
       return structuredClone(recoveryStatus);
     },
     async resetDerivedState() {
@@ -353,6 +366,21 @@ export function createDemoDesktopApi(
       previewKeys.clear();
       previewBytes.clear();
       return { removedFiles, removedBytes: removedFiles * 4096 };
+    },
+    async maintainThumbnailCache() {
+      recoveryStatus.cacheStats.entryCount = previewKeys.size;
+      recoveryStatus.cacheStats.fileCount = previewKeys.size * 2;
+      recoveryStatus.cacheStats.byteCount = previewKeys.size * 4096;
+      return {
+        removedEntries: 0,
+        removedFiles: 0,
+        removedBytes: 0,
+        incompatibleEntries: 0,
+        orphanEntries: 0,
+        expiredEntries: 0,
+        capacityEntries: 0,
+        stats: structuredClone(recoveryStatus.cacheStats),
+      };
     },
     async listObsidianVaults() {
       return structuredClone(vaults);

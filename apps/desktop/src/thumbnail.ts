@@ -38,11 +38,35 @@ export interface CacheClearReport {
   removedBytes: number;
 }
 
+export interface CacheStats {
+  layoutVersion: number;
+  fileCount: number;
+  entryCount: number;
+  byteCount: number;
+  maxEntries: number;
+  maxBytes: number;
+  retentionDays: number;
+  decoderVersion: string;
+}
+
+export interface CacheMaintenanceReport {
+  removedEntries: number;
+  removedFiles: number;
+  removedBytes: number;
+  incompatibleEntries: number;
+  orphanEntries: number;
+  expiredEntries: number;
+  capacityEntries: number;
+  stats: CacheStats;
+}
+
 export type ThumbnailCommandError =
   | { kind: "asset-not-found"; assetKey: string }
   | { kind: "invalid-request"; message: string }
   | { kind: "cache"; message: string }
-  | { kind: "internal"; message: string };
+  | { kind: "internal"; message: string }
+  | { kind: "recovery-busy"; activeScans: number; message: string }
+  | { kind: "recovery-incomplete"; pendingRoots: number; message: string };
 
 type Invoke = <T>(
   command: string,
@@ -72,4 +96,10 @@ export function clearThumbnailCache(
   call: Invoke = invoke,
 ): Promise<CacheClearReport> {
   return call<CacheClearReport>("clear_thumbnail_cache");
+}
+
+export function maintainThumbnailCache(
+  call: Invoke = invoke,
+): Promise<CacheMaintenanceReport> {
+  return call<CacheMaintenanceReport>("maintain_thumbnail_cache");
 }

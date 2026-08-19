@@ -11,6 +11,7 @@ members = [
   "crates/preview",
   "crates/transactions",
   "tools/eagle-p0",
+  "tools/cache-fault",
   "tools/fixture-generator",
   "tools/sidecar-fault",
   "tools/transaction-fault",

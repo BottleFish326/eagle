@@ -25,8 +25,8 @@ use asset_link_resolver::{
     VaultRootStatus,
 };
 use asset_preview::{
-    CacheClearReport, CacheStartupReport, PreviewError, ThumbnailOutcome, ThumbnailRequest,
-    ThumbnailService,
+    CacheClearReport, CacheMaintenanceReport, CacheStartupReport, CacheStats, PreviewError,
+    ThumbnailOutcome, ThumbnailRequest, ThumbnailService,
 };
 use asset_transactions::{
     MetadataTransactionStore, TransactionFailureKind, TransactionRecoveryResult,
@@ -68,6 +68,7 @@ struct ApplicationPaths {
 struct RuntimeRecoveryStatus {
     paths: ApplicationPaths,
     cache_startup: CacheStartupReport,
+    cache_stats: CacheStats,
 }
 
 #[derive(Debug, Clone)]
@@ -178,6 +179,11 @@ enum ThumbnailCommandError {
         active_scans: usize,
         message: String,
     },
+    RecoveryIncomplete {
+        #[serde(rename = "pendingRoots")]
+        pending_roots: usize,
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -233,10 +239,13 @@ impl From<PreviewError> for ThumbnailCommandError {
             }
             PreviewError::UnsafeCacheRoot(_)
             | PreviewError::CacheIo { .. }
+            | PreviewError::CacheMetadata { .. }
             | PreviewError::MissingCacheEntry(_) => Self::Cache {
                 message: error.to_string(),
             },
-            PreviewError::InvalidConcurrency(_) | PreviewError::PoisonedLock(_) => Self::Internal {
+            PreviewError::InvalidConcurrency(_)
+            | PreviewError::InvalidCachePolicy(_)
+            | PreviewError::PoisonedLock(_) => Self::Internal {
                 message: error.to_string(),
             },
         }
@@ -246,6 +255,7 @@ impl From<PreviewError> for ThumbnailCommandError {
 #[derive(Default)]
 struct ScanCoordinator {
     active: Mutex<HashMap<Uuid, ActiveScan>>,
+    authoritative_roots: Mutex<BTreeSet<Uuid>>,
 }
 
 #[derive(Debug, Clone)]
@@ -364,6 +374,10 @@ impl ScanCoordinator {
         if active.values().any(|scan| scan.root_id == root_id) {
             return Err(format!("library root is already being scanned: {root_id}"));
         }
+        let mut authoritative = self
+            .authoritative_roots
+            .lock()
+            .map_err(|_| "scan authority lock is poisoned".to_owned())?;
         active.insert(
             scan_id,
             ActiveScan {
@@ -371,6 +385,7 @@ impl ScanCoordinator {
                 cancellation,
             },
         );
+        authoritative.remove(&root_id);
         Ok(())
     }
 
@@ -393,6 +408,22 @@ impl ScanCoordinator {
 
     fn active_count(&self) -> usize {
         self.active.lock().map_or(0, |active| active.len())
+    }
+
+    fn mark_authoritative(&self, root_id: Uuid) -> Result<(), String> {
+        self.authoritative_roots
+            .lock()
+            .map_err(|_| "scan authority lock is poisoned".to_owned())?
+            .insert(root_id);
+        Ok(())
+    }
+
+    fn pending_authoritative(&self, required: &BTreeSet<Uuid>) -> Result<usize, String> {
+        let authoritative = self
+            .authoritative_roots
+            .lock()
+            .map_err(|_| "scan authority lock is poisoned".to_owned())?;
+        Ok(required.difference(&authoritative).count())
     }
 
     fn is_root_active(&self, root_id: Uuid) -> bool {
@@ -464,11 +495,22 @@ fn update_application_config(
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn runtime_recovery_status(state: State<'_, RuntimeState>) -> RuntimeRecoveryStatus {
-    RuntimeRecoveryStatus {
+async fn runtime_recovery_status(
+    state: State<'_, RuntimeState>,
+    previews: State<'_, Arc<ThumbnailService>>,
+) -> Result<RuntimeRecoveryStatus, ThumbnailCommandError> {
+    let previews = Arc::clone(previews.inner());
+    let cache_stats = tauri::async_runtime::spawn_blocking(move || previews.cache_stats())
+        .await
+        .map_err(|error| ThumbnailCommandError::Internal {
+            message: format!("thumbnail cache status task failed: {error}"),
+        })?
+        .map_err(ThumbnailCommandError::from)?;
+    Ok(RuntimeRecoveryStatus {
         paths: state.paths.clone(),
         cache_startup: state.cache_startup,
-    }
+        cache_stats,
+    })
 }
 
 #[tauri::command]
@@ -636,12 +678,19 @@ fn start_library_scan(
     roots: State<'_, Mutex<LibraryRootManager>>,
     scans: State<'_, Arc<ScanCoordinator>>,
     catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    previews: State<'_, Arc<ThumbnailService>>,
     diagnostics: State<'_, Arc<DiagnosticService>>,
 ) -> Result<Uuid, String> {
-    let root_status = roots
+    let root_statuses = roots
         .lock()
         .map_err(|_| "library root manager lock is poisoned".to_owned())?
-        .roots()
+        .roots();
+    let required_roots = root_statuses
+        .iter()
+        .filter(|root| root.root.enabled && root.access_status == RootAccessStatus::Available)
+        .map(|root| root.root.id)
+        .collect::<BTreeSet<_>>();
+    let root_status = root_statuses
         .into_iter()
         .find(|root| root.root.id == root_id)
         .ok_or_else(|| format!("library root was not found: {root_id}"))?;
@@ -661,6 +710,7 @@ fn start_library_scan(
     scans.register(scan_id, root_id, cancellation.clone())?;
     let coordinator = Arc::clone(scans.inner());
     let catalog = Arc::clone(catalog.inner());
+    let previews = Arc::clone(previews.inner());
     let diagnostics = Arc::clone(diagnostics.inner());
     let root = root_status.root;
     let thread_name = format!("library-scan-{}", &scan_id.to_string()[..8]);
@@ -674,6 +724,8 @@ fn start_library_scan(
                 &cancellation,
                 &coordinator,
                 &catalog,
+                &previews,
+                &required_roots,
                 &diagnostics,
             );
         });
@@ -684,6 +736,7 @@ fn start_library_scan(
     Ok(scan_id)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_library_scan_thread(
     scan_id: Uuid,
     root: LibraryRoot,
@@ -691,6 +744,8 @@ fn run_library_scan_thread(
     cancellation: &ScanCancellation,
     coordinator: &ScanCoordinator,
     catalog: &Mutex<AssetCatalog>,
+    previews: &ThumbnailService,
+    required_roots: &BTreeSet<Uuid>,
     diagnostics: &DiagnosticService,
 ) {
     let previous_records = if let Ok(catalog) = catalog.lock() {
@@ -755,7 +810,7 @@ fn run_library_scan_thread(
                 cancellation.cancel();
             }
         });
-    publish_scan_result(
+    let authoritative = publish_scan_result(
         scan_id,
         root.id,
         result,
@@ -766,6 +821,72 @@ fn run_library_scan_thread(
         diagnostics,
     );
     coordinator.finish(scan_id);
+    if authoritative && coordinator.mark_authoritative(root.id).is_err() {
+        record_diagnostic(
+            diagnostics,
+            DiagnosticLevel::Error,
+            "cache",
+            "maintenance-authority-failed",
+            [("reason", "scan-authority-lock-poisoned".into())],
+        );
+        return;
+    }
+    if coordinator.active_count() == 0 {
+        match coordinator.pending_authoritative(required_roots) {
+            Ok(0) => maintain_cache_after_scans(catalog, previews, diagnostics),
+            Ok(_) => {}
+            Err(_) => record_diagnostic(
+                diagnostics,
+                DiagnosticLevel::Error,
+                "cache",
+                "maintenance-authority-failed",
+                [("reason", "scan-authority-lock-poisoned".into())],
+            ),
+        }
+    }
+}
+
+fn maintain_cache_after_scans(
+    catalog: &Mutex<AssetCatalog>,
+    previews: &ThumbnailService,
+    diagnostics: &DiagnosticService,
+) {
+    let records = if let Ok(catalog) = catalog.lock() {
+        catalog.records()
+    } else {
+        record_diagnostic(
+            diagnostics,
+            DiagnosticLevel::Error,
+            "cache",
+            "maintenance-catalog-failed",
+            [("reason", "catalog-lock-poisoned".into())],
+        );
+        return;
+    };
+    match previews.maintain(&records) {
+        Ok(report) => record_cache_maintenance(diagnostics, &report, "scan-completed"),
+        Err(error) => record_diagnostic(
+            diagnostics,
+            DiagnosticLevel::Error,
+            "cache",
+            "maintenance-failed",
+            [("reason", cache_error_category(&error).into())],
+        ),
+    }
+}
+
+const fn cache_error_category(error: &PreviewError) -> &'static str {
+    match error {
+        PreviewError::InvalidMaxEdge(_) => "invalid-max-edge",
+        PreviewError::InvalidConcurrency(_) => "invalid-concurrency",
+        PreviewError::InvalidCachePolicy(_) => "invalid-policy",
+        PreviewError::UnsafeCacheRoot(_) => "unsafe-root",
+        PreviewError::CacheIo { .. } => "io",
+        PreviewError::CacheMetadata { .. } => "metadata",
+        PreviewError::InvalidCacheKey(_) => "invalid-key",
+        PreviewError::MissingCacheEntry(_) => "missing-entry",
+        PreviewError::PoisonedLock(_) => "poisoned-lock",
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -778,10 +899,11 @@ fn publish_scan_result(
     on_event: &Channel<LibraryScanEvent>,
     catalog: &Mutex<AssetCatalog>,
     diagnostics: &DiagnosticService,
-) {
+) -> bool {
     match result {
         Ok(summary) => {
-            let desired_records = if summary.completion == ScanCompletion::Completed {
+            let authoritative = summary.completion == ScanCompletion::Completed;
+            let desired_records = if authoritative {
                 scanned_records
             } else {
                 previous_records.to_vec()
@@ -795,7 +917,7 @@ fn publish_scan_result(
                     removed_keys: Vec::new(),
                     restored_records: Vec::new(),
                 });
-                return;
+                return false;
             };
             record_diagnostic(
                 diagnostics,
@@ -813,6 +935,7 @@ fn publish_scan_result(
                 summary,
                 reconciliation,
             });
+            authoritative
         }
         Err(error) => {
             let reconciliation = catalog.lock().ok().map(|mut catalog| {
@@ -835,6 +958,7 @@ fn publish_scan_result(
                 removed_keys,
                 restored_records,
             });
+            false
         }
     }
 }
@@ -1574,6 +1698,81 @@ async fn clear_thumbnail_cache(
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
+async fn maintain_thumbnail_cache(
+    previews: State<'_, Arc<ThumbnailService>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    scans: State<'_, Arc<ScanCoordinator>>,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+) -> Result<CacheMaintenanceReport, ThumbnailCommandError> {
+    let active_scans = scans.active_count();
+    if active_scans > 0 {
+        return Err(ThumbnailCommandError::RecoveryBusy {
+            active_scans,
+            message: format!(
+                "cannot reconcile thumbnail cache while {active_scans} library scans are active"
+            ),
+        });
+    }
+    let required_roots = roots
+        .lock()
+        .map_err(|_| ThumbnailCommandError::Internal {
+            message: "library root manager lock is poisoned".into(),
+        })?
+        .roots()
+        .into_iter()
+        .filter(|root| root.root.enabled && root.access_status == RootAccessStatus::Available)
+        .map(|root| root.root.id)
+        .collect::<BTreeSet<_>>();
+    let pending_roots = scans
+        .pending_authoritative(&required_roots)
+        .map_err(|message| ThumbnailCommandError::Internal { message })?;
+    if pending_roots > 0 {
+        return Err(ThumbnailCommandError::RecoveryIncomplete {
+            pending_roots,
+            message: format!(
+                "cannot reconcile thumbnail cache before {pending_roots} library roots complete a full scan"
+            ),
+        });
+    }
+    let records = catalog
+        .lock()
+        .map_err(|_| ThumbnailCommandError::Internal {
+            message: "asset catalog lock is poisoned".into(),
+        })?
+        .records();
+    let previews = Arc::clone(previews.inner());
+    let report = tauri::async_runtime::spawn_blocking(move || previews.maintain(&records))
+        .await
+        .map_err(|error| ThumbnailCommandError::Internal {
+            message: format!("thumbnail cache maintenance task failed: {error}"),
+        })?
+        .map_err(ThumbnailCommandError::from)?;
+    record_cache_maintenance(diagnostics.inner(), &report, "manual");
+    Ok(report)
+}
+
+fn record_cache_maintenance(
+    diagnostics: &DiagnosticService,
+    report: &CacheMaintenanceReport,
+    trigger: &str,
+) {
+    record_diagnostic(
+        diagnostics,
+        DiagnosticLevel::Info,
+        "cache",
+        "maintenance-completed",
+        [
+            ("trigger", trigger.to_owned()),
+            ("removedEntries", report.removed_entries.to_string()),
+            ("removedBytes", report.removed_bytes.to_string()),
+            ("remainingEntries", report.stats.entry_count.to_string()),
+        ],
+    );
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 async fn reset_derived_state(
     previews: State<'_, Arc<ThumbnailService>>,
     catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
@@ -1839,6 +2038,7 @@ pub fn run() {
             request_thumbnail,
             read_thumbnail,
             clear_thumbnail_cache,
+            maintain_thumbnail_cache,
             reset_derived_state,
             export_diagnostics
         ])
@@ -1848,7 +2048,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::fs;
     use std::path::Path;
 
@@ -1857,7 +2057,7 @@ mod tests {
     use asset_filesystem::{
         FsChange, FsChangeBatch, FsChangeKind, FsRescanReason, LibraryRoot, RootScanSettings,
     };
-    use asset_preview::CacheClearReport;
+    use asset_preview::{CacheClearReport, CacheMaintenanceReport, CacheStats};
     use asset_transactions::{TransactionScopeItem, TransactionState, TransactionSummary};
     use metadata::{MetadataPatch, sidecar_path_for};
     use tempfile::tempdir;
@@ -1892,6 +2092,8 @@ mod tests {
             .register(scan_id, root_id, cancellation.clone())
             .expect("register scan");
         assert!(coordinator.is_root_active(root_id));
+        let required = BTreeSet::from([root_id]);
+        assert_eq!(coordinator.pending_authoritative(&required), Ok(1));
 
         assert!(
             coordinator
@@ -1905,6 +2107,10 @@ mod tests {
         coordinator.finish(scan_id);
         assert!(!coordinator.is_root_active(root_id));
         assert!(!coordinator.cancel(scan_id).expect("cancel finished scan"));
+        coordinator
+            .mark_authoritative(root_id)
+            .expect("mark complete scan");
+        assert_eq!(coordinator.pending_authoritative(&required), Ok(0));
     }
 
     #[test]
@@ -2018,6 +2224,14 @@ mod tests {
         assert_eq!(busy["kind"], "recovery-busy");
         assert_eq!(busy["activeScans"], 2);
         assert_eq!(busy["message"], "two scans are active");
+
+        let incomplete = serde_json::to_value(ThumbnailCommandError::RecoveryIncomplete {
+            pending_roots: 1,
+            message: "one root has not completed".into(),
+        })
+        .expect("serialize recovery incomplete error");
+        assert_eq!(incomplete["kind"], "recovery-incomplete");
+        assert_eq!(incomplete["pendingRoots"], 1);
     }
 
     #[test]
@@ -2036,6 +2250,19 @@ mod tests {
             log: "/app/log".into(),
         })
         .expect("serialize application paths");
+        let maintenance = serde_json::to_value(CacheMaintenanceReport {
+            removed_entries: 3,
+            orphan_entries: 1,
+            stats: CacheStats {
+                layout_version: 2,
+                entry_count: 12,
+                max_entries: 20_000,
+                decoder_version: "test-decoder-v2",
+                ..CacheStats::default()
+            },
+            ..CacheMaintenanceReport::default()
+        })
+        .expect("serialize maintenance report");
 
         assert_eq!(value["cache"]["removedFiles"], 4);
         assert_eq!(value["cache"]["removedBytes"], 8192);
@@ -2043,6 +2270,11 @@ mod tests {
         assert_eq!(paths["configDirectory"], "/app/config");
         assert_eq!(paths["cacheDirectory"], "/app/cache");
         assert_eq!(paths["logDirectory"], "/app/log");
+        assert_eq!(maintenance["removedEntries"], 3);
+        assert_eq!(maintenance["orphanEntries"], 1);
+        assert_eq!(maintenance["stats"]["entryCount"], 12);
+        assert_eq!(maintenance["stats"]["maxEntries"], 20_000);
+        assert_eq!(maintenance["stats"]["decoderVersion"], "test-decoder-v2");
     }
 
     #[test]
