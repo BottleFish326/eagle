@@ -35,13 +35,21 @@ test("distinguishes hosted environment preparation from a runnable hosted job", 
     ready: false,
     failures: ["origin/main commit is unavailable"],
     commands: [],
+    remediations: [
+      {
+        kind: "publish-main",
+        command: "git push --set-upstream origin main",
+        message: "Publish the exact candidate.",
+      },
+    ],
   };
   const blockedReport = buildP2ExitStatus(blocked);
   assert.equal(blockedReport.stage, "hosted-environment-blocked");
   assert.equal(
     blockedReport.nextAction.command,
-    "npm run audit:p2-hosted-readiness",
+    "git push --set-upstream origin main",
   );
+  assert.equal(blockedReport.nextAction.kind, "publish-main");
 
   const ready = base();
   ready.externalGates = { state: "missing", failures: [] };
@@ -49,6 +57,7 @@ test("distinguishes hosted environment preparation from a runnable hosted job", 
     ready: true,
     failures: [],
     commands: ["gh workflow run ci.yml --ref main"],
+    remediations: [],
   };
   const readyReport = buildP2ExitStatus(ready);
   assert.equal(readyReport.stage, "hosted-run-pending");
@@ -142,7 +151,12 @@ function base() {
       cleanAll: true,
     },
     soak: { state: "passed", failures: [], summary: null },
-    hostedReadiness: { ready: false, failures: [], commands: [] },
+    hostedReadiness: {
+      ready: false,
+      failures: [],
+      commands: [],
+      remediations: [],
+    },
     externalGates: { state: "accepted", failures: [], summary: null },
     localFaults: {
       state: "accepted",

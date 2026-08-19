@@ -45,6 +45,11 @@ export function buildP2ExitStatus({
       p2A12: {
         hostedReady: inputs.hostedReadiness.ready,
         hostedFailures: [...inputs.hostedReadiness.failures],
+        hostedRemediations: inputs.hostedReadiness.remediations.map(
+          (entry) => ({
+            ...entry,
+          }),
+        ),
         externalGates: inputs.externalGates,
       },
       localFaults: inputs.localFaults,
@@ -140,14 +145,17 @@ function decide(inputs) {
       "Replay P2-A11 and P2-A12 into the immutable external gate receipt.",
     );
   if (externalGates.state !== "accepted") {
-    if (hostedReadiness.ready !== true)
+    if (hostedReadiness.ready !== true) {
+      const remediation = hostedReadiness.remediations[0];
       return decision(
         "hosted-environment-blocked",
         prefixed("P2-A12 hosted readiness", hostedReadiness.failures),
-        "prepare-hosted-environment",
-        "npm run audit:p2-hosted-readiness",
-        "Prepare and publish the exact GitHub main candidate before triggering P2-A12.",
+        remediation?.kind ?? "prepare-hosted-environment",
+        remediation?.command ?? "npm run audit:p2-hosted-readiness",
+        remediation?.message ??
+          "Prepare and publish the exact GitHub main candidate before triggering P2-A12.",
       );
+    }
     return decision(
       "hosted-run-pending",
       [],
@@ -210,6 +218,7 @@ function normalizeInputs(value) {
       ready: value.hostedReadiness?.ready === true,
       failures: stringArray(value.hostedReadiness?.failures),
       commands: stringArray(value.hostedReadiness?.commands),
+      remediations: remediationArray(value.hostedReadiness?.remediations),
     },
     externalGates: normalizeGate(value.externalGates, [
       "missing",
@@ -245,6 +254,23 @@ function stringArray(value) {
   return Array.isArray(value)
     ? value.filter((entry) => typeof entry === "string")
     : [];
+}
+
+function remediationArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) =>
+    typeof entry?.kind === "string" &&
+    (typeof entry?.command === "string" || entry?.command === null) &&
+    typeof entry?.message === "string"
+      ? [
+          {
+            kind: entry.kind,
+            command: entry.command,
+            message: entry.message,
+          },
+        ]
+      : [],
+  );
 }
 
 function prefixed(label, failures) {

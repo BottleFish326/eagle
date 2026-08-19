@@ -106,7 +106,7 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 ## 6. 后续验收动作
 
 1. 建立 GitHub origin、安装并认证 GitHub CLI，把当前 `main` 推送为 `origin/main`；
-2. 运行 `npm run audit:p2-hosted-readiness`，只有输出 `ready=true` 时才使用报告内的 commit-bound 命令触发 `ci.yml`；该预检只读，不创建仓库、不推送、不触发 workflow；
+2. 运行 `npm run audit:p2-hosted-readiness`；`ready=false` 时按 `remediations` 的固定顺序处理缺失 CLI、认证、GitHub origin、main/default/upstream 和发布状态，命令中的仓库 URL 仍必须由用户选择；只有输出 `ready=true` 时才使用报告内的 commit-bound 命令触发 `ci.yml`。该预检只读，不安装软件、不认证、不修改 remote、不推送、不触发 workflow；
 3. 确认 `platform-paths` 的三个 matrix leg、`platform-matrix-evidence` 和 `quality` 均实际通过，核对 CLI 返回的 run ID/attempt 后执行 `npm run collect:p2-hosted-evidence -- --run-id <run-id> --attempt <attempt>`；采集器会再次验证运行身份和五个 job，精确下载并调用归档器，不能改用“最新运行”；
 4. 确认 Windows leg 实际执行强制符号链接、260+ 路径扫描及 Sidecar 原子替换，不能以 skip 计为通过；
 5. 确认 Linux leg 实际执行大小写并存、权限撤销和移动根目录掉线；

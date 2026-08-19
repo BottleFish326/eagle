@@ -30,11 +30,13 @@ test("accepts one clean published main commit and emits commit-bound commands", 
   assert.match(report.commands[1], /--json attempt,databaseId/u);
   assert.match(report.commands[3], /--run-id <run-id> --attempt <attempt>/u);
   assert.equal(report.commands.length, 4);
+  assert.deepEqual(report.remediations, []);
 });
 
 test("rejects missing tooling, mismatched publication, and a dirty workflow", () => {
   const report = buildP2HostedReadiness({
     ghAvailable: false,
+    ghInstallCommand: "brew install gh",
     ghAuthenticated: false,
     remoteUrl: "https://gitlab.com/owner/material-eagle.git",
     repositorySlug: null,
@@ -65,6 +67,47 @@ test("rejects missing tooling, mismatched publication, and a dirty workflow", ()
     report.failures.includes("CI workflow does not expose workflow_dispatch"),
   );
   assert.deepEqual(report.commands, []);
+  assert.deepEqual(
+    report.remediations.map((entry) => entry.kind),
+    [
+      "install-github-cli",
+      "configure-github-origin",
+      "switch-main",
+      "clean-tracked-worktree",
+      "enable-workflow-dispatch",
+    ],
+  );
+  assert.equal(report.remediations[0].command, "brew install gh");
+  assert.equal(
+    report.remediations[1].command,
+    "git remote set-url origin <github-repository-url>",
+  );
+});
+
+test("orders authentication, repository policy, and publication remediation", () => {
+  const report = buildP2HostedReadiness({
+    ghAvailable: true,
+    ghAuthenticated: false,
+    remoteUrl: "git@github.com:owner/material-eagle.git",
+    repositorySlug: "owner/material-eagle",
+    defaultBranch: "develop",
+    branch: "main",
+    upstream: null,
+    currentCommit: commit,
+    remoteCommit: null,
+    cleanTracked: true,
+    workflowDispatchConfigured: true,
+  });
+  assert.equal(report.ready, false);
+  assert.deepEqual(
+    report.remediations.map((entry) => entry.kind),
+    ["authenticate-github-cli", "set-default-main", "publish-main"],
+  );
+  assert.match(report.remediations[0].command, /^gh auth login/u);
+  assert.equal(
+    report.remediations.at(-1).command,
+    "git push --set-upstream origin main",
+  );
 });
 
 test("normalizes supported GitHub remote URL forms", () => {

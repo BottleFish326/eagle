@@ -28,6 +28,10 @@ export async function collectP2HostedReadinessInputs(repository) {
   );
   return {
     ghAvailable,
+    ghInstallCommand:
+      !ghAvailable && commandSucceeds(repository, "brew", ["--version"])
+        ? "brew install gh"
+        : null,
     ghAuthenticated:
       ghAvailable &&
       commandSucceeds(repository, "gh", [

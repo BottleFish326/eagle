@@ -92,7 +92,7 @@ npm run audit:p2-soak-baseline
 npm run audit:p2-hosted-readiness
 ```
 
-预检不会创建仓库、推送或触发 workflow。它要求 CLI/认证/remote/默认分支/本地分支/upstream/远端 commit/tracked 清洁状态和手动入口全部匹配，并输出绑定当前 SHA 的 `gh workflow run`、`gh run list/watch` 与指定 run/attempt 的一体化证据采集命令。只有 `ready=true` 时才按输出触发真实 hosted run，然后归档：
+预检不会安装软件、发起认证、创建仓库、修改 remote、推送或触发 workflow。它要求 CLI/认证/remote/默认分支/本地分支/upstream/远端 commit/tracked 清洁状态和手动入口全部匹配；`ready=false` 时按依赖顺序输出结构化 `remediations`，当前 Homebrew 环境会先给出 `brew install gh`，随后才是认证、用户选择 GitHub URL、发布 main 等动作。只有 `ready=true` 时才输出绑定当前 SHA 的 `gh workflow run`、`gh run list/watch` 与指定 run/attempt 的一体化证据采集命令，并按输出触发真实 hosted run，然后归档：
 
 - remote URL、汇总 JSON 自动生成的 workflow `runUrl`、commit SHA、runner image/version 和时间；
 - 三个 leg 均 success，并下载各自保留 90 天的 `p2-a12-source-<runner>-<sha>-attempt-<n>` JSON artifact；
