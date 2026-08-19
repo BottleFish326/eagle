@@ -1,0 +1,27 @@
+schema: 1
+filters:
+  - id: 0198a7c2-8341-7a31-b842-f15d39f33c18
+    name: Favorite wide images
+    query: 'type:image favorite:true width:>=1920 aspect:>=16/9'
+    scope:
+      kind: all-enabled-roots
+    sort:
+      field: modified-at
+      direction: descending
+    createdAt: '2026-08-20T00:00:00.000Z'
+    updatedAt: '2026-08-20T00:00:00.000Z'
+  - id: 0198a7c2-8342-7a31-b842-f15d39f33c19
+    name: Eagle review queue
+    query: 'project/eagle -state/done rating:<4'
+    scope:
+      kind: selected-roots
+      rootIds:
+        - 0198a7c2-9001-7a31-b842-f15d39f33c20
+    sort:
+      field: file-name
+      direction: ascending
+    createdAt: '2026-08-20T00:01:00.000Z'
+    updatedAt: '2026-08-20T00:01:00.000Z'
+    futureDisplayHint: compact
+futureTopLevel:
+  keep: true

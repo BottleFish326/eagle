@@ -62,7 +62,7 @@
 |---|---|---|
 | P3-01 扩展格式能力管线 | Design ready | 已固定识别/属性/预览三层能力、codec 缺失降级、worker 隔离、格式矩阵、资源限额、恶意夹具要求、严格夹具 Schema 和六个实施切片；阶段 2 退出前不计作 P3 开始，见 `reports/p3-01-readiness.md` |
 | P3-02 智能属性与高级过滤 | Design ready | 已固定定型谓词、整数单位、RFC 3339、精确宽高比、未知属性、混合索引和独立三方查询语料；阶段 2 退出前不计作 P3 开始，见 `reports/p3-02-readiness.md` |
-| P3-03 保存过滤器 | Persistence design ready | 已固定用户级独立 YAML、根 ID 作用域、无素材快照、乐观并发及显式 Tag 重命名影响处理；阶段 2 退出前不计作 P3 开始，见 `../specs/adr/027-user-profile-saved-filters.md` |
+| P3-03 保存过滤器 | Design ready | 已固定用户级 YAML、条目隔离、未知字段保留、完整版本、精确 Tag AST 重写和跨文件协调恢复；阶段 2 退出前不计作 P3 开始，见 `reports/p3-03-readiness.md` |
 | P3-04 批量工作流 | Design ready | 已固定精确全选快照、catalog revision、只读预检、协作取消、事务续传与剪贴板单次提交；阶段 2 退出前不计作 P3 开始，见 `reports/p3-04-readiness.md` |
 | P3-05 重复素材分析 | Design ready | 已固定大小/快速指纹/完整 SHA-256、当前文件重读、物理别名、视觉候选隔离和非破坏性报告；阶段 2 退出前不计作 P3 开始，见 `reports/p3-05-readiness.md` |
 | P3-06 拖放与剪贴板 | Design ready | 已固定原始文件/引用双拖柄、后端授权 native drag、Copy-only、Vault 内外有序引用和最小剪贴板权限；阶段 2 退出前不计作 P3 开始，见 `reports/p3-06-readiness.md` |
@@ -125,6 +125,7 @@
 - [P2-08 平台与文件系统兼容验收报告](reports/p2-08-acceptance.md)
 - [P3-01 扩展格式支持实施准备报告](reports/p3-01-readiness.md)
 - [P3-02 智能属性与高级过滤实施准备报告](reports/p3-02-readiness.md)
+- [P3-03 保存过滤器实施准备报告](reports/p3-03-readiness.md)
 - [P3-04 批量工作流实施准备报告](reports/p3-04-readiness.md)
 - [P3-05 重复素材分析实施准备报告](reports/p3-05-readiness.md)
 - [P3-06 拖放与剪贴板实施准备报告](reports/p3-06-readiness.md)
