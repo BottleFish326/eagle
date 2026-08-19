@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AssetSidecar, ExpectedVersion, SidecarError, digest_file, read_sidecar, sidecar_path_for,
-    write_sidecar_atomic,
+    AssetSidecar, ExpectedVersion, SidecarError, digest_file, fingerprint_asset, read_sidecar,
+    sidecar_path_for, write_sidecar_atomic,
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,6 +71,7 @@ pub fn edit_asset_metadata(
 
     let before = sidecar.clone();
     apply_patch(&mut sidecar, patch);
+    sidecar.fingerprint = Some(fingerprint_asset(asset_path)?);
     let changed = created || sidecar != before;
     if !changed {
         let digest = expected_digest
@@ -209,6 +210,15 @@ mod tests {
         assert!(edit.changed);
         assert_eq!(edit.sidecar.id.get_version_num(), 7);
         assert!(edit.sidecar.tags.contains("ui/icon"));
+        let fingerprint = edit.sidecar.fingerprint.expect("asset fingerprint");
+        assert_eq!(fingerprint.algorithm, "sha256");
+        assert_eq!(fingerprint.value, asset_digest);
+        assert_eq!(fingerprint.size, 20);
+        assert_eq!(
+            fingerprint.quick_algorithm.as_deref(),
+            Some("sha256-sample-64k-v1")
+        );
+        assert_eq!(fingerprint.quick_value.as_deref().map(str::len), Some(64));
         assert_eq!(digest_file(&asset).expect("asset digest"), asset_digest);
     }
 

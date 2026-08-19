@@ -6,6 +6,8 @@ import {
   cycleTagFilter,
   matchesDemoExpression,
   nextGridIndex,
+  reconcileSelectedKeys,
+  reconcileSelectionAnchor,
   summarizeTags,
 } from "./ui-model";
 
@@ -45,6 +47,22 @@ describe("desktop UI model", () => {
     expect(nextGridIndex(0, 10, 4, "ArrowLeft")).toBe(0);
     expect(nextGridIndex(5, 10, 4, "Home")).toBe(0);
     expect(nextGridIndex(5, 10, 4, "End")).toBe(9);
+  });
+
+  it("keeps selection and anchor on an asset that moved with its stable sidecar", () => {
+    const moves = [{ fromKey: "/assets/old.png", toKey: "/assets/new.png" }];
+    const removed = ["/assets/old.png", "/assets/deleted.png"];
+
+    expect(
+      reconcileSelectedKeys(
+        new Set(["/assets/old.png", "/assets/deleted.png"]),
+        moves,
+        removed,
+      ),
+    ).toEqual(new Set(["/assets/new.png"]));
+    expect(reconcileSelectionAnchor("/assets/old.png", moves, removed)).toBe(
+      "/assets/new.png",
+    );
   });
 
   it("matches the demo query with the same visible filter forms", () => {

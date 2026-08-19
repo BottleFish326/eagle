@@ -35,6 +35,7 @@ impl AssetKind {
 #[serde(rename_all = "kebab-case", tag = "type", content = "message")]
 pub enum AssetIssue {
     InvalidSidecar(String),
+    MismatchedSidecar(String),
     UnreadableFile(String),
     InvalidImageMetadata(String),
     InvalidNativeMetadata(String),

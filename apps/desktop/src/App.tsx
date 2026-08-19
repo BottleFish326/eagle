@@ -28,12 +28,15 @@ import {
   type VaultReferenceFailure,
 } from "./obsidian-vaults";
 import { RootManager } from "./RootManager";
+import type { ReconciliationReport, RelinkCandidate } from "./reconciliation";
 import { SettingsManager } from "./SettingsManager";
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
 import {
   composeAssetQuery,
   cycleTagFilter,
   formatQueryError,
+  reconcileSelectedKeys,
+  reconcileSelectionAnchor,
   removeRootAssets,
   summarizeTags,
   type TagFilterMap,
@@ -90,6 +93,10 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const [queryError, setQueryError] = useState<string>();
   const [queryPending, setQueryPending] = useState(false);
   const [scans, setScans] = useState<Record<string, ScanUiState>>({});
+  const [reconciliationReports, setReconciliationReports] = useState<
+    Record<string, ReconciliationReport>
+  >({});
+  const [relinkBusy, setRelinkBusy] = useState<string>();
   const [rootManagerOpen, setRootManagerOpen] = useState(false);
   const [vaultManagerOpen, setVaultManagerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -118,7 +125,6 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const runScan = useCallback(
     async (root: LibraryRootStatus) => {
       activeScanRoots.current.add(root.id);
-      setAssets((current) => removeRootAssets(current, root.id));
       setScans((current) => ({
         ...current,
         [root.id]: {
@@ -129,9 +135,35 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         },
       }));
       const receive = (event: LibraryScanEvent) => {
-        handleScanEvent(root.id, event, setAssets, setScans);
+        handleScanEvent(
+          root.id,
+          event,
+          setAssets,
+          setScans,
+          setSelected,
+          setSelectionAnchor,
+        );
         if (event.event === "finished" || event.event === "failed") {
           activeScanRoots.current.delete(root.id);
+        }
+        if (
+          event.event === "finished" &&
+          event.data.summary.completion === "completed"
+        ) {
+          void api
+            .inspectLibraryReconciliation(root.id)
+            .then((report) =>
+              setReconciliationReports((current) => ({
+                ...current,
+                [root.id]: report,
+              })),
+            )
+            .catch((error: unknown) =>
+              setNotice({
+                tone: "error",
+                message: `移动诊断失败：${errorMessage(error)}`,
+              }),
+            );
         }
       };
       try {
@@ -167,6 +199,30 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       }
     },
     [api],
+  );
+
+  const confirmRelink = useCallback(
+    async (candidate: RelinkCandidate) => {
+      const root = rootsById.current.get(candidate.rootId);
+      if (root === undefined) return;
+      setRelinkBusy(candidate.candidateId);
+      try {
+        await api.confirmLibraryRelink(candidate.candidateId);
+        setNotice({
+          tone: "info",
+          message: "已按确认计划移动 Sidecar；正在重新解释素材身份。",
+        });
+        await runScan(root);
+      } catch (error) {
+        setNotice({
+          tone: "error",
+          message: `重新关联失败：${errorMessage(error)}`,
+        });
+      } finally {
+        setRelinkBusy(undefined);
+      }
+    },
+    [api, runScan],
   );
 
   const scheduleWatchRescan = useCallback(
@@ -1245,7 +1301,11 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         onScan={runScan}
         onToggle={toggleRoot}
         open={rootManagerOpen}
+        onConfirmRelink={confirmRelink}
+        reconciliationReports={reconciliationReports}
+        relinkBusy={relinkBusy}
         roots={roots}
+        scanningRootIds={new Set(activeScans.map(([rootId]) => rootId))}
       />
       <VaultManager
         activeVaultId={activeVaultId}
@@ -1282,6 +1342,8 @@ function handleScanEvent(
   event: LibraryScanEvent,
   setAssets: React.Dispatch<React.SetStateAction<Map<string, AssetRecord>>>,
   setScans: React.Dispatch<React.SetStateAction<Record<string, ScanUiState>>>,
+  setSelected: React.Dispatch<React.SetStateAction<Set<string>>>,
+  setSelectionAnchor: React.Dispatch<React.SetStateAction<string | undefined>>,
 ) {
   if (event.event === "started") {
     setScans((current) => ({
@@ -1314,6 +1376,19 @@ function handleScanEvent(
       },
     }));
   } else if (event.event === "finished") {
+    const { movedAssets, removedKeys } = event.data.reconciliation;
+    setAssets((current) =>
+      removeAssetKeys(
+        upsertAssets(current, event.data.reconciliation.restoredRecords),
+        removedKeys,
+      ),
+    );
+    setSelected((current) =>
+      reconcileSelectedKeys(current, movedAssets, removedKeys),
+    );
+    setSelectionAnchor((current) =>
+      reconcileSelectionAnchor(current, movedAssets, removedKeys),
+    );
     setScans((current) => ({
       ...current,
       [rootId]: {
@@ -1328,6 +1403,12 @@ function handleScanEvent(
       },
     }));
   } else {
+    setAssets((current) =>
+      removeAssetKeys(
+        upsertAssets(current, event.data.restoredRecords),
+        event.data.removedKeys,
+      ),
+    );
     setScans((current) => ({
       ...current,
       [rootId]: {
@@ -1340,6 +1421,16 @@ function handleScanEvent(
       },
     }));
   }
+}
+
+function removeAssetKeys(
+  assets: Map<string, AssetRecord>,
+  removedKeys: readonly string[],
+): Map<string, AssetRecord> {
+  if (removedKeys.length === 0) return assets;
+  const next = new Map(assets);
+  for (const key of removedKeys) next.delete(key);
+  return next;
 }
 
 function EmptyState({

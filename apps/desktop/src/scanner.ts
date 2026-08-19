@@ -2,6 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 
 export type AssetIssue =
   | { type: "invalid-sidecar"; message: string }
+  | { type: "mismatched-sidecar"; message: string }
   | { type: "unreadable-file"; message: string }
   | { type: "invalid-image-metadata"; message: string }
   | { type: "invalid-native-metadata"; message: string }
@@ -78,11 +79,38 @@ export interface ScanSummary {
   elapsedMs: number;
 }
 
+export interface StableAssetMove {
+  id: string;
+  fromKey: string;
+  toKey: string;
+}
+
+export interface CatalogRootReconciliation {
+  removedKeys: string[];
+  movedAssets: StableAssetMove[];
+  restoredRecords: AssetRecord[];
+}
+
 export type LibraryScanEvent =
   | { event: "started"; data: { scanId: string; rootId: string; root: string } }
   | { event: "batch"; data: { scanId: string; batch: ScanBatch } }
-  | { event: "finished"; data: { scanId: string; summary: ScanSummary } }
-  | { event: "failed"; data: { scanId: string; message: string } };
+  | {
+      event: "finished";
+      data: {
+        scanId: string;
+        summary: ScanSummary;
+        reconciliation: CatalogRootReconciliation;
+      };
+    }
+  | {
+      event: "failed";
+      data: {
+        scanId: string;
+        message: string;
+        removedKeys: string[];
+        restoredRecords: AssetRecord[];
+      };
+    };
 
 type Invoke = <T>(
   command: string,

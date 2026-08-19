@@ -1399,6 +1399,11 @@ textarea:focus-visible {
   padding: 20px 30px;
 }
 
+.root-entry {
+  display: grid;
+  gap: 7px;
+}
+
 .root-row {
   display: grid;
   grid-template-columns: 9px minmax(0, 1fr) auto 32px 38px 32px;
@@ -1409,6 +1414,82 @@ textarea:focus-visible {
   border: 1px solid #dedfd7;
   border-radius: 12px;
   background: #fffefa;
+}
+
+.reconciliation-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dec9a3;
+  border-radius: 12px;
+  background: #fffaf0;
+}
+
+.reconciliation-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.66rem;
+}
+
+.reconciliation-summary strong {
+  margin-right: auto;
+  color: #725530;
+}
+
+.reconciliation-summary span,
+.reconciliation-state {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #f2e5ca;
+  color: #795f39;
+}
+
+.reconciliation-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 64%);
+}
+
+.reconciliation-item > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  margin-right: auto;
+}
+
+.reconciliation-item small {
+  color: #9a6b2d;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.reconciliation-item strong,
+.reconciliation-item span,
+.reconciliation-item em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reconciliation-item strong {
+  font-size: 0.7rem;
+}
+
+.reconciliation-item span,
+.reconciliation-item em {
+  color: #77756d;
+  font-size: 0.62rem;
+}
+
+.reconciliation-item em {
+  color: #a05c51;
+  font-style: normal;
 }
 
 .vault-row {

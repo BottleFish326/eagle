@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -17,12 +17,19 @@ mod edit;
 pub use edit::{MetadataEdit, MetadataPatch, edit_asset_metadata};
 
 pub const SIDECAR_SCHEMA_VERSION: u32 = 1;
+pub const QUICK_FINGERPRINT_ALGORITHM: &str = "sha256-sample-64k-v1";
+const QUICK_FINGERPRINT_SAMPLE_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Fingerprint {
     pub algorithm: String,
     pub value: String,
     pub size: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quick_algorithm: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quick_value: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -100,9 +107,29 @@ impl AssetSidecar {
         if self.note.chars().count() > 10_000 {
             return Err(SidecarError::NoteTooLong);
         }
+        if let Some(fingerprint) = &self.fingerprint {
+            fingerprint.validate()?;
+        }
         DateTime::parse_from_rfc3339(&self.updated_at)
             .map_err(|_| SidecarError::InvalidUpdatedAt(self.updated_at.clone()))?;
         Ok(())
+    }
+}
+
+impl Fingerprint {
+    fn validate(&self) -> Result<(), SidecarError> {
+        if self.algorithm != "sha256" || !is_sha256_hex(&self.value) {
+            return Err(SidecarError::InvalidFingerprint);
+        }
+        match (&self.quick_algorithm, &self.quick_value) {
+            (None, None) => Ok(()),
+            (Some(algorithm), Some(value))
+                if algorithm == QUICK_FINGERPRINT_ALGORITHM && is_sha256_hex(value) =>
+            {
+                Ok(())
+            }
+            _ => Err(SidecarError::InvalidFingerprint),
+        }
     }
 }
 
@@ -165,6 +192,8 @@ pub enum SidecarError {
     ConflictingTagEdit(String),
     #[error("updatedAt is not RFC 3339: {0}")]
     InvalidUpdatedAt(String),
+    #[error("fingerprint must use the supported SHA-256 and quick fingerprint formats")]
+    InvalidFingerprint,
     #[error("sidecar changed since it was read: {path}")]
     Conflict { path: PathBuf },
     #[error("failed to persist sidecar at {path}: {source}")]
@@ -182,6 +211,77 @@ pub fn sidecar_path_for(asset_path: &Path) -> PathBuf {
         .map_or_else(OsString::new, OsString::from);
     name.push(".asset.yml");
     asset_path.with_file_name(name)
+}
+
+/// Computes the persisted size, sampled quick fingerprint, and full SHA-256 for an asset.
+///
+/// # Errors
+///
+/// Returns [`SidecarError`] when the asset cannot be opened, inspected, or read.
+pub fn fingerprint_asset(path: &Path) -> Result<Fingerprint, SidecarError> {
+    let size = fs::metadata(path)
+        .map_err(|source| SidecarError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?
+        .len();
+    Ok(Fingerprint {
+        algorithm: "sha256".into(),
+        value: digest_file(path)?,
+        size,
+        quick_algorithm: Some(QUICK_FINGERPRINT_ALGORITHM.into()),
+        quick_value: Some(quick_fingerprint_file(path)?),
+    })
+}
+
+/// Computes the bounded sampled fingerprint used before a full SHA-256 comparison.
+///
+/// # Errors
+///
+/// Returns [`SidecarError`] when the asset cannot be opened or read.
+pub fn quick_fingerprint_file(path: &Path) -> Result<String, SidecarError> {
+    let mut file = File::open(path).map_err(|source| SidecarError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let size = file
+        .metadata()
+        .map_err(|source| SidecarError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?
+        .len();
+    let sample_size = usize::try_from(size.min(QUICK_FINGERPRINT_SAMPLE_BYTES as u64))
+        .unwrap_or(QUICK_FINGERPRINT_SAMPLE_BYTES);
+    let mut first = vec![0_u8; sample_size];
+    file.read_exact(&mut first)
+        .map_err(|source| SidecarError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+
+    let mut digest = Sha256::new();
+    digest.update(b"material-eagle-quick-fingerprint-v1\0");
+    digest.update(size.to_le_bytes());
+    digest.update(&first);
+    if size > QUICK_FINGERPRINT_SAMPLE_BYTES as u64 {
+        let tail_size = size.min(QUICK_FINGERPRINT_SAMPLE_BYTES as u64);
+        let tail_offset = i64::try_from(tail_size).unwrap_or(i64::MAX);
+        file.seek(SeekFrom::End(-tail_offset))
+            .map_err(|source| SidecarError::Io {
+                path: path.to_path_buf(),
+                source,
+            })?;
+        let mut last =
+            vec![0_u8; usize::try_from(tail_size).unwrap_or(QUICK_FINGERPRINT_SAMPLE_BYTES)];
+        file.read_exact(&mut last)
+            .map_err(|source| SidecarError::Io {
+                path: path.to_path_buf(),
+                source,
+            })?;
+        digest.update(last);
+    }
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 /// Reads, parses, and validates a sidecar, returning its content digest.
@@ -318,6 +418,13 @@ fn digest_bytes(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     format!("{:x}", hasher.finalize())
+}
+
+fn is_sha256_hex(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn now_rfc3339() -> String {

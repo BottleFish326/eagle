@@ -48,6 +48,11 @@ import {
   updateObsidianVault,
 } from "./obsidian-vaults";
 import { editAssetMetadata } from "./metadata-editor";
+import type { ReconciliationReport, RelinkReceipt } from "./reconciliation";
+import {
+  confirmLibraryRelink,
+  inspectLibraryReconciliation,
+} from "./reconciliation";
 import type { LibraryScanEvent } from "./scanner";
 import { cancelLibraryScan, startLibraryScan } from "./scanner";
 import type {
@@ -76,6 +81,8 @@ export interface DesktopApi {
     receive: (event: LibraryScanEvent) => void,
   ): Promise<string>;
   cancelLibraryScan(scanId: string): Promise<boolean>;
+  inspectLibraryReconciliation(rootId: string): Promise<ReconciliationReport>;
+  confirmLibraryRelink(candidateId: string): Promise<RelinkReceipt>;
   startLibraryWatch(
     rootId: string,
     receive: (event: LibraryWatchEvent) => void,
@@ -109,6 +116,8 @@ export const tauriDesktopApi: DesktopApi = {
   removeLibraryRoot,
   startLibraryScan,
   cancelLibraryScan,
+  inspectLibraryReconciliation,
+  confirmLibraryRelink,
   startLibraryWatch,
   stopLibraryWatch,
   queryAssets,

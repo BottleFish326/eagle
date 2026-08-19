@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use asset_core::{AssetIssue, AssetRecord, SidecarState};
 use asset_index::{AssetIndex, AssetQuery, QueryParseError, parse_query};
@@ -60,6 +60,22 @@ pub struct QueryAssetsResult {
     pub total_assets: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StableAssetMove {
+    pub id: Uuid,
+    pub from_key: String,
+    pub to_key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogRootReconciliation {
+    pub removed_keys: Vec<String>,
+    pub moved_assets: Vec<StableAssetMove>,
+    pub restored_records: Vec<AssetRecord>,
+}
+
 #[derive(Debug, Error)]
 pub enum CatalogError {
     #[error("metadata edit requires at least one target")]
@@ -110,6 +126,75 @@ impl AssetCatalog {
             self.index.remove(&key);
         }
         count
+    }
+
+    #[must_use]
+    pub fn root_records(&self, root_id: Uuid) -> Vec<AssetRecord> {
+        self.index
+            .query(&AssetQuery::default())
+            .into_iter()
+            .filter_map(|key| self.index.get(&key))
+            .filter(|record| record.root_id == Some(root_id))
+            .cloned()
+            .collect()
+    }
+
+    /// Atomically replaces one root's derived records after a completed scan and
+    /// reports stable-ID path changes for transient UI state reconciliation.
+    pub fn reconcile_root(
+        &mut self,
+        root_id: Uuid,
+        previous: &[AssetRecord],
+        records: Vec<AssetRecord>,
+    ) -> CatalogRootReconciliation {
+        let current_keys = self
+            .root_records(root_id)
+            .into_iter()
+            .map(|record| record.key)
+            .collect::<BTreeSet<_>>();
+        let desired_keys = records
+            .iter()
+            .map(|record| record.key.clone())
+            .collect::<BTreeSet<_>>();
+        let mut removed_keys = current_keys
+            .difference(&desired_keys)
+            .cloned()
+            .collect::<Vec<_>>();
+        removed_keys.sort();
+        let mut restored_records = records
+            .iter()
+            .filter(|record| self.index.get(&record.key) != Some(*record))
+            .cloned()
+            .collect::<Vec<_>>();
+        restored_records.sort_by(|left, right| left.key.cmp(&right.key));
+
+        let previous_by_id = records_by_stable_id(previous);
+        let next_by_id = records_by_stable_id(&records);
+        let mut moved_assets = Vec::new();
+        for (id, from_records) in previous_by_id {
+            let Some(to_records) = next_by_id.get(&id) else {
+                continue;
+            };
+            if from_records.len() == 1
+                && to_records.len() == 1
+                && from_records[0].key != to_records[0].key
+            {
+                moved_assets.push(StableAssetMove {
+                    id,
+                    from_key: from_records[0].key.clone(),
+                    to_key: to_records[0].key.clone(),
+                });
+            }
+        }
+        moved_assets.sort_by(|left, right| left.from_key.cmp(&right.from_key));
+
+        self.remove_root(root_id);
+        self.ingest(records);
+        CatalogRootReconciliation {
+            removed_keys,
+            moved_assets,
+            restored_records,
+        }
     }
 
     #[must_use]
@@ -212,6 +297,16 @@ impl AssetCatalog {
         self.index.upsert(record.clone());
         Ok(record)
     }
+}
+
+fn records_by_stable_id(records: &[AssetRecord]) -> BTreeMap<Uuid, Vec<&AssetRecord>> {
+    let mut result = BTreeMap::<Uuid, Vec<&AssetRecord>>::new();
+    for record in records {
+        if let Some(id) = record.id {
+            result.entry(id).or_default().push(record);
+        }
+    }
+    result
 }
 
 #[derive(Debug, Error)]
@@ -336,6 +431,35 @@ mod tests {
         );
         assert!(catalog.get("second").is_some());
         assert_eq!(catalog.remove_root(first_root), 0);
+    }
+
+    #[test]
+    fn completed_root_reconciliation_preserves_a_unique_stable_identity_move() {
+        let root_id = Uuid::now_v7();
+        let stable_id = Uuid::now_v7();
+        let mut previous = record("/assets/old.png", PathBuf::from("/assets/old.png"));
+        previous.root_id = Some(root_id);
+        previous.id = Some(stable_id);
+        previous.tags = BTreeSet::from(["identity/preserved".into()]);
+        let mut moved = previous.clone();
+        moved.key = "/assets/archive/new.png".into();
+        moved.path = PathBuf::from("/assets/archive/new.png");
+        let mut stale = record("/assets/stale.png", PathBuf::from("/assets/stale.png"));
+        stale.root_id = Some(root_id);
+        let mut catalog = AssetCatalog::default();
+        catalog.ingest([previous.clone(), moved.clone(), stale]);
+
+        let outcome = catalog.reconcile_root(root_id, &[previous], vec![moved.clone()]);
+
+        assert_eq!(outcome.moved_assets.len(), 1);
+        assert_eq!(outcome.moved_assets[0].id, stable_id);
+        assert_eq!(outcome.moved_assets[0].from_key, "/assets/old.png");
+        assert_eq!(outcome.moved_assets[0].to_key, moved.key);
+        assert_eq!(
+            outcome.removed_keys,
+            vec!["/assets/old.png", "/assets/stale.png"]
+        );
+        assert_eq!(catalog.root_records(root_id), vec![moved]);
     }
 
     #[test]

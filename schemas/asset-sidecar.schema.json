@@ -62,7 +62,18 @@
         "size": {
           "type": "integer",
           "minimum": 0
+        },
+        "quickAlgorithm": {
+          "const": "sha256-sample-64k-v1"
+        },
+        "quickValue": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
         }
+      },
+      "dependentRequired": {
+        "quickAlgorithm": ["quickValue"],
+        "quickValue": ["quickAlgorithm"]
       },
       "additionalProperties": false
     },

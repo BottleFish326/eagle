@@ -8,7 +8,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use asset_core::{AssetDimensions, AssetIssue, AssetRecord, NativeImageMetadata, SidecarState};
 use exif::{In, Tag, Value};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
-use metadata::{read_sidecar, sidecar_path_for};
+use metadata::{quick_fingerprint_file, read_sidecar, sidecar_path_for};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -363,30 +363,46 @@ fn parse_asset(root_id: Option<Uuid>, root: &Path, path: &Path) -> Option<AssetR
         }
     }
 
-    let sidecar_path = sidecar_path_for(&canonical);
-    if sidecar_path.is_file() {
-        asset.sidecar_path = Some(sidecar_path.clone());
-        match read_sidecar(&sidecar_path) {
-            Ok((sidecar, digest)) => {
-                // File-derived fields remain authoritative. Sidecars only provide user metadata.
-                asset.sidecar_state = Some(SidecarState {
-                    schema: sidecar.schema,
-                    digest,
-                    updated_at: sidecar.updated_at.clone(),
-                });
-                asset.id = Some(sidecar.id);
-                asset.tags = sidecar.tags;
-                asset.rating = sidecar.rating;
-                asset.favorite = sidecar.favorite;
-                asset.note = sidecar.note;
-                asset.aliases = sidecar.aliases;
-            }
-            Err(error) => asset
-                .issues
-                .push(AssetIssue::InvalidSidecar(error.to_string())),
-        }
-    }
+    merge_adjacent_sidecar(&mut asset, &canonical, file_metadata.len());
     Some(asset)
+}
+
+fn merge_adjacent_sidecar(asset: &mut AssetRecord, asset_path: &Path, asset_size: u64) {
+    let sidecar_path = sidecar_path_for(asset_path);
+    if !sidecar_path.is_file() {
+        return;
+    }
+    asset.sidecar_path = Some(sidecar_path.clone());
+    match read_sidecar(&sidecar_path) {
+        Ok((sidecar, digest)) => {
+            if sidecar.fingerprint.as_ref().is_some_and(|fingerprint| {
+                fingerprint.size != asset_size
+                    || fingerprint.quick_value.as_ref().is_some_and(|expected| {
+                        quick_fingerprint_file(asset_path).as_ref().ok() != Some(expected)
+                    })
+            }) {
+                asset.issues.push(AssetIssue::MismatchedSidecar(
+                    "Sidecar fingerprint does not match the adjacent asset".into(),
+                ));
+                return;
+            }
+            // File-derived fields remain authoritative. Sidecars only provide user metadata.
+            asset.sidecar_state = Some(SidecarState {
+                schema: sidecar.schema,
+                digest,
+                updated_at: sidecar.updated_at.clone(),
+            });
+            asset.id = Some(sidecar.id);
+            asset.tags = sidecar.tags;
+            asset.rating = sidecar.rating;
+            asset.favorite = sidecar.favorite;
+            asset.note = sidecar.note;
+            asset.aliases = sidecar.aliases;
+        }
+        Err(error) => asset
+            .issues
+            .push(AssetIssue::InvalidSidecar(error.to_string())),
+    }
 }
 
 fn unavailable_asset(

@@ -175,6 +175,11 @@ export function createDemoDesktopApi(
                   problemCount: 1,
                   elapsedMs: 412,
                 },
+                reconciliation: {
+                  removedKeys: [],
+                  movedAssets: [],
+                  restoredRecords: [],
+                },
               },
             }),
           120 + batches.length * 30,
@@ -189,6 +194,17 @@ export function createDemoDesktopApi(
       active.forEach(window.clearTimeout);
       timers.delete(scanId);
       return true;
+    },
+    async inspectLibraryReconciliation(rootId) {
+      return {
+        rootId,
+        orphanSidecars: [],
+        missingAssets: [],
+        pendingMoves: [],
+      };
+    },
+    async confirmLibraryRelink() {
+      throw new Error("演示数据没有可确认的重新关联候选");
     },
     async startLibraryWatch(rootId, receive) {
       if (!roots.some((root) => root.id === rootId)) {

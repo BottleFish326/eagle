@@ -10,12 +10,14 @@ use app_config::{
     DiagnosticService, DiagnosticSnapshot, UpdateUiPreferences,
 };
 use asset_catalog::{
-    AssetCatalog, BatchMetadataEdit, BatchMetadataEditResult, QueryAssetsInput, QueryAssetsResult,
+    AssetCatalog, BatchMetadataEdit, BatchMetadataEditResult, CatalogRootReconciliation,
+    QueryAssetsInput, QueryAssetsResult,
 };
 use asset_filesystem::{
-    AddLibraryRoot, FsChangeBatch, FsRescanReason, LibraryRoot, LibraryRootManager,
-    LibraryRootStatus, RootAccessStatus, ScanBatch, ScanCancellation, ScanOptions, ScanSummary,
-    UpdateLibraryRoot, WatchSession, scan_root_incremental,
+    AddLibraryRoot, FilesystemError, FsChangeBatch, FsRescanReason, LibraryRoot,
+    LibraryRootManager, LibraryRootStatus, ReconciliationReport, RelinkCandidate, RelinkReceipt,
+    RootAccessStatus, ScanBatch, ScanCancellation, ScanCompletion, ScanOptions, ScanSummary,
+    UpdateLibraryRoot, WatchSession, apply_relink, inspect_reconciliation, scan_root_incremental,
 };
 use asset_index::QueryParseError;
 use asset_link_resolver::{
@@ -91,10 +93,13 @@ enum LibraryScanEvent {
     Finished {
         scan_id: Uuid,
         summary: ScanSummary,
+        reconciliation: CatalogRootReconciliation,
     },
     Failed {
         scan_id: Uuid,
         message: String,
+        removed_keys: Vec<String>,
+        restored_records: Vec<asset_core::AssetRecord>,
     },
 }
 
@@ -221,7 +226,13 @@ impl From<PreviewError> for ThumbnailCommandError {
 
 #[derive(Default)]
 struct ScanCoordinator {
-    active: Mutex<HashMap<Uuid, ScanCancellation>>,
+    active: Mutex<HashMap<Uuid, ActiveScan>>,
+}
+
+#[derive(Debug, Clone)]
+struct ActiveScan {
+    root_id: Uuid,
+    cancellation: ScanCancellation,
 }
 
 #[derive(Debug, Clone)]
@@ -233,6 +244,44 @@ struct ActiveWatch {
 #[derive(Default)]
 struct WatchCoordinator {
     active: Mutex<HashMap<Uuid, ActiveWatch>>,
+}
+
+#[derive(Default)]
+struct ReconciliationCoordinator {
+    candidates: Mutex<HashMap<Uuid, RelinkCandidate>>,
+}
+
+impl ReconciliationCoordinator {
+    fn replace_report(&self, report: &ReconciliationReport) -> Result<(), String> {
+        let mut candidates = self
+            .candidates
+            .lock()
+            .map_err(|_| "reconciliation coordinator lock is poisoned".to_owned())?;
+        candidates.retain(|_, candidate| candidate.root_id != report.root_id);
+        candidates.extend(
+            report
+                .pending_moves
+                .iter()
+                .cloned()
+                .map(|candidate| (candidate.candidate_id, candidate)),
+        );
+        Ok(())
+    }
+
+    fn candidate(&self, candidate_id: Uuid) -> Result<RelinkCandidate, String> {
+        self.candidates
+            .lock()
+            .map_err(|_| "reconciliation coordinator lock is poisoned".to_owned())?
+            .get(&candidate_id)
+            .cloned()
+            .ok_or_else(|| format!("relink candidate is missing or stale: {candidate_id}"))
+    }
+
+    fn resolve_sidecar(&self, sidecar_id: Uuid) {
+        if let Ok(mut candidates) = self.candidates.lock() {
+            candidates.retain(|_, candidate| candidate.sidecar_id != sidecar_id);
+        }
+    }
 }
 
 impl WatchCoordinator {
@@ -283,11 +332,26 @@ impl WatchCoordinator {
 }
 
 impl ScanCoordinator {
-    fn register(&self, scan_id: Uuid, cancellation: ScanCancellation) -> Result<(), String> {
-        self.active
+    fn register(
+        &self,
+        scan_id: Uuid,
+        root_id: Uuid,
+        cancellation: ScanCancellation,
+    ) -> Result<(), String> {
+        let mut active = self
+            .active
             .lock()
-            .map_err(|_| "scan coordinator lock is poisoned".to_owned())?
-            .insert(scan_id, cancellation);
+            .map_err(|_| "scan coordinator lock is poisoned".to_owned())?;
+        if active.values().any(|scan| scan.root_id == root_id) {
+            return Err(format!("library root is already being scanned: {root_id}"));
+        }
+        active.insert(
+            scan_id,
+            ActiveScan {
+                root_id,
+                cancellation,
+            },
+        );
         Ok(())
     }
 
@@ -296,8 +360,8 @@ impl ScanCoordinator {
             .active
             .lock()
             .map_err(|_| "scan coordinator lock is poisoned".to_owned())?;
-        Ok(active.get(&scan_id).is_some_and(|token| {
-            token.cancel();
+        Ok(active.get(&scan_id).is_some_and(|scan| {
+            scan.cancellation.cancel();
             true
         }))
     }
@@ -310,6 +374,12 @@ impl ScanCoordinator {
 
     fn active_count(&self) -> usize {
         self.active.lock().map_or(0, |active| active.len())
+    }
+
+    fn is_root_active(&self, root_id: Uuid) -> bool {
+        self.active
+            .lock()
+            .is_ok_and(|active| active.values().any(|scan| scan.root_id == root_id))
     }
 }
 
@@ -569,7 +639,7 @@ fn start_library_scan(
 
     let scan_id = Uuid::now_v7();
     let cancellation = ScanCancellation::new();
-    scans.register(scan_id, cancellation.clone())?;
+    scans.register(scan_id, root_id, cancellation.clone())?;
     let coordinator = Arc::clone(scans.inner());
     let catalog = Arc::clone(catalog.inner());
     let diagnostics = Arc::clone(diagnostics.inner());
@@ -604,8 +674,8 @@ fn run_library_scan_thread(
     catalog: &Mutex<AssetCatalog>,
     diagnostics: &DiagnosticService,
 ) {
-    let removed_records = if let Ok(mut catalog) = catalog.lock() {
-        catalog.remove_root(root.id)
+    let previous_records = if let Ok(catalog) = catalog.lock() {
+        catalog.root_records(root.id)
     } else {
         record_diagnostic(
             diagnostics,
@@ -617,6 +687,8 @@ fn run_library_scan_thread(
         let _ = on_event.send(LibraryScanEvent::Failed {
             scan_id,
             message: "asset catalog lock is poisoned".into(),
+            removed_keys: Vec::new(),
+            restored_records: Vec::new(),
         });
         coordinator.finish(scan_id);
         return;
@@ -629,7 +701,7 @@ fn run_library_scan_thread(
         [
             ("scanId", scan_id.to_string()),
             ("rootId", root.id.to_string()),
-            ("catalogRecordsRemoved", removed_records.to_string()),
+            ("previousRecordCount", previous_records.len().to_string()),
         ],
     );
     if on_event
@@ -648,8 +720,10 @@ fn run_library_scan_thread(
         ignore: root.scan.ignore,
         ..ScanOptions::default()
     };
+    let mut scanned_records = Vec::new();
     let result =
         scan_root_incremental(Some(root.id), &root.path, &options, cancellation, |batch| {
+            scanned_records.extend(batch.assets.iter().cloned());
             if let Ok(mut catalog) = catalog.lock() {
                 catalog.ingest(batch.assets.iter().cloned());
             } else {
@@ -662,8 +736,48 @@ fn run_library_scan_thread(
                 cancellation.cancel();
             }
         });
+    publish_scan_result(
+        scan_id,
+        root.id,
+        result,
+        scanned_records,
+        &previous_records,
+        on_event,
+        catalog,
+        diagnostics,
+    );
+    coordinator.finish(scan_id);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn publish_scan_result(
+    scan_id: Uuid,
+    root_id: Uuid,
+    result: Result<ScanSummary, FilesystemError>,
+    scanned_records: Vec<asset_core::AssetRecord>,
+    previous_records: &[asset_core::AssetRecord],
+    on_event: &Channel<LibraryScanEvent>,
+    catalog: &Mutex<AssetCatalog>,
+    diagnostics: &DiagnosticService,
+) {
     match result {
         Ok(summary) => {
+            let desired_records = if summary.completion == ScanCompletion::Completed {
+                scanned_records
+            } else {
+                previous_records.to_vec()
+            };
+            let reconciliation = if let Ok(mut catalog) = catalog.lock() {
+                catalog.reconcile_root(root_id, previous_records, desired_records)
+            } else {
+                let _ = on_event.send(LibraryScanEvent::Failed {
+                    scan_id,
+                    message: "asset catalog lock is poisoned".into(),
+                    removed_keys: Vec::new(),
+                    restored_records: Vec::new(),
+                });
+                return;
+            };
             record_diagnostic(
                 diagnostics,
                 DiagnosticLevel::Info,
@@ -675,9 +789,20 @@ fn run_library_scan_thread(
                     ("problemCount", summary.problem_count.to_string()),
                 ],
             );
-            let _ = on_event.send(LibraryScanEvent::Finished { scan_id, summary });
+            let _ = on_event.send(LibraryScanEvent::Finished {
+                scan_id,
+                summary,
+                reconciliation,
+            });
         }
         Err(error) => {
+            let reconciliation = catalog.lock().ok().map(|mut catalog| {
+                catalog.reconcile_root(root_id, previous_records, previous_records.to_vec())
+            });
+            let (removed_keys, restored_records) = reconciliation.map_or_else(
+                || (Vec::new(), Vec::new()),
+                |reconciliation| (reconciliation.removed_keys, reconciliation.restored_records),
+            );
             record_diagnostic(
                 diagnostics,
                 DiagnosticLevel::Error,
@@ -688,10 +813,11 @@ fn run_library_scan_thread(
             let _ = on_event.send(LibraryScanEvent::Failed {
                 scan_id,
                 message: error.to_string(),
+                removed_keys,
+                restored_records,
             });
         }
     }
-    coordinator.finish(scan_id);
 }
 
 #[tauri::command]
@@ -701,6 +827,74 @@ fn cancel_library_scan(
     scans: State<'_, Arc<ScanCoordinator>>,
 ) -> Result<bool, String> {
     scans.cancel(scan_id)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn inspect_library_reconciliation(
+    root_id: Uuid,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    reconciliation: State<'_, Arc<ReconciliationCoordinator>>,
+) -> Result<ReconciliationReport, String> {
+    let root_status = roots
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .roots()
+        .into_iter()
+        .find(|root| root.root.id == root_id)
+        .ok_or_else(|| format!("library root was not found: {root_id}"))?;
+    if !root_status.root.enabled || root_status.access_status != RootAccessStatus::Available {
+        return Err(format!("library root is not available: {root_id}"));
+    }
+    let assets = catalog
+        .lock()
+        .map_err(|_| "asset catalog lock is poisoned".to_owned())?
+        .root_records(root_id);
+    let options = ScanOptions {
+        recursive: root_status.root.scan.recursive,
+        ignore_hidden: true,
+        ignore: root_status.root.scan.ignore.clone(),
+        ..ScanOptions::default()
+    };
+    let report = inspect_reconciliation(root_id, &root_status.root.path, &options, &assets)
+        .map_err(|error| error.to_string())?;
+    reconciliation.replace_report(&report)?;
+    Ok(report)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn confirm_library_relink(
+    candidate_id: Uuid,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    scans: State<'_, Arc<ScanCoordinator>>,
+    reconciliation: State<'_, Arc<ReconciliationCoordinator>>,
+) -> Result<RelinkReceipt, String> {
+    let candidate = reconciliation.candidate(candidate_id)?;
+    if scans.is_root_active(candidate.root_id) {
+        return Err(format!(
+            "library root is currently being scanned: {}",
+            candidate.root_id
+        ));
+    }
+    let root_status = roots
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .roots()
+        .into_iter()
+        .find(|root| root.root.id == candidate.root_id)
+        .ok_or_else(|| format!("library root was not found: {}", candidate.root_id))?;
+    if !root_status.root.enabled || root_status.access_status != RootAccessStatus::Available {
+        return Err(format!(
+            "library root is not available: {}",
+            candidate.root_id
+        ));
+    }
+    let receipt =
+        apply_relink(&root_status.root.path, &candidate).map_err(|error| error.to_string())?;
+    reconciliation.resolve_sidecar(candidate.sidecar_id);
+    Ok(receipt)
 }
 
 #[tauri::command]
@@ -1199,6 +1393,7 @@ pub fn run() {
             app.manage(Mutex::new(application_config));
             app.manage(Arc::new(ScanCoordinator::default()));
             app.manage(Arc::new(WatchCoordinator::default()));
+            app.manage(Arc::new(ReconciliationCoordinator::default()));
             app.manage(Arc::new(Mutex::new(AssetCatalog::default())));
             let previews = Arc::new(ThumbnailService::open(&cache_directory, 4)?);
             let cache_startup = previews.startup_report();
@@ -1241,6 +1436,8 @@ pub fn run() {
             resolve_obsidian_vault_references,
             start_library_scan,
             cancel_library_scan,
+            inspect_library_reconciliation,
+            confirm_library_relink,
             start_library_watch,
             stop_library_watch,
             edit_asset_metadata,
@@ -1285,14 +1482,24 @@ mod tests {
     fn scan_coordinator_cancels_and_releases_registered_scans() {
         let coordinator = ScanCoordinator::default();
         let scan_id = Uuid::now_v7();
+        let root_id = Uuid::now_v7();
         let cancellation = ScanCancellation::new();
         coordinator
-            .register(scan_id, cancellation.clone())
+            .register(scan_id, root_id, cancellation.clone())
             .expect("register scan");
+        assert!(coordinator.is_root_active(root_id));
+
+        assert!(
+            coordinator
+                .register(Uuid::now_v7(), root_id, ScanCancellation::new())
+                .expect_err("duplicate root scan")
+                .contains("already being scanned")
+        );
 
         assert!(coordinator.cancel(scan_id).expect("cancel scan"));
         assert!(cancellation.is_cancelled());
         coordinator.finish(scan_id);
+        assert!(!coordinator.is_root_active(root_id));
         assert!(!coordinator.cancel(scan_id).expect("cancel finished scan"));
     }
 
@@ -1302,12 +1509,15 @@ mod tests {
         let event = serde_json::to_value(LibraryScanEvent::Failed {
             scan_id,
             message: "invalid root".into(),
+            removed_keys: vec!["/library/stale.png".into()],
+            restored_records: Vec::new(),
         })
         .expect("serialize scan event");
 
         assert_eq!(event["event"], "failed");
         assert_eq!(event["data"]["scanId"], scan_id.to_string());
         assert_eq!(event["data"]["message"], "invalid root");
+        assert_eq!(event["data"]["removedKeys"][0], "/library/stale.png");
     }
 
     #[test]

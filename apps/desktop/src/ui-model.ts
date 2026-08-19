@@ -68,6 +68,33 @@ export function removeRootAssets(
   return new Map([...current].filter(([, asset]) => asset.rootId !== rootId));
 }
 
+export function reconcileSelectedKeys(
+  selected: ReadonlySet<string>,
+  moves: readonly { fromKey: string; toKey: string }[],
+  removedKeys: readonly string[],
+): Set<string> {
+  const moved = new Map(moves.map((move) => [move.fromKey, move.toKey]));
+  const removed = new Set(removedKeys);
+  const next = new Set<string>();
+  for (const key of selected) {
+    const replacement = moved.get(key);
+    if (replacement !== undefined) next.add(replacement);
+    else if (!removed.has(key)) next.add(key);
+  }
+  return next;
+}
+
+export function reconcileSelectionAnchor(
+  anchor: string | undefined,
+  moves: readonly { fromKey: string; toKey: string }[],
+  removedKeys: readonly string[],
+): string | undefined {
+  if (anchor === undefined) return undefined;
+  const replacement = moves.find((move) => move.fromKey === anchor)?.toKey;
+  if (replacement !== undefined) return replacement;
+  return removedKeys.includes(anchor) ? undefined : anchor;
+}
+
 export function nextGridIndex(
   current: number,
   itemCount: number,
@@ -92,6 +119,8 @@ export function issueLabel(issue: AssetIssue): string {
   switch (issue.type) {
     case "invalid-sidecar":
       return "Sidecar 无法解析";
+    case "mismatched-sidecar":
+      return "Sidecar 与素材指纹不匹配";
     case "unreadable-file":
       return "文件不可读";
     case "invalid-image-metadata":
