@@ -1,18 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildP2LocalFaultGatesReport } from "./p2-local-fault-gates.mjs";
-import { REQUIRED_P2_HOSTED_JOBS } from "./p2-hosted-evidence.mjs";
-import { expectedPlatformPathTests } from "./platform-path-evidence.mjs";
+import {
+  makeP2ExternalReceiptFixture,
+  makeP2LocalFaultReceiptFixture,
+  TEST_P2_CANDIDATE_COMMIT,
+  TEST_P2_LOCAL_COMMIT,
+} from "./p2-acceptance-test-fixtures.mjs";
 import {
   buildPhase2ExitGatesReport,
   inspectPhase2ExitGatesReceipt,
 } from "./phase-2-exit-gates.mjs";
+import {
+  buildP2DataSafetyAuditReport,
+  P2_DATA_SAFETY_REPORTS,
+} from "./p2-data-safety-audit.mjs";
 import { FORMAL_SOAK_BASELINE_COMMIT } from "./soak-baseline-audit.mjs";
 
-const candidateCommit = "d".repeat(40);
-const localCommit = "c".repeat(40);
-const externalReport = makeExternalReport();
+const candidateCommit = TEST_P2_CANDIDATE_COMMIT;
+const localCommit = TEST_P2_LOCAL_COMMIT;
+const externalReport = makeP2ExternalReceiptFixture();
 
 test("accepts replayed external evidence and committed local fault evidence in order", () => {
   const fixture = acceptedInputs();
@@ -28,6 +35,8 @@ test("accepts replayed external evidence and committed local fault evidence in o
     "after-cache-rename",
     "after-cache-recreate",
   ]);
+  assert.equal(report.p2DataSafety.openP0, 0);
+  assert.equal(report.p2DataSafety.openP1, 0);
   const inspection = inspectPhase2ExitGatesReceipt(report);
   assert.equal(inspection.accepted, true, inspection.failures.join("; "));
 });
@@ -43,6 +52,9 @@ test("rejects replay drift, local tampering, source drift, and missing commit bi
   fixture.commitOrderVerified = false;
   fixture.externalEvidenceInLocalCandidate = false;
   fixture.localEvidenceCommitted = false;
+  fixture.dataSafetyReplay = structuredClone(fixture.dataSafetyReplay);
+  fixture.dataSafetyReplay.defectRegister.counts.open.P1 = 1;
+  fixture.dataSafetyEvidenceCommitted = false;
   fixture.soakBaselineAudit = structuredClone(fixture.soakBaselineAudit);
   fixture.soakBaselineAudit.productInputs.changedPaths = [
     "crates/preview/src/cache.rs",
@@ -55,9 +67,11 @@ test("rejects replay drift, local tampering, source drift, and missing commit bi
     "phase 2 exit candidate working tree is not clean",
     "stored external gate evidence does not equal its replay",
     "P2-A04/P2-A10: P2-A04 receipt recovery count is not 1000",
-    "P2 commits are not ordered soak <= hosted matrix <= local faults <= candidate",
+    "P2 commits are not ordered soak <= hosted matrix <= local faults <= data safety <= candidate",
     "local fault candidate does not contain the exact external gate evidence",
     "local fault evidence is not committed in the exit candidate",
+    "stored data safety evidence does not equal its replay",
+    "data safety evidence is not committed in the exit candidate",
     "formal soak baseline audit is not accepted for the candidate",
     "non-documentation paths changed after local fault execution: tools/transaction-fault/src/main.rs",
   ])
@@ -88,6 +102,7 @@ test("offline final receipt inspection rejects structural and summary tampering"
   report.p2External.sha256 = "bad";
   report.p2LocalFaults.environment.nodeVersion = "v25.0.0";
   report.p2LocalFaults.cacheFaultPoints.reverse();
+  report.p2DataSafety.openP1 = 1;
   const inspection = inspectPhase2ExitGatesReceipt(report);
   assert.equal(inspection.accepted, false);
   for (const expected of [
@@ -97,24 +112,33 @@ test("offline final receipt inspection rejects structural and summary tampering"
     "phase 2 external receipt digest is invalid",
     "phase 2 local fault environment Node.js is not 24.x",
     "phase 2 local fault points are invalid",
+    "phase 2 data safety receipt has open P0/P1 defects",
   ])
     assert.ok(inspection.failures.includes(expected), expected);
 });
 
 function acceptedInputs() {
-  const localFaultReceipt = makeLocalFaultReceipt();
+  const localFaultReceipt = makeP2LocalFaultReceiptFixture();
   const externalReplay = structuredClone(externalReport);
+  const dataSafetyReceipt = makeDataSafetyReceipt(
+    externalReplay,
+    localFaultReceipt,
+  );
   return {
     externalBytes: Buffer.from(`${JSON.stringify(externalReport)}\n`),
     externalReport: structuredClone(externalReport),
     externalReplay,
     localFaultBytes: Buffer.from(`${JSON.stringify(localFaultReceipt)}\n`),
     localFaultReceipt,
+    dataSafetyBytes: Buffer.from(`${JSON.stringify(dataSafetyReceipt)}\n`),
+    dataSafetyReceipt: structuredClone(dataSafetyReceipt),
+    dataSafetyReplay: structuredClone(dataSafetyReceipt),
     candidateCommit,
     workingTreeClean: true,
     commitOrderVerified: true,
     externalEvidenceInLocalCandidate: true,
     localEvidenceCommitted: true,
+    dataSafetyEvidenceCommitted: true,
     soakBaselineAudit: {
       schema: 1,
       accepted: true,
@@ -129,206 +153,31 @@ function acceptedInputs() {
   };
 }
 
-function makeExternalReport() {
-  const soakCommit = "a".repeat(40);
-  const matrixCommit = "b".repeat(40);
-  const runId = "123456";
-  const attempt = "1";
-  const repository = "owner/repository";
-  const workflowRef = `${repository}/.github/workflows/ci.yml@refs/heads/main`;
-  const runUrl = `https://github.com/${repository}/actions/runs/${runId}`;
-  const matrixVerifiedAt = "2026-08-20T02:30:00.000Z";
-  const hostedRunVerifiedAt = "2026-08-20T02:45:00.000Z";
-  const verificationEnvironment = {
-    nodeVersion: "v24.19.0",
-    githubActions: "true",
-    githubSha: matrixCommit,
-    githubRunId: runId,
-    githubRunAttempt: attempt,
-    githubWorkflowRef: workflowRef,
-    githubRepository: repository,
-    githubServerUrl: "https://github.com",
-    runnerOs: "Linux",
-    runnerArch: "X64",
-    runnerEnvironment: "github-hosted",
-  };
-  const artifacts = ["darwin", "linux", "win32"].map((platform) => {
-    const runnerOs = {
-      darwin: "macOS",
-      linux: "Linux",
-      win32: "Windows",
-    }[platform];
-    const tests = expectedPlatformPathTests(platform);
-    return {
-      artifactName: `p2-a12-source-${runnerOs}-${matrixCommit}-attempt-${attempt}`,
-      fileName: "p2-a12-platform-paths.json",
-      sha256:
-        platform === "darwin"
-          ? "3".repeat(64)
-          : platform === "linux"
-            ? "4".repeat(64)
-            : "5".repeat(64),
-      platform,
-      accepted: true,
-      startedAt: "2026-08-20T02:10:00.000Z",
-      completedAt: "2026-08-20T02:20:00.000Z",
-      environment: {
-        architecture: "x64",
-        nodeVersion: "v24.19.0",
-        rustc: "rustc 1.89.0",
-        cargo: "cargo 1.89.0",
-        runnerOs,
-        runnerArch: "X64",
-        runnerEnvironment: "github-hosted",
-        githubRunId: runId,
-        githubRunAttempt: attempt,
-        githubWorkflowRef: workflowRef,
-        githubRepository: repository,
-        githubServerUrl: "https://github.com",
-      },
-      expectedTests: tests,
-      listedTests: tests,
-      executedTests: tests,
-      summary: {
-        result: "ok",
-        passed: tests.length,
-        failed: 0,
-        ignored: 0,
-        measured: 0,
-        filteredOut: 100,
-      },
-    };
-  });
-  const hostedJobs = REQUIRED_P2_HOSTED_JOBS.map((name, index) => {
-    const databaseId = 900_000 + index;
-    return {
-      databaseId,
-      name,
-      status: "completed",
-      conclusion: "success",
-      startedAt: "2026-08-20T02:05:00.000Z",
-      completedAt: "2026-08-20T02:40:00.000Z",
-      url: `${runUrl}/job/${String(databaseId)}`,
-    };
-  });
-  return {
+function makeDataSafetyReceipt(externalReceipt, localFaultReceipt) {
+  const defectRegister = {
     schema: 1,
-    accepted: true,
-    failures: [],
-    evidenceAt: hostedRunVerifiedAt,
-    commitOrderVerified: true,
-    p2A11: {
-      accepted: true,
-      fileName: "p2-06-resource-soak.json",
-      sha256: "1".repeat(64),
-      gitCommit: soakCommit,
-      startedAt: "2026-08-19T18:00:00.000Z",
-      completedAt: "2026-08-20T02:00:00.000Z",
-      durationSeconds: 28_800,
-      fixtureCount: 100_000,
-      environment: {
-        platform: "darwin",
-        architecture: "arm64",
-        nodeVersion: "v24.19.0",
-      },
-      summary: {
-        nativeSampleCount: 5_749,
-        minimumNativeSampleCount: 4_311,
-        internalSampleCount: 5_761,
-        minimumInternalSampleCount: 4_320,
-        invalidInternalSampleCount: 0,
-        invalidExternalSampleCount: 0,
-        rssGrowthKiB: 1_024,
-        rssSlopeKiBPerMinute: 2,
-        maxRssKiB: 200_000,
-        handleGrowth: 2,
-        maxHandles: 12,
-        threadBaseline: 4,
-        maxThreads: 5,
-        maxCpuPercent: 25,
-        scanPasses: 1_440,
-        generatedEvents: 40_000,
-        watcherBatches: 20_000,
-        thumbnailRequests: 400_000,
-        hashRequests: 400_000,
-        cacheEntries: 20_000,
-        scheduler: {
-          mode: "foreground",
-          foregroundLimit: 4,
-          maxWaiters: 256,
-          activeTotal: 1,
-          waitingTotal: 0,
-          peakActiveTotal: 2,
-          peakWaitingTotal: 0,
-        },
-      },
-    },
-    p2A12: {
-      accepted: true,
-      matrixArtifactName: `p2-a12-matrix-${matrixCommit}-attempt-${attempt}`,
-      matrixSha256: "6".repeat(64),
-      hostedRunReceiptSha256: "7".repeat(64),
-      hostedRunVerifiedAt,
-      gitCommit: matrixCommit,
-      verifiedAt: matrixVerifiedAt,
-      githubRunAttempt: attempt,
-      runUrl,
-      verificationEnvironment,
-      artifacts,
-      hostedJobs,
-    },
+    scope: "phase-2-exit",
+    status: "reviewed",
+    reviewedAt: "2026-08-20T03:30:00.000Z",
+    findings: [],
   };
-}
-
-function makeLocalFaultReceipt() {
-  const transactionId = "01912345-6789-7abc-8def-0123456789ab";
-  const report = buildP2LocalFaultGatesReport({
-    gitCommit: localCommit,
-    executedAt: "2026-08-20T03:00:00.000Z",
-    environment: {
-      platform: "darwin",
-      architecture: "arm64",
-      nodeVersion: "v24.19.0",
-      rustc: "rustc 1.89.0",
-      cargo: "cargo 1.89.0",
-    },
-    binarySha256: {
-      transactionFault: "1".repeat(64),
-      cacheFault: "2".repeat(64),
-    },
+  const report = buildP2DataSafetyAuditReport({
+    candidateCommit,
+    candidateCommittedAt: "2026-08-20T04:00:00.000Z",
     repositoryClean: true,
-    transaction: {
-      abort: aborted(),
-      recover: succeeded(
-        `discovered ${transactionId} Active applied=317\nrecovered ${transactionId} 1000\n`,
-      ),
-    },
-    cacheCases: ["after-cache-rename", "after-cache-recreate"].map(
-      (faultPoint) => ({
-        faultPoint,
-        seed: succeeded("seeded cache=1 asset=true sidecar=true\n"),
-        abort: aborted(),
-        recover: succeeded(
-          "recovered disposition=maintained cache=1 asset=true sidecar=true\n",
-        ),
-      }),
-    ),
-    temporaryWorkspacesRemoved: true,
+    commitOrderVerified: true,
+    inputsCommitted: true,
+    defectRegister,
+    defectRegisterBytes: Buffer.from(JSON.stringify(defectRegister)),
+    externalReceipt,
+    externalBytes: Buffer.from(JSON.stringify(externalReceipt)),
+    localFaultReceipt,
+    localFaultBytes: Buffer.from(JSON.stringify(localFaultReceipt)),
+    reportFiles: P2_DATA_SAFETY_REPORTS.map((fileName) => ({
+      fileName,
+      bytes: Buffer.from(fileName),
+    })),
   });
   assert.equal(report.accepted, true, report.failures.join("; "));
   return report;
-}
-
-function succeeded(stdout) {
-  return { status: 0, signal: null, error: null, stdout, stderr: "" };
-}
-
-function aborted() {
-  return {
-    status: null,
-    signal: "SIGABRT",
-    error: null,
-    stdout: "",
-    stderr: "",
-  };
 }

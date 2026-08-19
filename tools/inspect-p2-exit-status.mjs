@@ -7,6 +7,7 @@ import { collectP2HostedReadinessInputs } from "./p2-hosted-environment.mjs";
 import { buildP2HostedReadiness } from "./p2-hosted-readiness.mjs";
 import { inspectP2HostedRunReceipt } from "./p2-hosted-run-receipt.mjs";
 import { inspectP2LocalFaultGatesReceipt } from "./p2-local-fault-gates.mjs";
+import { inspectP2DataSafetyAuditReceipt } from "./p2-data-safety-audit.mjs";
 import { buildP2ExitStatus } from "./p2-exit-status.mjs";
 import { inspectPhase2ExitGatesReceipt } from "./phase-2-exit-gates.mjs";
 import { buildPhase2ExternalGatesReport } from "./phase-2-external-gates.mjs";
@@ -30,10 +31,12 @@ const files = {
   hostedRun: path.join(evidenceDirectory, "p2-a12-hosted-run.json"),
   external: path.join(evidenceDirectory, "p2-external-gates.json"),
   localFaults: path.join(evidenceDirectory, "p2-local-fault-gates.json"),
+  dataSafety: path.join(evidenceDirectory, "p2-data-safety-audit.json"),
   finalExit: path.join(evidenceDirectory, "p2-phase-2-exit.json"),
 };
 const repositoryFiles = {
   localFaults: "docs/reports/evidence/p2-local-fault-gates.json",
+  dataSafety: "docs/reports/evidence/p2-data-safety-audit.json",
   finalExit: "docs/reports/evidence/p2-phase-2-exit.json",
 };
 const invalidStages = new Set([
@@ -42,6 +45,7 @@ const invalidStages = new Set([
   "soak-failed",
   "external-gates-invalid",
   "local-faults-invalid",
+  "data-safety-invalid",
 ]);
 
 try {
@@ -61,6 +65,7 @@ try {
     hostedRun,
   });
   const localFaults = await collectLocalFaultState(git.currentCommit);
+  const dataSafety = await collectDataSafetyState(git.currentCommit);
   const finalExit = await collectFinalExitState(git.currentCommit);
   const report = buildP2ExitStatus({
     git,
@@ -68,6 +73,7 @@ try {
     hostedReadiness,
     externalGates,
     localFaults,
+    dataSafety,
     finalExit,
   });
   console.log(JSON.stringify(report, null, 2));
@@ -322,6 +328,44 @@ async function collectLocalFaultState(currentCommit) {
       ? {
           gitCommit: evidence.value.gitCommit,
           executedAt: evidence.value.executedAt,
+        }
+      : null,
+  };
+}
+
+async function collectDataSafetyState(currentCommit) {
+  const evidence = await readOptionalJson(files.dataSafety, 1024 * 1024);
+  if (!evidence.exists)
+    return { state: "missing", failures: [], committed: false, summary: null };
+  if (evidence.error !== null)
+    return {
+      state: "invalid",
+      failures: [evidence.error],
+      committed: false,
+      summary: null,
+    };
+  const inspection = inspectP2DataSafetyAuditReceipt(evidence.value);
+  const failures = [...inspection.failures];
+  if (
+    inspection.accepted &&
+    !isAncestor(evidence.value.candidateCommit, currentCommit)
+  )
+    failures.push("data safety candidate commit is not an ancestor of HEAD");
+  const accepted = failures.length === 0;
+  return {
+    state: accepted ? "accepted" : "invalid",
+    failures,
+    committed: gitBlobEquals(
+      currentCommit,
+      repositoryFiles.dataSafety,
+      evidence.bytes,
+    ),
+    summary: accepted
+      ? {
+          candidateCommit: evidence.value.candidateCommit,
+          evidenceAt: evidence.value.evidenceAt,
+          openP0: evidence.value.defectRegister.counts.open.P0,
+          openP1: evidence.value.defectRegister.counts.open.P1,
         }
       : null,
   };

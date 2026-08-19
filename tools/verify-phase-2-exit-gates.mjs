@@ -14,6 +14,10 @@ import {
   buildPhase2ExitGatesReport,
   inspectPhase2ExitGatesReceipt,
 } from "./phase-2-exit-gates.mjs";
+import {
+  buildP2DataSafetyAuditReport,
+  P2_DATA_SAFETY_REPORTS,
+} from "./p2-data-safety-audit.mjs";
 import { buildPhase2ExternalGatesReport } from "./phase-2-external-gates.mjs";
 import { readPlatformMatrixBundle } from "./platform-matrix-bundle.mjs";
 import {
@@ -31,11 +35,18 @@ const paths = {
   hostedRun: path.join(evidenceDirectory, "p2-a12-hosted-run.json"),
   external: path.join(evidenceDirectory, "p2-external-gates.json"),
   localFaults: path.join(evidenceDirectory, "p2-local-fault-gates.json"),
+  dataSafety: path.join(evidenceDirectory, "p2-data-safety-audit.json"),
   output: path.join(evidenceDirectory, "p2-phase-2-exit.json"),
 };
 const repositoryPaths = {
   external: "docs/reports/evidence/p2-external-gates.json",
   localFaults: "docs/reports/evidence/p2-local-fault-gates.json",
+  dataSafety: "docs/reports/evidence/p2-data-safety-audit.json",
+};
+const dataSafetyInputs = {
+  defectRegister: "docs/defects.json",
+  external: repositoryPaths.external,
+  localFaults: repositoryPaths.localFaults,
 };
 
 try {
@@ -78,10 +89,20 @@ try {
     localFaultBytes,
     "phase 2 local fault evidence",
   );
+  const dataSafetyBytes = await readBoundedFile(
+    paths.dataSafety,
+    1024 * 1024,
+    "phase 2 data safety evidence",
+  );
+  const dataSafetyReceipt = parseJson(
+    dataSafetyBytes,
+    "phase 2 data safety evidence",
+  );
 
   const resourceCommit = resourceReport?.gitCommit;
   const matrixCommit = platformBundle.matrixReport?.gitCommit;
   const localCommit = localFaultReceipt?.gitCommit;
+  const dataSafetyCommit = dataSafetyReceipt?.candidateCommit;
   const externalCommitOrder =
     isCommit(resourceCommit) &&
     isCommit(matrixCommit) &&
@@ -95,11 +116,14 @@ try {
     hostedRunReceipt,
     commitOrderVerified: externalCommitOrder,
   });
+  const dataSafetyReplay = replayDataSafetyAudit(dataSafetyCommit);
   const commitOrderVerified =
     externalCommitOrder &&
     isCommit(localCommit) &&
     isAncestor(matrixCommit, localCommit) &&
-    isAncestor(localCommit, candidateCommit);
+    isCommit(dataSafetyCommit) &&
+    isAncestor(localCommit, dataSafetyCommit) &&
+    isAncestor(dataSafetyCommit, candidateCommit);
   const soakBaselineAudit = buildCurrentSoakBaselineAudit(candidateCommit);
   const localCandidateDriftPaths = isCommit(localCommit)
     ? changedPaths(localCommit, []).filter(
@@ -113,6 +137,9 @@ try {
     externalReplay,
     localFaultBytes,
     localFaultReceipt,
+    dataSafetyBytes,
+    dataSafetyReceipt,
+    dataSafetyReplay,
     candidateCommit,
     workingTreeClean: true,
     commitOrderVerified,
@@ -123,6 +150,11 @@ try {
       candidateCommit,
       repositoryPaths.localFaults,
       localFaultBytes,
+    ),
+    dataSafetyEvidenceCommitted: gitBlobEquals(
+      candidateCommit,
+      repositoryPaths.dataSafety,
+      dataSafetyBytes,
     ),
     soakBaselineAudit,
     localCandidateDriftPaths,
@@ -196,6 +228,67 @@ function buildCurrentSoakBaselineAudit(candidateCommit) {
   });
 }
 
+function replayDataSafetyAudit(candidateCommit) {
+  if (!isCommit(candidateCommit)) return null;
+  const defectRegisterBytes = readGitBlob(
+    candidateCommit,
+    dataSafetyInputs.defectRegister,
+  );
+  const externalBytes = readGitBlob(candidateCommit, dataSafetyInputs.external);
+  const localFaultBytes = readGitBlob(
+    candidateCommit,
+    dataSafetyInputs.localFaults,
+  );
+  const defectRegister = parseJson(
+    defectRegisterBytes,
+    "historical defect register",
+  );
+  const externalReceipt = parseJson(
+    externalBytes,
+    "historical external gate evidence",
+  );
+  const localFaultReceipt = parseJson(
+    localFaultBytes,
+    "historical local fault evidence",
+  );
+  const reportFiles = P2_DATA_SAFETY_REPORTS.map((fileName) => ({
+    fileName,
+    bytes: readGitBlob(candidateCommit, fileName),
+  }));
+  const commitOrderVerified =
+    isCommit(externalReceipt?.p2A11?.gitCommit) &&
+    isCommit(externalReceipt?.p2A12?.gitCommit) &&
+    isCommit(localFaultReceipt?.gitCommit) &&
+    isAncestor(
+      externalReceipt.p2A11.gitCommit,
+      externalReceipt.p2A12.gitCommit,
+    ) &&
+    isAncestor(externalReceipt.p2A12.gitCommit, localFaultReceipt.gitCommit) &&
+    isAncestor(localFaultReceipt.gitCommit, candidateCommit);
+  return buildP2DataSafetyAuditReport({
+    candidateCommit,
+    candidateCommittedAt: commitTime(candidateCommit),
+    repositoryClean: true,
+    commitOrderVerified,
+    inputsCommitted: true,
+    defectRegisterBytes,
+    defectRegister,
+    externalBytes,
+    externalReceipt,
+    localFaultBytes,
+    localFaultReceipt,
+    reportFiles,
+  });
+}
+
+function commitTime(commit) {
+  const value = git(["show", "-s", "--format=%cI", commit]).trim();
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp))
+    throw new Error(`cannot read commit time for ${commit}`);
+  return new Date(timestamp).toISOString();
+}
+
 function changedPaths(baseline, scopes) {
   const args = ["diff", "--name-only", "--no-renames", "-z", baseline];
   if (scopes.length > 0) args.push("--", ...scopes);
@@ -221,6 +314,15 @@ function gitBlobEquals(commit, filePath, expected) {
     Buffer.isBuffer(result.stdout) &&
     result.stdout.equals(expected)
   );
+}
+
+function readGitBlob(commit, filePath) {
+  const result = runGit(["show", `${commit}:${filePath}`], null);
+  if (result.status !== 0 || !Buffer.isBuffer(result.stdout))
+    throw new Error(
+      `cannot read ${filePath} from ${commit}: ${diagnostic(result)}`,
+    );
+  return result.stdout;
 }
 
 function isCommit(value) {

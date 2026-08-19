@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://material-eagle.local/schemas/phase-2-exit-evidence.schema.json",
   "title": "Phase 2 final exit evidence",
-  "description": "Accepted-only receipt produced after replaying external gates, inspecting local crash evidence, and auditing candidate commit relationships and source drift.",
+  "description": "Accepted-only receipt produced after replaying external gates, local crash evidence, the reviewed data-safety audit, candidate commit relationships, and source drift.",
   "type": "object",
   "required": [
     "schema",
@@ -14,10 +14,12 @@
     "commitOrderVerified",
     "externalEvidenceInLocalCandidate",
     "localEvidenceCommitted",
+    "dataSafetyEvidenceCommitted",
     "soakBaseline",
     "localCandidate",
     "p2External",
-    "p2LocalFaults"
+    "p2LocalFaults",
+    "p2DataSafety"
   ],
   "properties": {
     "schema": { "const": 1 },
@@ -29,10 +31,12 @@
     "commitOrderVerified": { "const": true },
     "externalEvidenceInLocalCandidate": { "const": true },
     "localEvidenceCommitted": { "const": true },
+    "dataSafetyEvidenceCommitted": { "const": true },
     "soakBaseline": { "$ref": "#/$defs/soakBaseline" },
     "localCandidate": { "$ref": "#/$defs/localCandidate" },
     "p2External": { "$ref": "#/$defs/p2External" },
-    "p2LocalFaults": { "$ref": "#/$defs/p2LocalFaults" }
+    "p2LocalFaults": { "$ref": "#/$defs/p2LocalFaults" },
+    "p2DataSafety": { "$ref": "#/$defs/p2DataSafety" }
   },
   "additionalProperties": false,
   "$defs": {
@@ -173,6 +177,26 @@
         "transaction": { "$ref": "#/$defs/transaction" },
         "cacheFaultPoints": { "$ref": "#/$defs/cacheFaultPoints" },
         "temporaryWorkspacesRemoved": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "p2DataSafety": {
+      "type": "object",
+      "required": [
+        "fileName",
+        "sha256",
+        "candidateCommit",
+        "evidenceAt",
+        "openP0",
+        "openP1"
+      ],
+      "properties": {
+        "fileName": { "const": "p2-data-safety-audit.json" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "candidateCommit": { "$ref": "#/$defs/gitCommit" },
+        "evidenceAt": { "type": "string", "format": "date-time" },
+        "openP0": { "const": 0 },
+        "openP1": { "const": 0 }
       },
       "additionalProperties": false
     }

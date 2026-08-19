@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/p2-data-safety-audit.schema.json",
+  "title": "Phase 2 data safety audit receipt",
+  "description": "Accepted-only receipt binding the reviewed defect register, external gates, local crash gates, and safety-control reports.",
+  "type": "object",
+  "required": [
+    "schema",
+    "accepted",
+    "failures",
+    "evidenceAt",
+    "candidateCommit",
+    "candidateCommittedAt",
+    "repositoryClean",
+    "commitOrderVerified",
+    "inputsCommitted",
+    "defectRegister",
+    "p2External",
+    "p2LocalFaults",
+    "reports",
+    "controls"
+  ],
+  "properties": {
+    "schema": { "const": 1 },
+    "accepted": { "const": true },
+    "failures": { "type": "array", "maxItems": 0 },
+    "evidenceAt": { "type": "string", "format": "date-time" },
+    "candidateCommit": { "$ref": "#/$defs/gitCommit" },
+    "candidateCommittedAt": { "type": "string", "format": "date-time" },
+    "repositoryClean": { "const": true },
+    "commitOrderVerified": { "const": true },
+    "inputsCommitted": { "const": true },
+    "defectRegister": { "$ref": "#/$defs/defectRegister" },
+    "p2External": { "$ref": "#/$defs/p2External" },
+    "p2LocalFaults": { "$ref": "#/$defs/p2LocalFaults" },
+    "reports": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": { "$ref": "#/$defs/report" }
+    },
+    "controls": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/control" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "severityCounts": {
+      "type": "object",
+      "required": ["P0", "P1", "P2", "P3"],
+      "properties": {
+        "P0": { "type": "integer", "minimum": 0 },
+        "P1": { "type": "integer", "minimum": 0 },
+        "P2": { "type": "integer", "minimum": 0 },
+        "P3": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "defectRegister": {
+      "type": "object",
+      "required": [
+        "fileName",
+        "sha256",
+        "status",
+        "reviewedAt",
+        "counts",
+        "findings"
+      ],
+      "properties": {
+        "fileName": { "const": "docs/defects.json" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "status": { "const": "reviewed" },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "counts": {
+          "type": "object",
+          "required": ["open", "resolved"],
+          "properties": {
+            "open": {
+              "allOf": [
+                { "$ref": "#/$defs/severityCounts" },
+                {
+                  "properties": {
+                    "P0": { "const": 0 },
+                    "P1": { "const": 0 }
+                  }
+                }
+              ]
+            },
+            "resolved": { "$ref": "#/$defs/severityCounts" }
+          },
+          "additionalProperties": false
+        },
+        "findings": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "$ref": "https://material-eagle.local/schemas/defect-register.schema.json#/$defs/finding"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "p2External": {
+      "type": "object",
+      "required": [
+        "fileName",
+        "sha256",
+        "evidenceAt",
+        "p2A11Commit",
+        "p2A12Commit"
+      ],
+      "properties": {
+        "fileName": {
+          "const": "docs/reports/evidence/p2-external-gates.json"
+        },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "evidenceAt": { "type": "string", "format": "date-time" },
+        "p2A11Commit": { "$ref": "#/$defs/gitCommit" },
+        "p2A12Commit": { "$ref": "#/$defs/gitCommit" }
+      },
+      "additionalProperties": false
+    },
+    "p2LocalFaults": {
+      "type": "object",
+      "required": ["fileName", "sha256", "gitCommit", "executedAt"],
+      "properties": {
+        "fileName": {
+          "const": "docs/reports/evidence/p2-local-fault-gates.json"
+        },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "gitCommit": { "$ref": "#/$defs/gitCommit" },
+        "executedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "report": {
+      "type": "object",
+      "required": ["fileName", "sha256"],
+      "properties": {
+        "fileName": {
+          "enum": [
+            "docs/reports/phase-1-acceptance.md",
+            "docs/reports/p2-01-acceptance.md",
+            "docs/reports/p2-02-acceptance.md",
+            "docs/reports/p2-03-acceptance.md",
+            "docs/reports/p2-04-acceptance.md",
+            "docs/reports/p2-05-acceptance.md",
+            "docs/reports/p2-06-acceptance.md",
+            "docs/reports/p2-07-acceptance.md",
+            "docs/reports/p2-08-acceptance.md"
+          ]
+        },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "control": {
+      "type": "object",
+      "required": ["id", "title", "evidenceFiles"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^DS-[0-9]{2}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "evidenceFiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 9,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

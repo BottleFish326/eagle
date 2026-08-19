@@ -55,7 +55,7 @@
 | P2-06 资源与稳定性控制 | Acceptance pending | 统一限流、后台降级、协作期限、双有界队列与资源监控已通过短时 smoke；固定受测 SHA 的只读基线门禁可审计 tracked/untracked 漂移；P2-A11 的 L 数据集连续 8 小时证据待生成，见 `reports/p2-06-acceptance.md` |
 | P2-07 诊断和支持工具 | Completed locally | 1 MiB × 5 JSONL 滚动日志、路径值脱敏、Schema 2 错误/性能导出、512 条有界只读一致性报告和 UUID 素材追踪通过；见 `reports/p2-07-acceptance.md` |
 | P2-08 平台与文件系统兼容 | Acceptance pending | macOS 原生 10 项通过；三平台证据器精确要求 10/12/9 项，matrix 汇总器绑定同一 commit/run/attempt；指定运行采集器会复核五个成功 job、下载并重放四个 artifact，发布可离线复验且含 quality 结论的托管收据；P2-A12 首次远程运行仍待完成；见 `reports/p2-08-acceptance.md` |
-| 阶段 2 退出验收 | Draft / Not accepted | P2-A01 至 P2-A10 已汇总；只读状态编排器覆盖长稳、托管、外部汇总、本地故障和最终收据的完整状态转换；两类 accepted-only 收据写盘前独立自检；最终验证器重放 A11/A12 并核对源码漂移、证据归属与四段 commit 顺序；P2-A11 正式任务运行中，P2-A12 等待托管结果；见 `reports/phase-2-acceptance.md` |
+| 阶段 2 退出验收 | Draft / Not accepted | P2-A01 至 P2-A10 已汇总；只读状态编排器覆盖长稳、托管、外部汇总、本地故障、数据安全和最终收据；外部、数据安全与最终 accepted-only 收据均有独立离线自检；最终验证器重放 A11/A12、历史缺陷登记及九份安全控制报告，并核对源码漂移、证据归属与五段 commit 顺序；P2-A11 正式任务运行中，P2-A12 等待托管结果，缺陷登记保持 draft；见 `reports/phase-2-acceptance.md` |
 
 ## 阶段 3 实施准备
 
@@ -134,6 +134,7 @@
 - [P2-07 诊断和支持工具验收报告](reports/p2-07-acceptance.md)
 - [P2-08 平台与文件系统兼容验收报告](reports/p2-08-acceptance.md)
 - [阶段 2 验收报告（草案）](reports/phase-2-acceptance.md)
+- [阶段 2 数据安全缺陷审计](reports/p2-data-safety-audit.md)
 - [P3-01 扩展格式支持实施准备报告](reports/p3-01-readiness.md)
 - [P3-02 智能属性与高级过滤实施准备报告](reports/p3-02-readiness.md)
 - [P3-03 保存过滤器实施准备报告](reports/p3-03-readiness.md)

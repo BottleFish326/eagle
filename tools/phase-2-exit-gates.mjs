@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
 import { inspectP2LocalFaultGatesReceipt } from "./p2-local-fault-gates.mjs";
+import { inspectP2DataSafetyAuditReceipt } from "./p2-data-safety-audit.mjs";
 import { inspectPhase2ExternalGatesReceipt } from "./phase-2-external-gates.mjs";
 import { FORMAL_SOAK_BASELINE_COMMIT } from "./soak-baseline-audit.mjs";
 
@@ -16,11 +17,15 @@ export function buildPhase2ExitGatesReport({
   externalReplay,
   localFaultBytes,
   localFaultReceipt,
+  dataSafetyBytes,
+  dataSafetyReceipt,
+  dataSafetyReplay,
   candidateCommit,
   workingTreeClean,
   commitOrderVerified,
   externalEvidenceInLocalCandidate,
   localEvidenceCommitted,
+  dataSafetyEvidenceCommitted,
   soakBaselineAudit,
   localCandidateDriftPaths,
 }) {
@@ -32,19 +37,23 @@ export function buildPhase2ExitGatesReport({
 
   const externalSha256 = sha256(externalBytes);
   const localFaultSha256 = sha256(localFaultBytes);
+  const dataSafetySha256 = sha256(dataSafetyBytes);
   if (!isSha256(externalSha256))
     failures.push("phase 2 external evidence bytes are invalid");
   if (!isSha256(localFaultSha256))
     failures.push("phase 2 local fault evidence bytes are invalid");
+  if (!isSha256(dataSafetySha256))
+    failures.push("phase 2 data safety evidence bytes are invalid");
 
   inspectExternalGates(externalReport, externalReplay, failures);
   const localInspection = inspectP2LocalFaultGatesReceipt(localFaultReceipt);
   for (const failure of localInspection.failures)
     failures.push(`P2-A04/P2-A10: ${failure}`);
+  inspectDataSafety(dataSafetyReceipt, dataSafetyReplay, failures);
 
   if (commitOrderVerified !== true)
     failures.push(
-      "P2 commits are not ordered soak <= hosted matrix <= local faults <= candidate",
+      "P2 commits are not ordered soak <= hosted matrix <= local faults <= data safety <= candidate",
     );
   if (externalEvidenceInLocalCandidate !== true)
     failures.push(
@@ -53,6 +62,10 @@ export function buildPhase2ExitGatesReport({
   if (localEvidenceCommitted !== true)
     failures.push(
       "local fault evidence is not committed in the exit candidate",
+    );
+  if (dataSafetyEvidenceCommitted !== true)
+    failures.push(
+      "data safety evidence is not committed in the exit candidate",
     );
 
   inspectSoakBaseline(soakBaselineAudit, candidateCommit, failures);
@@ -73,12 +86,14 @@ export function buildPhase2ExitGatesReport({
     evidenceAt: laterIsoInstant(
       externalReplay?.evidenceAt,
       localFaultReceipt?.executedAt,
+      dataSafetyReplay?.evidenceAt,
     ),
     candidateCommit,
     workingTreeClean: workingTreeClean === true,
     commitOrderVerified: commitOrderVerified === true,
     externalEvidenceInLocalCandidate: externalEvidenceInLocalCandidate === true,
     localEvidenceCommitted: localEvidenceCommitted === true,
+    dataSafetyEvidenceCommitted: dataSafetyEvidenceCommitted === true,
     soakBaseline: {
       verified: soakBaselineAccepted(soakBaselineAudit, candidateCommit),
       baselineCommit: soakBaselineAudit?.baselineCommit ?? null,
@@ -127,6 +142,14 @@ export function buildPhase2ExitGatesReport({
       temporaryWorkspacesRemoved:
         localFaultReceipt?.temporaryWorkspacesRemoved === true,
     },
+    p2DataSafety: {
+      fileName: "p2-data-safety-audit.json",
+      sha256: dataSafetySha256,
+      candidateCommit: dataSafetyReplay?.candidateCommit ?? null,
+      evidenceAt: dataSafetyReplay?.evidenceAt ?? null,
+      openP0: dataSafetyReplay?.defectRegister?.counts?.open?.P0 ?? null,
+      openP1: dataSafetyReplay?.defectRegister?.counts?.open?.P1 ?? null,
+    },
   };
 }
 
@@ -144,10 +167,12 @@ export function inspectPhase2ExitGatesReceipt(value) {
       "commitOrderVerified",
       "externalEvidenceInLocalCandidate",
       "localEvidenceCommitted",
+      "dataSafetyEvidenceCommitted",
       "soakBaseline",
       "localCandidate",
       "p2External",
       "p2LocalFaults",
+      "p2DataSafety",
     ],
     failures,
     "phase 2 exit receipt",
@@ -167,6 +192,7 @@ export function inspectPhase2ExitGatesReceipt(value) {
     "commitOrderVerified",
     "externalEvidenceInLocalCandidate",
     "localEvidenceCommitted",
+    "dataSafetyEvidenceCommitted",
   ])
     if (value?.[field] !== true)
       failures.push(`phase 2 exit receipt ${field} is not true`);
@@ -175,6 +201,7 @@ export function inspectPhase2ExitGatesReceipt(value) {
   inspectLocalCandidateReceipt(value?.localCandidate, failures);
   inspectExternalReceiptSummary(value?.p2External, failures);
   inspectLocalFaultReceiptSummary(value?.p2LocalFaults, failures);
+  inspectDataSafetyReceiptSummary(value?.p2DataSafety, failures);
   if (
     isCommit(value?.localCandidate?.gitCommit) &&
     isCommit(value?.p2LocalFaults?.gitCommit) &&
@@ -184,6 +211,7 @@ export function inspectPhase2ExitGatesReceipt(value) {
   const expectedEvidenceAt = laterIsoInstant(
     value?.p2External?.evidenceAt,
     value?.p2LocalFaults?.executedAt,
+    value?.p2DataSafety?.evidenceAt,
   );
   if (value?.evidenceAt !== expectedEvidenceAt)
     failures.push("phase 2 exit receipt evidence time is not deterministic");
@@ -292,6 +320,25 @@ function inspectLocalFaultReceiptSummary(value, failures) {
     failures.push("phase 2 local fault workspaces were not removed");
 }
 
+function inspectDataSafetyReceiptSummary(value, failures) {
+  checkExactKeys(
+    value,
+    ["fileName", "sha256", "candidateCommit", "evidenceAt", "openP0", "openP1"],
+    failures,
+    "phase 2 data safety receipt summary",
+  );
+  if (value?.fileName !== "p2-data-safety-audit.json")
+    failures.push("phase 2 data safety receipt filename is invalid");
+  if (!isSha256(value?.sha256))
+    failures.push("phase 2 data safety receipt digest is invalid");
+  if (!isCommit(value?.candidateCommit))
+    failures.push("phase 2 data safety receipt candidate commit is invalid");
+  if (!isIsoInstant(value?.evidenceAt))
+    failures.push("phase 2 data safety receipt evidence time is invalid");
+  if (value?.openP0 !== 0 || value?.openP1 !== 0)
+    failures.push("phase 2 data safety receipt has open P0/P1 defects");
+}
+
 function inspectLocalEnvironment(value, failures) {
   checkExactKeys(
     value,
@@ -358,6 +405,14 @@ function inspectExternalGates(stored, replayed, failures) {
     failures.push(`P2-A11/P2-A12 external gate replay: ${failure}`);
   if (!isDeepStrictEqual(stored, replayed))
     failures.push("stored external gate evidence does not equal its replay");
+}
+
+function inspectDataSafety(stored, replayed, failures) {
+  const inspection = inspectP2DataSafetyAuditReceipt(replayed);
+  for (const failure of inspection.failures)
+    failures.push(`P2 data safety replay: ${failure}`);
+  if (!isDeepStrictEqual(stored, replayed))
+    failures.push("stored data safety evidence does not equal its replay");
 }
 
 function inspectSoakBaseline(value, candidateCommit, failures) {

@@ -93,19 +93,23 @@ npm run audit:p2-hosted-readiness
 npm run status:p2-exit
 npm run verify:p2-external
 npm run inspect:p2-external
+npm run verify:p2-data-safety
+npm run inspect:p2-data-safety
 npm run verify:p2-exit
 npm run inspect:p2-exit
 ```
 
 `npm run ci` 依次执行格式检查、Rust/TypeScript 静态检查、全部单元测试、S 数据集跨模块测试、Tauri 桌面端构建和 Obsidian 插件构建。`npm run test:medium` 在受标记保护的临时目录生成 10,000 项 M 夹具，验证扫描、复合查询和原始素材摘要后安全清理，用于阶段/每日规模回归，不放入每次提交的快速 CI。`npm run test:stability` 使用独立 Chrome 对同规模界面预热 60 秒并连续滚动、筛选 30 分钟，自动拒绝堆增长、主线程阻塞、全量卡片挂载、对象 URL 越界、错误结果、页面重载和采集超时；默认需要 macOS Google Chrome，可用 `-- --chrome <path>` 覆盖浏览器路径。`npm run test:resource-stability` 默认生成 L 数据集并运行 8 小时原生负载，采集 RSS、CPU、线程、句柄、调度与缓存曲线；它是 P2-A11 的阶段验收，不属于每次提交的快速 CI。`npm run test:p2-local-fault-gates` 只用于阶段 2 干净候选提交：它构建并哈希两个 Rust 故障工具，真实重复 P2-A04 的 317/1000 中断续传和 P2-A10 的两个缓存 abort/recover 边界，安全清理隔离目录后发布不可覆盖的机器收据；不能在资源稳定性采样期间运行。`npm run audit:p2-soak-baseline` 只读核对正式长稳任务固定的受测 SHA、已加载脚本和产品输入，用于最终证据提交前排除源码漂移。`npm run audit:p2-hosted-readiness` 只读检查 P2-A12 的 GitHub CLI、origin/默认分支、已发布 commit 和手动工作流入口；未就绪时按顺序输出安装、认证、配置 origin、切换/发布 main 等建议动作，就绪后才生成绑定该 commit/run attempt 的触发与证据下载命令。预检不会自动执行任何建议。
 
-`npm run status:p2-exit` 是只读阶段编排器：它检查 Git 状态、A11 final/partial、A12 原始归档与 hosted 收据、外部汇总、本地故障收据和最终退出收据，必要时从原始字节重放外部门禁。命令不会构建、推送、触发 workflow 或写证据；输出唯一当前阶段和下一动作，只有发现矛盾、失败或损坏的不可覆盖证据时才返回非零。
+`npm run status:p2-exit` 是只读阶段编排器：它检查 Git 状态、A11 final/partial、A12 原始归档与 hosted 收据、外部汇总、本地故障收据、数据安全审计和最终退出收据，必要时从原始字节重放外部门禁。命令不会构建、推送、触发 workflow 或写证据；输出唯一当前阶段和下一动作，只有发现矛盾、失败或损坏的不可覆盖证据时才返回非零。
 
 P2-A12 的托管运行成功后，执行 `npm run collect:p2-hosted-evidence -- --run-id <run-id> --attempt <attempt>`。该命令拒绝模糊的“最新运行”，复核指定运行的状态、事件、workflow、分支、commit、URL 和五个必需 job，随后精确下载、离线重放并归档四份机器证据，同时发布不可覆盖的托管运行收据供阶段退出复验。
 
 A11 与 A12 原始证据均就位后，`npm run verify:p2-external` 会确定性重放两项门禁并生成不可覆盖的统一收据；`npm run inspect:p2-external` 可在不读取原始证据的情况下严格复核收据结构、正式资源边界、三平台测试全集、GitHub hosted 上下文、artifact/job 绑定与确定性时间。离线检查用于归档审阅，不能代替原始重放。
 
-所有阶段 2 正式证据和本地故障收据提交后，从完全干净的候选提交运行 `npm run verify:p2-exit`。该命令再次从 A11 原始样本与 A12 四份 artifact 重放外部门禁，严格检查 A04/A10 收据，复核 `soak ≤ hosted matrix ≤ local faults ≤ candidate`、soak 源码零漂移、证据在相应提交中逐字存在，以及本地故障执行后没有 README/docs 之外的变化。只有全部满足并通过独立收据自检才生成不可覆盖的 `p2-phase-2-exit.json`；之后可用 `npm run inspect:p2-exit` 单独离线复核其完整结构与内部摘要一致性。
+外部门禁与本地候选故障收据都提交后，必须复核 [`docs/defects.json`](docs/defects.json) 中的全部发现，把审核状态和时间更新为真实值，再运行 `npm run verify:p2-data-safety`。该门禁拒绝 draft 登记、open P0/P1、无规避/目标版本的 open P2、过早审核、未提交输入或九类报告漂移；accepted 收据可用 `npm run inspect:p2-data-safety` 离线检查。
+
+所有阶段 2 正式证据、本地故障收据和数据安全收据提交后，从完全干净的候选提交运行 `npm run verify:p2-exit`。该命令再次从 A11 原始样本与 A12 四份 artifact 重放外部门禁，严格检查 A04/A10 收据，并从数据安全收据绑定的历史提交重放缺陷登记与九份控制报告；同时复核 `soak ≤ hosted matrix ≤ local faults ≤ data safety ≤ candidate`、soak 源码零漂移、证据在相应提交中逐字存在，以及本地故障执行后没有 README/docs 之外的变化。只有全部满足并通过独立收据自检才生成不可覆盖的 `p2-phase-2-exit.json`；之后可用 `npm run inspect:p2-exit` 单独离线复核其完整结构与内部摘要一致性。
 
 ## 阶段 0 原型单独验证
 

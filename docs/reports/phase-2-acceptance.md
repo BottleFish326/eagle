@@ -12,7 +12,7 @@
 
 本报告提前汇总已完成证据并固定最后两项门禁的判定流程。它不是阶段通过声明；P2-A11 和 P2-A12 任一未完成时，阶段 2 必须保持 **In progress**，阶段 3 不得开始实现。
 
-全过程可运行 `npm run status:p2-exit` 获取机器状态。该只读编排器同时检查 Git、A11 final/partial、A12 hosted readiness/原始归档、外部汇总、本地故障与最终收据；运行中的 A11 partial 必须逐项匹配正式 28,800 秒参数，进度按 internal/native 两条采样流的较小覆盖时长计算，并报告目标、已覆盖、剩余毫秒与百分比。编排器会把状态归入长稳运行/失败、托管环境阻塞/可触发、外部汇总待生成/损坏、本地故障待运行/待提交、候选脏、最终待生成/待提交或 accepted，并只输出当前唯一下一动作。命令不会执行该动作，也不会构建、推送、触发 workflow 或写证据；只有矛盾/失败/损坏证据返回非零。
+全过程可运行 `npm run status:p2-exit` 获取机器状态。该只读编排器同时检查 Git、A11 final/partial、A12 hosted readiness/原始归档、外部汇总、本地故障、数据安全审计与最终收据；运行中的 A11 partial 必须逐项匹配正式 28,800 秒参数，进度按 internal/native 两条采样流的较小覆盖时长计算，并报告目标、已覆盖、剩余毫秒与百分比。编排器会把状态归入长稳运行/失败、托管环境阻塞/可触发、外部汇总待生成/损坏、本地故障待运行/待提交、数据安全待审核/损坏/待提交、候选脏、最终待生成/待提交或 accepted，并只输出当前唯一下一动作。命令不会执行该动作，也不会构建、推送、触发 workflow 或写证据；只有矛盾/失败/损坏证据返回非零。
 
 ## 2. 工作项结果
 
@@ -148,25 +148,39 @@ npm run test:p2-local-fault-gates
 
 该命令会构建并运行 Rust 故障负载，因此不在 P2-A11 采样期间执行。当前执行器、Schema、离线严格检查器与七项纯判定测试已通过；正式候选收据仍 pending，必须等 soak 正常结束、partial 消失且候选证据提交后再运行。该本地收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
 
-## 5.3 阶段 2 最终机器退出收据
+## 5.3 P0/P1 数据安全缺陷审计
 
-外部门禁、本地故障收据与实际结论更新都提交后，从完全干净的候选提交执行：
+外部门禁与本地故障收据提交后，必须对 [`docs/defects.json`](../defects.json) 做最终复核。初始 `draft` 状态故意不能通过；即使 findings 为空，也只有逐项审阅自动化、失败现场、九份阶段/工作项报告和已知限制后，才能把状态改为 `reviewed`，且 `reviewedAt` 必须晚于外部门禁与本地故障执行时间。open P0/P1 无条件阻断，open P2 必须同时记录可执行规避方式和目标版本。
+
+登记和报告更新提交、工作树完全干净后执行：
+
+```text
+npm run verify:p2-data-safety
+npm run inspect:p2-data-safety
+```
+
+生成器严格检查缺陷字段、ID 唯一性、优先级退出规则、九份固定控制报告 SHA-256、外部与本地收据、全部输入已提交、工作树清洁以及 `A11 <= A12 <= local faults <= data-safety candidate`。成功报告先由独立路径自检，再以不可覆盖方式生成 `p2-data-safety-audit.json`；其 accepted-only 结构由 [`p2-data-safety-audit.schema.json`](../../schemas/p2-data-safety-audit.schema.json) 固定。完整规则和十项控制见 [数据安全缺陷审计](p2-data-safety-audit.md)。当前实现与篡改测试已通过，但正式输入未齐，因此登记册保持 draft、正式收据 pending。
+
+## 5.4 阶段 2 最终机器退出收据
+
+外部门禁、本地故障收据、数据安全收据与实际结论更新都提交后，从完全干净的候选提交执行：
 
 ```text
 npm run verify:p2-exit
 ```
 
-最终验证器不把 `p2-external-gates.json` 当作不可复核的声明。它重新读取 A11 原始样本、A12 三个平台源 artifact/矩阵 artifact 和 hosted-run 收据，重建外部门禁并要求与已提交汇总逐字语义相同；随后用独立检查器验证 A04/A10 收据的完整字段、Node/Rust/Cargo 环境、二进制摘要、进程状态、317/1000 边界、两个缓存故障点顺序与临时目录清理。
+最终验证器不把 `p2-external-gates.json` 或 `p2-data-safety-audit.json` 当作不可复核的声明。它重新读取 A11 原始样本、A12 三个平台源 artifact/矩阵 artifact 和 hosted-run 收据，重建外部门禁并要求与已提交汇总逐字语义相同；随后用独立检查器验证 A04/A10 收据的完整字段、Node/Rust/Cargo 环境、二进制摘要、进程状态、317/1000 边界、两个缓存故障点顺序与临时目录清理。数据安全收据则从其绑定的历史 candidate commit 重新读取 defect register、外部/本地收据和九份报告逐字重放。
 
 Git 侧还必须同时满足：
 
-1. `soak commit <= hosted matrix commit <= local fault commit <= final candidate HEAD`；
+1. `soak commit <= hosted matrix commit <= local fault commit <= data-safety candidate <= final candidate HEAD`；
 2. A11 固定加载脚本和产品输入相对正式 soak 基线零漂移；
 3. 本地故障执行所绑定的干净提交中已包含当前逐字相同的 `p2-external-gates.json`；
 4. 当前候选提交中已包含逐字相同的 `p2-local-fault-gates.json`；
-5. 本地故障执行后只有 `README.md` 与 `docs/` 可以变化，任何工具、Schema、工作流、依赖或产品源码变化都要求从新的干净提交重跑故障门禁。
+5. 当前候选提交中已包含逐字相同的数据安全收据，其历史 candidate 的全部审计输入可重放且 P0/P1 open 计数均为零；
+6. 本地故障执行后只有 `README.md` 与 `docs/` 可以变化，任何工具、Schema、工作流、依赖或产品源码变化都要求从新的干净提交重跑故障门禁。
 
-任一条件失败时只输出拒绝报告并返回非零。全部通过后，生成的报告还要由一条不读取原始输入的独立检查路径核对精确字段、摘要格式、固定边界、来源提交与确定性时间；只有自检也接受，才以不可覆盖方式生成 `docs/reports/evidence/p2-phase-2-exit.json`。其 accepted-only 结构由 [`phase-2-exit-evidence.schema.json`](../../schemas/phase-2-exit-evidence.schema.json) 固定，记录两个输入收据 SHA-256、四段提交关系、候选 SHA、来源基线和最小验收摘要；归档后可运行 `npm run inspect:p2-exit` 再次离线检查。当前纯分析的成功、综合篡改、非法路径和存档篡改四项测试与 Schema 编译已通过；正式退出命令必须等待 A11/A12 和本地候选故障收据全部就位，当前不能生成 accepted 结果。
+任一条件失败时只输出拒绝报告并返回非零。全部通过后，生成的报告还要由一条不读取原始输入的独立检查路径核对精确字段、摘要格式、固定边界、来源提交与确定性时间；只有自检也接受，才以不可覆盖方式生成 `docs/reports/evidence/p2-phase-2-exit.json`。其 accepted-only 结构由 [`phase-2-exit-evidence.schema.json`](../../schemas/phase-2-exit-evidence.schema.json) 固定，记录三份输入收据 SHA-256、五段提交关系、候选 SHA、来源基线和最小验收摘要；归档后可运行 `npm run inspect:p2-exit` 再次离线检查。当前纯分析的成功、综合篡改、非法路径和存档篡改测试与 Schema 编译已通过；正式退出命令必须等待 A11/A12、本地候选故障收据及其后的 reviewed 数据安全收据全部就位，当前不能生成 accepted 结果。
 
 ## 6. 产品不变量复核
 
@@ -188,7 +202,7 @@ Git 侧还必须同时满足：
 | 崩溃测试无截断 Sidecar | Pass locally；候选提交统一故障收据 pending |
 | 连续 8 小时无无界资源增长 | Pending |
 | 三平台核心路径原生测试通过 | Pending |
-| P0/P1 数据安全缺陷为零 | Final audit pending；当前报告无已知未解决项 |
+| P0/P1 数据安全缺陷为零 | 审计链已实现；登记册保持 draft，须在 A11/A12 与本地故障门禁后完成 reviewed 审计，当前不得判 Pass |
 
 ## 8. 阶段退出操作
 
@@ -199,9 +213,11 @@ Git 侧还必须同时满足：
 3. 提交所有候选代码与上述正式证据，确认没有 partial、临时 fixture、token 或本机路径，且 `git status` 完全干净；
 4. 执行 `npm run test:p2-local-fault-gates`，检查不可覆盖收据通过 Schema 并绑定该干净候选提交；失败时保留现场、修复后从新的干净提交完整重跑；
 5. 添加本地故障收据，更新 P2-03/P2-05/P2-06/P2-08、本报告、`docs/progress.md` 和 README，运行文档/Schema 检查与最终快速质量门禁，然后提交；此后不得修改 README/docs 之外的路径；
-6. 再次确认工作树完全干净，执行 `npm run verify:p2-exit`，要求输出 `accepted=true`、`failures=[]` 并通过最终 Schema；
-7. 把本报告改为实际 Accepted、添加最终退出收据并提交，再把阶段 3 从 Not started 改为 In progress。
+6. 复核所有自动化、失败现场和已知限制，把 `docs/defects.json` 更新为真实 reviewed 状态；open P0/P1 必须为零，open P2 必须有规避方式和目标版本，审核时间必须晚于最终门禁证据，然后提交；
+7. 在干净候选上执行 `npm run verify:p2-data-safety`，要求 accepted、自检通过且生成不可覆盖收据；添加并提交收据；
+8. 再次确认工作树完全干净，执行 `npm run verify:p2-exit`，要求输出 `accepted=true`、`failures=[]` 并通过最终 Schema；
+9. 把本报告改为实际 Accepted、添加最终退出收据并提交，再把阶段 3 从 Not started 改为 In progress。
 
 ## 9. 当前结论
 
-P2-A01 至 P2-A10 已有本地自动化/故障注入证据，A04/A10 的最终候选收据执行器和阶段 2 最终退出验证器已就绪，但为隔离 soak 尚未执行正式候选故障负载。P2-A11 正在执行，P2-A12 仍受没有 Git remote 的外部托管矩阵阻塞。因此阶段 2 当前结论是 **Not accepted / In progress**，不得提前宣称完成。
+P2-A01 至 P2-A10 已有本地自动化/故障注入证据，A04/A10 候选收据、数据安全审计和阶段 2 最终退出验证器均已就绪，但为隔离 soak 尚未执行正式候选故障负载，缺陷登记也必须保持 draft。P2-A11 正在执行，P2-A12 仍受没有 Git remote 的外部托管矩阵阻塞。因此阶段 2 当前结论是 **Not accepted / In progress**，不得提前宣称完成。

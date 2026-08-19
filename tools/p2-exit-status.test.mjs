@@ -87,6 +87,34 @@ test("routes accepted external evidence through local faults and a clean final c
     "local-faults-uncommitted",
   );
 
+  const safetyMissing = base();
+  safetyMissing.dataSafety = {
+    state: "missing",
+    failures: [],
+    committed: false,
+  };
+  const safetyMissingReport = buildP2ExitStatus(safetyMissing);
+  assert.equal(safetyMissingReport.stage, "data-safety-pending");
+  assert.equal(
+    safetyMissingReport.nextAction.command,
+    "npm run verify:p2-data-safety",
+  );
+
+  const safetyInvalid = base();
+  safetyInvalid.dataSafety = {
+    state: "invalid",
+    failures: ["open P1"],
+    committed: false,
+  };
+  assert.equal(buildP2ExitStatus(safetyInvalid).stage, "data-safety-invalid");
+
+  const safetyUncommitted = base();
+  safetyUncommitted.dataSafety.committed = false;
+  assert.equal(
+    buildP2ExitStatus(safetyUncommitted).stage,
+    "data-safety-uncommitted",
+  );
+
   const dirty = base();
   dirty.git.cleanAll = false;
   assert.equal(buildP2ExitStatus(dirty).stage, "candidate-dirty");
@@ -156,6 +184,12 @@ function base() {
     },
     externalGates: { state: "accepted", failures: [], summary: null },
     localFaults: {
+      state: "accepted",
+      failures: [],
+      committed: true,
+      summary: null,
+    },
+    dataSafety: {
       state: "accepted",
       failures: [],
       committed: true,

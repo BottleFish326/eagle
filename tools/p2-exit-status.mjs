@@ -12,6 +12,9 @@ export const P2_EXIT_STAGES = Object.freeze([
   "local-faults-pending",
   "local-faults-invalid",
   "local-faults-uncommitted",
+  "data-safety-pending",
+  "data-safety-invalid",
+  "data-safety-uncommitted",
   "candidate-dirty",
   "final-exit-pending",
   "accepted",
@@ -23,6 +26,7 @@ export function buildP2ExitStatus({
   hostedReadiness,
   externalGates,
   localFaults,
+  dataSafety,
   finalExit,
 }) {
   const inputs = normalizeInputs({
@@ -31,6 +35,7 @@ export function buildP2ExitStatus({
     hostedReadiness,
     externalGates,
     localFaults,
+    dataSafety,
     finalExit,
   });
   const decision = decide(inputs);
@@ -53,6 +58,7 @@ export function buildP2ExitStatus({
         externalGates: inputs.externalGates,
       },
       localFaults: inputs.localFaults,
+      dataSafety: inputs.dataSafety,
       finalExit: inputs.finalExit,
     },
     nextAction: decision.nextAction,
@@ -60,8 +66,15 @@ export function buildP2ExitStatus({
 }
 
 function decide(inputs) {
-  const { git, soak, hostedReadiness, externalGates, localFaults, finalExit } =
-    inputs;
+  const {
+    git,
+    soak,
+    hostedReadiness,
+    externalGates,
+    localFaults,
+    dataSafety,
+    finalExit,
+  } = inputs;
 
   if (finalExit.state === "invalid")
     return decision(
@@ -77,7 +90,9 @@ function decide(inputs) {
       soak.state === "passed" &&
       externalGates.state === "accepted" &&
       localFaults.state === "accepted" &&
-      localFaults.committed === true;
+      localFaults.committed === true &&
+      dataSafety.state === "accepted" &&
+      dataSafety.committed === true;
     if (!upstreamAccepted)
       return decision(
         "evidence-conflict",
@@ -189,6 +204,30 @@ function decide(inputs) {
       "git status --short",
       "Inspect and commit the local fault receipt plus documentation before final verification.",
     );
+  if (dataSafety.state === "invalid")
+    return decision(
+      "data-safety-invalid",
+      prefixed("data safety", dataSafety.failures),
+      "preserve-data-safety-evidence",
+      "npm run inspect:p2-data-safety",
+      "Do not overwrite the receipt; inspect the defect register and bound evidence.",
+    );
+  if (dataSafety.state === "missing")
+    return decision(
+      "data-safety-pending",
+      [],
+      "verify-data-safety",
+      "npm run verify:p2-data-safety",
+      "Review the defect register after all gates, then generate the immutable data safety receipt.",
+    );
+  if (dataSafety.committed !== true)
+    return decision(
+      "data-safety-uncommitted",
+      [],
+      "commit-data-safety",
+      "npm run inspect:p2-data-safety",
+      "Inspect and commit the accepted data safety receipt before final verification.",
+    );
   if (git.cleanAll !== true)
     return decision(
       "candidate-dirty",
@@ -227,6 +266,7 @@ function normalizeInputs(value) {
       "invalid",
     ]),
     localFaults: normalizeReceipt(value.localFaults),
+    dataSafety: normalizeReceipt(value.dataSafety),
     finalExit: normalizeReceipt(value.finalExit),
   };
 }
