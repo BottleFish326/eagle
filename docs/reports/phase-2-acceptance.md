@@ -4,7 +4,7 @@
 >
 > 日期：2026-08-20
 >
-> P2-A11 受测基线：`c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21`；后续提交截至本报告只增加不被运行任务加载的只读 checkpoint inspector 与文档
+> P2-A11 受测基线：`c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21`；正式任务加载的 `resource-stability-analysis.mjs` 与 `verify-resource-stability.mjs` 已保持和该提交逐字相同，后续最终重放、平台证据、Schema 与文档均位于运行任务未加载的独立文件
 
 ## 1. 验收范围
 
@@ -57,6 +57,14 @@ docs/reports/evidence/p2-06-resource-soak.json.partial
 ```
 
 partial 只证明任务仍可审计，不能提交、不能当作通过证据。当前 `inspect-resource-stability-checkpoint.mjs` 返回 healthy/no failures；该结论也不能替代 8 小时 complete sample。
+
+基线隔离可用以下命令直接复核；任何输出或非零退出都必须停止验收并解释差异：
+
+```text
+git diff --exit-code c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21 -- \
+  tools/resource-stability-analysis.mjs \
+  tools/verify-resource-stability.mjs
+```
 
 ### 4.1 唯一通过判据
 
@@ -135,7 +143,7 @@ node tools/verify-phase-2-external-gates.mjs
 只有第 4、5 节证据都通过后，执行一次候选提交审计：
 
 1. 确认 P2-A11 final JSON、P2-A12 已归档 consolidated matrix/三个源 artifact/hosted logs 与实现 commit 可追溯，并生成 `p2-external-gates.json`；
-2. 确认从 `c18e1ca` 起只有未被受测进程加载的只读 inspector/证据/文档变化；若有产品或验收器判定代码变化，重新跑相应门禁；
+2. 执行第 4 节基线 diff，确认正式 soak 生成器和原始判定器逐字未变；另审计后续提交没有修改该任务已编译的产品代码，若存在则重新跑相应门禁；
 3. 检查 `git status` 只包含预期最终证据，没有 partial、临时 fixture、token 或本机路径；
 4. 更新 P2-06/P2-08、本报告、`docs/progress.md` 和 README 为实际结论；
 5. 运行文档/Schema 检查和最终快速质量门禁；

@@ -9,10 +9,8 @@ import test from "node:test";
 import { buildPhase2ExternalGatesReport } from "./phase-2-external-gates.mjs";
 import { buildPlatformMatrixReport } from "./platform-matrix-analysis.mjs";
 import { expectedPlatformPathTests } from "./platform-path-evidence.mjs";
-import {
-  buildResourceStabilityReport,
-  FORMAL_RESOURCE_STABILITY_OPTIONS,
-} from "./resource-stability-analysis.mjs";
+import { buildResourceStabilityReport } from "./resource-stability-analysis.mjs";
+import { FORMAL_RESOURCE_STABILITY_OPTIONS } from "./resource-stability-report.mjs";
 
 const repository = path.resolve(import.meta.dirname, "..");
 const verifier = path.join(

@@ -4,7 +4,7 @@ import { inspectPlatformMatrixArchive } from "./platform-matrix-archive.mjs";
 import {
   FORMAL_RESOURCE_STABILITY_OPTIONS,
   inspectResourceStabilityReport,
-} from "./resource-stability-analysis.mjs";
+} from "./resource-stability-report.mjs";
 
 export function buildPhase2ExternalGatesReport({
   resourceBytes,

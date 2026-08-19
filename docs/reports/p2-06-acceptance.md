@@ -77,7 +77,7 @@ npm run test:resource-stability
 
 命令在非 Node 24 或脏 Git 工作区拒绝启动。自动拒绝条件包括：提交号/运行时缺失、检查点写入失败、进程非零或信号退出、未产生覆盖请求时长的完整结束样本、内部时间轴倒退、素材数不符、内部或原生样本少于理论采样数的 75%、样本结构非法、RSS 增长超过 256 MiB、RSS 斜率超过 8 MiB/分钟、句柄增长超过 64、句柄波动超过 128、线程峰值超过预热基线 16、CPU 超出调度容量包络、许可或等待队列越界、缓存越界以及扫描/事件/哈希/解码任一活动缺失。
 
-最终验收不能只读取 `accepted`。`inspectResourceStabilityReport` 会固定正式参数为 28,800/60/100,000/5/60，使用报告内的原始内部/原生样本、退出状态、stderr、环境和时间重新构造完整报告；重放结果必须继续通过并与磁盘 JSON 在语义上完全一致。
+最终验收不能只读取 `accepted`。独立只读模块 `resource-stability-report.mjs` 中的 `inspectResourceStabilityReport` 会固定正式参数为 28,800/60/100,000/5/60，使用报告内的原始内部/原生样本、退出状态、stderr、环境和时间重新构造完整报告；重放结果必须继续通过并与磁盘 JSON 在语义上完全一致。正式任务加载的 `resource-stability-analysis.mjs` 与 `verify-resource-stability.mjs` 保持和受测 commit `c18e1ca` 逐字相同，新增重放逻辑不改变正在运行的生成器或原始判定器。
 
 P2-A12 证据归档后，`verify-phase-2-external-gates.mjs` 会再次调用该重放器，并将最终 JSON 原始字节 SHA-256、受测 commit、参数、环境和 summary 写入统一外部门禁结论。该统一结论不替代本节 8 小时判据。
 

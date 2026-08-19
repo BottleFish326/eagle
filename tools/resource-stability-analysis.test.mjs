@@ -7,9 +7,9 @@ import test from "node:test";
 import {
   assertResourceStabilityRuntime,
   buildResourceStabilityReport,
-  inspectResourceStabilityReport,
   linearSlope,
 } from "./resource-stability-analysis.mjs";
+import { inspectResourceStabilityReport } from "./resource-stability-report.mjs";
 import {
   createResourceStabilityCheckpoint,
   inspectResourceStabilityCheckpoint,
