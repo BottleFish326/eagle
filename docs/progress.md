@@ -63,6 +63,7 @@
 | P3-01 扩展格式能力管线 | Design ready | 已固定识别/属性/预览三层能力、codec 缺失降级、worker 隔离、格式矩阵、资源限额、恶意夹具要求、严格夹具 Schema 和六个实施切片；阶段 2 退出前不计作 P3 开始，见 `reports/p3-01-readiness.md` |
 | P3-02 智能属性与高级过滤 | Design ready | 已固定定型谓词、整数单位、RFC 3339、精确宽高比、未知属性、混合索引和独立三方查询语料；阶段 2 退出前不计作 P3 开始，见 `reports/p3-02-readiness.md` |
 | P3-03 保存过滤器 | Persistence design ready | 已固定用户级独立 YAML、根 ID 作用域、无素材快照、乐观并发及显式 Tag 重命名影响处理；阶段 2 退出前不计作 P3 开始，见 `../specs/adr/027-user-profile-saved-filters.md` |
+| P3-04 批量工作流 | Design ready | 已固定精确全选快照、catalog revision、只读预检、协作取消、事务续传与剪贴板单次提交；阶段 2 退出前不计作 P3 开始，见 `reports/p3-04-readiness.md` |
 
 ## 已固定的关键决定
 
@@ -95,6 +96,7 @@
 - 根目录 canonicalize 后按平台逐组件判断重叠；Windows 路径键折叠大小写与 Unicode、macOS 只折叠 Unicode、Linux 保留原样。符号链接只诊断不跟随，扫描中掉线或撤权时放弃本次权威结果并恢复扫描前目录记录。
 - 扩展格式按识别、属性和预览三层能力解耦；codec 缺失只降级为通用类型卡片，不得隐藏素材。复杂或原生解码器使用固定 worker 和硬超时，文件派生媒体属性不写入 Sidecar。
 - 高级查询先解析为定型谓词；大小、时长与时间使用整数，宽高比用分数交叉比较，未知属性只能由显式 `unknown` 匹配。P3-A03 的离线 oracle 不得复用产品解析器或索引。
+- “全选当前结果”在后端物化精确有序快照，不能在执行时重新求值而纳入新素材；元数据批次沿用纯文件事务，取消后已提交项保持完整、未开始项可继续或条件恢复。
 
 ## 当前性能证据
 
@@ -117,6 +119,7 @@
 - [P2-08 平台与文件系统兼容验收报告](reports/p2-08-acceptance.md)
 - [P3-01 扩展格式支持实施准备报告](reports/p3-01-readiness.md)
 - [P3-02 智能属性与高级过滤实施准备报告](reports/p3-02-readiness.md)
+- [P3-04 批量工作流实施准备报告](reports/p3-04-readiness.md)
 - [平台差异记录](../specs/platform-notes.md)
 - 参考环境：Apple M4、16 GiB、APFS SSD、macOS 26.5.2；
 - L 数据集：100,000 个素材、20,000 个 sidecar；

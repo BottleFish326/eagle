@@ -41,3 +41,4 @@
 | [ADR-026](026-capability-based-extended-format-pipeline.md) | 能力驱动的扩展格式管线 | Accepted |
 | [ADR-027](027-user-profile-saved-filters.md) | 用户级保存过滤器与显式 Tag 重命名 | Accepted |
 | [ADR-028](028-typed-advanced-query-predicates.md) | 定型高级查询谓词与独立结果预言机 | Accepted |
+| [ADR-029](029-exact-batch-selection-and-execution.md) | 精确批量选择快照与分层执行 | Accepted |
