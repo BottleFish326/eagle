@@ -15,7 +15,7 @@ Obsidian 插件既要在桌面素材管理器运行时复用其查询能力，�
 
 1. 桌面端在其操作系统应用配置目录维护 `obsidian-authorization.yml`。它是普通、原子写入的机器级 capability manifest，包含 installation UUIDv7、revision、总开关和用户明确允许给 Obsidian 的根 ID/path/scan 规则。它不写入 Vault、素材根、Sidecar、缓存或数据库。
 2. Manifest 使用 [`obsidian-authorization.schema.json`](../../schemas/obsidian-authorization.schema.json)，Unix 文件权限为 0600、父目录 0700；Windows 使用当前用户 ACL。它由桌面端从已配置 LibraryRoot 的子集生成，不能授权不存在、停用、重叠、跟随符号链接或当前不可访问的根。
-3. Obsidian 插件第一次发现 installation/root 或 root path fingerprint 变化时逐项显示真实路径并要求批准。插件数据只保存 installation ID、root ID、路径 SHA-256 指纹和 enabled，不保存绝对路径或长期 IPC token。有效授权是 manifest enabled、root enabled、指纹匹配和插件批准的交集。
+3. Obsidian 插件第一次发现 installation/root 或 root path fingerprint 变化时逐项显示真实路径并要求批准。插件数据只保存随机 Vault instance ID、installation ID、root ID、路径 SHA-256 指纹和 enabled，不保存绝对路径或长期 IPC token。有效授权是 manifest enabled、root enabled、指纹匹配和插件批准的交集。
 4. 桌面运行时控制面使用当前用户限定的 Unix domain socket（macOS/Linux）或当前 SID ACL 的 Windows named pipe。启动时在应用配置目录原子写 `obsidian-endpoint.json`，包含协议版本、installation ID、endpoint、pid、start nonce 和更新时间；退出时删除，插件必须把连接失败/握手不符视为离线。
 5. 控制协议使用长度前缀的版本化 JSON、1 MiB 请求/响应上限、request ID、deadline 和显式 capability。API不接受绝对路径；查询、引用和打开定位只接受 root/filter/asset 的不透明 ID。连接默认只读，任何创建稳定 ID 的写能力必须由单独 capability、精确预检和用户确认授权。
 6. Desktop IPC 只作为加速和桌面联动，不是外部引用真相源。插件始终能从当前 manifest 授权根直接建立内存最小索引；桌面断开时正在进行的只读查询可以明确失败并回退离线，不把 IPC 结果持久化。

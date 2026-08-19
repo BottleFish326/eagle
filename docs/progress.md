@@ -10,7 +10,7 @@
 | 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
 | 阶段 2：可靠性与恢复 | In progress | P2-01 至 P2-05、P2-07 已完成本地验收；P2-06 等待 P2-A11 连续 8 小时，P2-08 等待 Windows/Linux 托管矩阵完成 P2-A12 |
 | 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出；P3-01 至 P3-07 的完整实施准备均已收敛 |
-| 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出；机器级授权、用户态 IPC、离线内存索引与媒体 lease 架构已完成准备 |
+| 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出；P4-01 至 P4-06 的授权、索引、媒体、搜索插入、双向定位与恢复架构已完成准备 |
 
 ## 阶段 0 工作项
 
@@ -73,6 +73,7 @@
 | 准备项 | 状态 | 证据 |
 |---|---|---|
 | P4-01/P4-02 权限与离线索引 | Architecture ready | 已固定机器级授权 manifest、插件逐根批准、Unix socket/Windows pipe、两阶段内存索引、小图 object URL 和大媒体 Range lease；阶段 3 退出前不计作 P4 开始，见 `reports/p4-01-02-readiness.md` |
+| P4-03/P4-05/P4-06 搜索、定位与恢复 | Architecture ready | 已固定在线/离线统一选择器、目标 digest 防误写、单事务插入、临时 Markdown AST backlink、双向 handle 定位及无改写移动恢复；阶段 3 退出前不计作 P4 开始，见 `reports/p4-03-05-06-readiness.md` |
 
 ## 已固定的关键决定
 
@@ -138,6 +139,7 @@
 - [P3-06 拖放与剪贴板实施准备报告](reports/p3-06-readiness.md)
 - [P3-07 生产级交互实施准备报告](reports/p3-07-readiness.md)
 - [P4-01/P4-02 插件权限与离线索引实施准备报告](reports/p4-01-02-readiness.md)
+- [P4-03/P4-05/P4-06 搜索插入、双向定位与恢复实施准备报告](reports/p4-03-05-06-readiness.md)
 - [平台差异记录](../specs/platform-notes.md)
 - 参考环境：Apple M4、16 GiB、APFS SSD、macOS 26.5.2；
 - L 数据集：100,000 个素材、20,000 个 sidecar；

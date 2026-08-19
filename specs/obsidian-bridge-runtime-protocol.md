@@ -20,12 +20,13 @@
 
 ```text
 BridgeApproval {
+  vaultInstanceId,
   installationId,
   roots: [{ rootId, pathFingerprint, enabled }]
 }
 ```
 
-`pathFingerprint = SHA-256("material-eagle-obsidian-root-v1\\0" || platformPathKey)`。首次 root、installation 变化或指纹变化时显示 manifest 中的路径/名称并要求批准。未知 root 默认拒绝；manifest remove/disable 立即压倒旧批准。插件用户也可单独关闭已批准根。
+`vaultInstanceId` 是当前 Vault 插件数据中的随机 UUIDv7；`pathFingerprint = SHA-256("material-eagle-obsidian-root-v1\\0" || platformPathKey)`。首次 root、installation 变化或指纹变化时显示 manifest 中的路径/名称并要求批准。未知 root 默认拒绝；manifest remove/disable 立即压倒旧批准。插件用户也可单独关闭已批准根。
 
 插件按 Windows/macOS/Linux 的固定 Material Eagle 应用配置位置发现 `obsidian-authorization.yml`，不在 Vault 数据中保存 manifest 路径，也不提供任意 manifest/root 路径输入。插件不允许从笔记、URI、IPC response 或 Markdown 属性添加根；发现文件后仍需逐根批准。
 
@@ -54,11 +55,23 @@ Hello {
   protocol,
   installationId,
   startNonce,
-  client: { pluginVersion, obsidianVersion, approvalRevision }
+  client: {
+    pluginVersion,
+    obsidianVersion,
+    approvalRevision,
+    vaultSession: {
+      vaultInstanceId,
+      vaultPathFingerprint,
+      displayName,
+      capabilities: [backlinks-query, open-note]
+    }
+  }
 }
 ```
 
-服务端回 `HelloAck { protocol, capabilities, manifestRevision, build }`。installation/nonce/protocol 不符即关闭。每帧 4-byte big-endian length + UTF-8 JSON，最大 1 MiB；request ID 唯一，deadline 最大 30 秒，超时/取消释放后端资源。
+`vaultInstanceId` 是插件数据中的随机 UUIDv7；path fingerprint 使用 ADR-034 的 domain-separated SHA-256，只用于匹配桌面端已配置 Vault，不发送 Vault 绝对路径。displayName/fingerprint 只保留于活动连接和瞬态 UI，不写日志。
+
+服务端回 `HelloAck { protocol, capabilities, manifestRevision, build }`。installation/nonce/protocol 不符即关闭。每帧 4-byte big-endian length + UTF-8 JSON，最大 1 MiB；frame 带 `kind=request|response|event` 和 direction，request ID 在单连接双向唯一，deadline 最大 30 秒，超时/取消释放后端资源。服务端只有在客户端握手声明 capability 后才能发起 backlink/note 请求。
 
 协议 1 capability：
 
@@ -69,7 +82,9 @@ open-asset
 health
 ```
 
-服务端按 manifest 和客户端批准 root ID 交集限制查询。响应不含绝对路径、Sidecar 内容或 token。查询每页最多 256 项，opaque cursor 绑定 query/scope/sort/catalog revision 并在 60 秒或连接关闭时失效；不得用单个超限 frame 截断全量结果。`open-asset` 只改变本机桌面 UI 选择；未来 `ensure-stable-id` 属于独立写 capability，默认不存在。
+插件可向服务端发起上述只读请求；服务端可向已声明 capability 的插件发起 `backlinks.query` 和 `notes.open`。双向方法的 payload、短期 noteHandle、相对笔记路径隐私边界和 revision 规则由 [`obsidian-search-navigation-and-recovery-protocol.md`](obsidian-search-navigation-and-recovery-protocol.md) 固定。
+
+服务端按 manifest 和客户端批准 root ID 交集限制查询。响应不含绝对素材路径、Sidecar 内容或 token。查询每页最多 256 项，opaque cursor 绑定 query/scope/sort/catalog revision 并在 60 秒或连接关闭时失效；不得用单个超限 frame 截断全量结果。`open-asset` 只改变本机桌面 UI 选择；未来 `ensure-stable-id` 属于独立写 capability，默认不存在。
 
 ## 4. 离线最小索引
 
