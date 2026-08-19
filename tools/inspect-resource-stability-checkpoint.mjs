@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { inspectResourceStabilityCheckpoint } from "./resource-stability-checkpoint.mjs";
+import { inspectResourceStabilityCheckpoint } from "./resource-stability-checkpoint-inspection.mjs";
 
 const repository = path.resolve(import.meta.dirname, "..");
 const checkpointPath = path.resolve(

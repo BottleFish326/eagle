@@ -12,9 +12,9 @@ import {
 import { inspectResourceStabilityReport } from "./resource-stability-report.mjs";
 import {
   createResourceStabilityCheckpoint,
-  inspectResourceStabilityCheckpoint,
   writeJsonAtomic,
 } from "./resource-stability-checkpoint.mjs";
+import { inspectResourceStabilityCheckpoint } from "./resource-stability-checkpoint-inspection.mjs";
 
 const options = {
   durationSeconds: 100,

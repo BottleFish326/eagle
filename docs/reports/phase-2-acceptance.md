@@ -4,7 +4,7 @@
 >
 > 日期：2026-08-20
 >
-> P2-A11 受测基线：`c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21`；正式任务加载的 `resource-stability-analysis.mjs` 与 `verify-resource-stability.mjs` 已保持和该提交逐字相同，后续最终重放、平台证据、Schema 与文档均位于运行任务未加载的独立文件
+> P2-A11 受测基线：`c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21`；正式任务加载的分析、检查点写入和运行器三份文件已保持和该提交逐字相同，后续 partial 检查、最终重放、平台证据、Schema 与文档均位于运行任务未加载的独立文件
 
 ## 1. 验收范围
 
@@ -63,6 +63,7 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 ```text
 git diff --exit-code c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21 -- \
   tools/resource-stability-analysis.mjs \
+  tools/resource-stability-checkpoint.mjs \
   tools/verify-resource-stability.mjs
 ```
 
