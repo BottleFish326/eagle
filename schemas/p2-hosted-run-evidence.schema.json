@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/p2-hosted-run-evidence.schema.json",
+  "title": "P2 hosted workflow run evidence",
+  "description": "Accepted-only receipt binding the successful GitHub Actions run, required jobs, and archived P2-A12 artifacts.",
+  "type": "object",
+  "required": [
+    "schema",
+    "accepted",
+    "failures",
+    "repository",
+    "verifiedAt",
+    "run",
+    "jobs",
+    "archive",
+    "temporaryDownloadRemoved"
+  ],
+  "properties": {
+    "schema": { "const": 1 },
+    "accepted": { "const": true },
+    "failures": { "type": "array", "maxItems": 0 },
+    "repository": {
+      "type": "string",
+      "pattern": "^[^/\\s]+/[^/\\s]+$"
+    },
+    "verifiedAt": { "type": "string", "format": "date-time" },
+    "run": { "$ref": "#/$defs/run" },
+    "jobs": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": { "$ref": "#/$defs/job" }
+    },
+    "archive": { "$ref": "#/$defs/archive" },
+    "temporaryDownloadRemoved": { "const": true }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "databaseId",
+        "attempt",
+        "event",
+        "headBranch",
+        "headSha",
+        "status",
+        "conclusion",
+        "workflowName",
+        "createdAt",
+        "startedAt",
+        "updatedAt",
+        "url"
+      ],
+      "properties": {
+        "databaseId": { "$ref": "#/$defs/positiveInteger" },
+        "attempt": { "$ref": "#/$defs/positiveInteger" },
+        "event": { "const": "workflow_dispatch" },
+        "headBranch": { "const": "main" },
+        "headSha": { "$ref": "#/$defs/gitCommit" },
+        "status": { "const": "completed" },
+        "conclusion": { "const": "success" },
+        "workflowName": { "const": "CI" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "url": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/actions/runs/[1-9][0-9]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "job": {
+      "type": "object",
+      "required": [
+        "databaseId",
+        "name",
+        "status",
+        "conclusion",
+        "startedAt",
+        "completedAt",
+        "url"
+      ],
+      "properties": {
+        "databaseId": { "$ref": "#/$defs/positiveInteger" },
+        "name": {
+          "enum": [
+            "Path compatibility (ubuntu-24.04)",
+            "Path compatibility (macos-15)",
+            "Path compatibility (windows-2025)",
+            "Consolidate path compatibility evidence",
+            "Format, test, and build"
+          ]
+        },
+        "status": { "const": "completed" },
+        "conclusion": { "const": "success" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "url": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/actions/runs/[1-9][0-9]*/job/[1-9][0-9]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "archive": {
+      "type": "object",
+      "required": ["gitCommit", "githubRunAttempt", "runUrl", "files"],
+      "properties": {
+        "gitCommit": { "$ref": "#/$defs/gitCommit" },
+        "githubRunAttempt": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "runUrl": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/actions/runs/[1-9][0-9]*$"
+        },
+        "files": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/file" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "file": {
+      "type": "object",
+      "required": ["relativePath", "sha256", "bytes"],
+      "properties": {
+        "relativePath": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+\\.json$"
+        },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "bytes": { "$ref": "#/$defs/positiveInteger" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

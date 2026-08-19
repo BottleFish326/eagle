@@ -114,7 +114,7 @@ npm run audit:p2-hosted-readiness
 npm run collect:p2-hosted-evidence -- --run-id <run-id> --attempt <attempt>
 ```
 
-采集器重新查询指定 attempt 的运行元数据，要求 completed/success、手动事件、workflow、分支、候选 SHA 与 URL 全部精确匹配；再把该 attempt 的四个 artifact 下载到受保护临时目录并调用原有归档器。归档器会再次重放、确认受测 commit 是当前 HEAD 祖先，并把原始字节目录级原子保存到 `docs/reports/evidence/p2-a12-platform-evidence/`。只有归档成功才清理临时下载；下载或重放失败会保留现场路径。不得省略显式 run ID/attempt、改用“最新 artifact”或手工复制结果替代该步骤。
+采集器重新查询指定 attempt 的运行元数据，要求 completed/success、手动事件、workflow、分支、候选 SHA 与 URL 全部精确匹配；三个原生平台 leg、矩阵汇总和完整质量门禁五个 job 还必须各出现一次且 completed/success。随后把该 attempt 的四个 artifact 下载到受保护临时目录并调用原有归档器。归档器会再次重放、确认受测 commit 是当前 HEAD 祖先，并把原始字节目录级原子保存到 `docs/reports/evidence/p2-a12-platform-evidence/`。只有归档成功才清理临时下载，并以不可覆盖、相同输入可幂等复核的方式发布 `docs/reports/evidence/p2-a12-hosted-run.json`；下载或重放失败会保留现场路径。不得省略显式 run ID/attempt、改用“最新 artifact”或手工复制结果替代该步骤。
 
 ## 5.1 P2-A11/P2-A12 统一机器结论
 
@@ -124,7 +124,7 @@ npm run collect:p2-hosted-evidence -- --run-id <run-id> --attempt <attempt>
 node tools/verify-phase-2-external-gates.mjs
 ```
 
-工具会从全部原始样本确定性重放 P2-A11，从归档的三个源 JSON 重放 P2-A12，并要求 Git 关系满足 `soak commit <= hosted matrix commit <= current HEAD`。通过结果以不可覆盖、相同输入可幂等复核的方式写入 `docs/reports/evidence/p2-external-gates.json`，字段由 [`phase-2-external-gates.schema.json`](../../schemas/phase-2-external-gates.schema.json) 固定，包含两个证据的 SHA-256、精简 summary、run URL 和三个 runner 摘要，不复制大体积原始样本；拒绝结果只输出到终端并返回非零，不落下可能被误认成正式证据的文件。
+工具会从全部原始样本确定性重放 P2-A11，从归档的三个源 JSON 重放 P2-A12，并用四个归档文件的实际字节重放 `p2-a12-hosted-run.json`，核对同一 run/attempt/commit、五个成功 job 与 quality 结果；同时要求 Git 关系满足 `soak commit <= hosted matrix commit <= current HEAD`。通过结果以不可覆盖、相同输入可幂等复核的方式写入 `docs/reports/evidence/p2-external-gates.json`，字段由 [`phase-2-external-gates.schema.json`](../../schemas/phase-2-external-gates.schema.json) 固定，包含三个证据的 SHA-256、精简 summary、run URL、三个 runner 摘要和五个 hosted job，不复制大体积原始样本；拒绝结果只输出到终端并返回非零，不落下可能被误认成正式证据的文件。
 
 只有统一报告 `accepted=true` 且 `failures=[]` 时，P2-A11/P2-A12 两项外部门禁才可一起视为满足。它不替代 P2-A01 至 P2-A10、完整质量门禁、数据安全复核或退出评审，因此不能单独把阶段 2 标成 Accepted。
 
@@ -154,7 +154,7 @@ node tools/verify-phase-2-external-gates.mjs
 
 只有第 4、5 节证据都通过后，执行一次候选提交审计：
 
-1. 确认 P2-A11 final JSON、P2-A12 已归档 consolidated matrix/三个源 artifact/hosted logs 与实现 commit 可追溯，并生成 `p2-external-gates.json`；
+1. 确认 P2-A11 final JSON、P2-A12 已归档 consolidated matrix/三个源 artifact、`p2-a12-hosted-run.json`/hosted logs 与实现 commit 可追溯，并生成 `p2-external-gates.json`；
 2. 执行 `npm run audit:p2-soak-baseline`，确认正式 soak 生成器、原始判定器和该任务已编译的产品代码均未变化；若任一 scope 出现差异则重新跑相应门禁；
 3. 检查 `git status` 只包含预期最终证据，没有 partial、临时 fixture、token 或本机路径；
 4. 更新 P2-06/P2-08、本报告、`docs/progress.md` 和 README 为实际结论；

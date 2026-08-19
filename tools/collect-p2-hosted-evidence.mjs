@@ -1,4 +1,14 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import {
+  link,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -14,6 +24,13 @@ import {
 import { buildP2HostedReadiness } from "./p2-hosted-readiness.mjs";
 
 const repository = path.resolve(import.meta.dirname, "..");
+const receiptPath = path.join(
+  repository,
+  "docs",
+  "reports",
+  "evidence",
+  "p2-a12-hosted-run.json",
+);
 let downloadDirectory = null;
 let temporaryDownloadRemoved = false;
 
@@ -55,6 +72,7 @@ try {
   const result = await collectP2HostedEvidence({
     inspection,
     run,
+    repositorySlug: readiness.github.repository,
     patterns,
     downloadDirectory,
     downloadArtifacts: async ({
@@ -85,6 +103,9 @@ try {
     removeDownloadDirectory: async (target) => {
       await rm(target, { recursive: true });
       temporaryDownloadRemoved = true;
+    },
+    publishEvidence: async (receipt) => {
+      await writeExclusiveOrIdentical(receiptPath, receipt);
     },
   });
   console.log(JSON.stringify(result, null, 2));
@@ -128,7 +149,7 @@ function readHostedRun({ runId, attempt, repositorySlug }) {
     "--attempt",
     String(attempt),
     "--json",
-    "attempt,conclusion,databaseId,event,headBranch,headSha,status,url,workflowName",
+    "attempt,conclusion,createdAt,databaseId,event,headBranch,headSha,jobs,startedAt,status,updatedAt,url,workflowName",
     "-R",
     repositorySlug,
   ]);
@@ -136,6 +157,33 @@ function readHostedRun({ runId, attempt, repositorySlug }) {
     return JSON.parse(output);
   } catch {
     throw new Error("GitHub CLI returned invalid hosted run JSON");
+  }
+}
+
+async function writeExclusiveOrIdentical(destination, value) {
+  const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+  try {
+    const stats = await lstat(destination);
+    if (!stats.isFile())
+      throw new Error("existing hosted run evidence is not a regular file");
+    const existing = await readFile(destination);
+    if (!existing.equals(bytes))
+      throw new Error("existing hosted run evidence differs");
+    return;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+
+  await mkdir(path.dirname(destination), { recursive: true });
+  const temporary = path.join(
+    path.dirname(destination),
+    `.${path.basename(destination)}.${randomUUID()}.tmp`,
+  );
+  await writeFile(temporary, bytes, { flag: "wx" });
+  try {
+    await link(temporary, destination);
+  } finally {
+    await unlink(temporary).catch(() => {});
   }
 }
 

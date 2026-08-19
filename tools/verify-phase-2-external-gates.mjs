@@ -29,6 +29,13 @@ const defaults = {
     "evidence",
     "p2-a12-platform-evidence",
   ),
+  hostedRunPath: path.join(
+    repository,
+    "docs",
+    "reports",
+    "evidence",
+    "p2-a12-hosted-run.json",
+  ),
   outputPath: path.join(
     repository,
     "docs",
@@ -45,11 +52,18 @@ try {
   const resourceBytes = await readBoundedFile(
     options.resourcePath,
     32 * 1024 * 1024,
+    "P2-A11 evidence",
   );
   const resourceReport = JSON.parse(resourceBytes.toString("utf8"));
   const platformBundle = await readPlatformMatrixBundle(
     options.platformArchive,
   );
+  const hostedRunBytes = await readBoundedFile(
+    options.hostedRunPath,
+    1024 * 1024,
+    "P2-A12 hosted run evidence",
+  );
+  const hostedRunReceipt = JSON.parse(hostedRunBytes.toString("utf8"));
   const resourceCommit = resourceReport.gitCommit;
   const matrixCommit = platformBundle.matrixReport?.gitCommit;
   const commitOrderVerified =
@@ -61,6 +75,8 @@ try {
     resourceBytes,
     resourceReport,
     platformBundle,
+    hostedRunBytes,
+    hostedRunReceipt,
     commitOrderVerified,
   });
   console.log(JSON.stringify(report, null, 2));
@@ -77,19 +93,21 @@ try {
 function parseArguments(args) {
   if (args.length === 0) return { ...defaults };
   if (
-    args.length === 6 &&
+    args.length === 8 &&
     args[0] === "--resource" &&
     args[2] === "--platform-archive" &&
-    args[4] === "--output"
+    args[4] === "--hosted-run" &&
+    args[6] === "--output"
   ) {
     return {
       resourcePath: path.resolve(args[1]),
       platformArchive: path.resolve(args[3]),
-      outputPath: path.resolve(args[5]),
+      hostedRunPath: path.resolve(args[5]),
+      outputPath: path.resolve(args[7]),
     };
   }
   throw new Error(
-    "usage: node tools/verify-phase-2-external-gates.mjs [--resource <json> --platform-archive <directory> --output <json>]",
+    "usage: node tools/verify-phase-2-external-gates.mjs [--resource <json> --platform-archive <directory> --hosted-run <json> --output <json>]",
   );
 }
 
@@ -125,10 +143,10 @@ function isCommit(value) {
   return typeof value === "string" && /^[0-9a-f]{40,64}$/u.test(value);
 }
 
-async function readBoundedFile(filePath, limit) {
+async function readBoundedFile(filePath, limit, label) {
   const stats = await lstat(filePath);
-  if (!stats.isFile()) throw new Error("P2-A11 evidence is not a regular file");
-  if (stats.size > limit) throw new Error("P2-A11 evidence exceeds 32 MiB");
+  if (!stats.isFile()) throw new Error(`${label} is not a regular file`);
+  if (stats.size > limit) throw new Error(`${label} exceeds its size limit`);
   return readFile(filePath);
 }
 

@@ -7,7 +7,13 @@ import path from "node:path";
 import test from "node:test";
 
 import { buildPhase2ExternalGatesReport } from "./phase-2-external-gates.mjs";
+import {
+  buildP2HostedRunReceipt,
+  inspectP2HostedRun,
+  REQUIRED_P2_HOSTED_JOBS,
+} from "./p2-hosted-evidence.mjs";
 import { buildPlatformMatrixReport } from "./platform-matrix-analysis.mjs";
+import { platformMatrixBundleEntries } from "./platform-matrix-bundle.mjs";
 import { expectedPlatformPathTests } from "./platform-path-evidence.mjs";
 import { buildResourceStabilityReport } from "./resource-stability-analysis.mjs";
 import { FORMAL_RESOURCE_STABILITY_OPTIONS } from "./resource-stability-report.mjs";
@@ -33,6 +39,11 @@ test("accepts and writes one deterministic verdict after replaying both external
   assert.equal(report.p2A11.fixtureCount, 100_000);
   assert.equal(report.p2A12.runUrl, fixture.matrix.workflow.runUrl);
   assert.equal(report.p2A12.artifacts.length, 3);
+  assert.equal(report.p2A12.hostedJobs.length, 5);
+  assert.equal(
+    report.p2A12.hostedRunReceiptSha256,
+    sha256(fixture.hostedRunBytes),
+  );
 
   const second = runVerifier(fixture);
   assert.equal(second.status, 0, second.stderr || second.stdout);
@@ -50,12 +61,31 @@ test("rejects a changed soak summary and an unverified commit order", async (con
     resourceBytes: changedBytes,
     resourceReport: changed,
     platformBundle: fixture.platformBundle,
+    hostedRunBytes: fixture.hostedRunBytes,
+    hostedRunReceipt: fixture.hostedRunReceipt,
     commitOrderVerified: false,
   });
   assert.equal(report.accepted, false);
   assert.ok(
     report.failures.some((failure) =>
       failure.includes("does not equal its raw-sample replay"),
+    ),
+  );
+
+  const changedHostedRun = structuredClone(fixture.hostedRunReceipt);
+  changedHostedRun.jobs.at(-1).conclusion = "failure";
+  const hostedRejected = buildPhase2ExternalGatesReport({
+    resourceBytes: fixture.resourceBytes,
+    resourceReport: fixture.resourceReport,
+    platformBundle: fixture.platformBundle,
+    hostedRunBytes: Buffer.from(JSON.stringify(changedHostedRun)),
+    hostedRunReceipt: changedHostedRun,
+    commitOrderVerified: true,
+  });
+  assert.equal(hostedRejected.accepted, false);
+  assert.ok(
+    hostedRejected.failures.some((failure) =>
+      failure.includes("hosted job conclusion is not success"),
     ),
   );
   assert.ok(
@@ -75,6 +105,7 @@ async function createFixture() {
   const root = await mkdtemp(path.join(tmpdir(), "material-eagle-p2-gates-"));
   const platformArchive = path.join(root, "platform");
   const resourcePath = path.join(root, "p2-06-resource-soak.json");
+  const hostedRunPath = path.join(root, "p2-a12-hosted-run.json");
   const output = path.join(root, "p2-external-gates.json");
   const commit = readCommit();
   await mkdir(platformArchive);
@@ -144,20 +175,60 @@ async function createFixture() {
     matrixBytes,
   );
 
+  const platformBundle = {
+    matrixArtifactName,
+    matrixReport: matrix,
+    matrixBytes,
+    sources,
+  };
+  const hostedRun = makeHostedRun({
+    commit,
+    runUrl: matrix.workflow.runUrl,
+    updatedAt: new Date(now + 1_000).toISOString(),
+  });
+  const hostedInspection = inspectP2HostedRun({
+    run: hostedRun,
+    requestedRunId: 123456,
+    requestedAttempt: 1,
+    expectedCommit: commit,
+    repositorySlug: "owner/repository",
+  });
+  assert.equal(
+    hostedInspection.accepted,
+    true,
+    hostedInspection.failures.join("; "),
+  );
+  const hostedRunReceipt = {
+    ...buildP2HostedRunReceipt({
+      inspection: hostedInspection,
+      run: hostedRun,
+      repositorySlug: "owner/repository",
+      archive: makeArchiveReport(platformBundle),
+    }),
+    temporaryDownloadRemoved: true,
+  };
+  assert.equal(
+    hostedRunReceipt.accepted,
+    true,
+    hostedRunReceipt.failures.join("; "),
+  );
+  const hostedRunBytes = Buffer.from(
+    `${JSON.stringify(hostedRunReceipt, null, 2)}\n`,
+  );
+  await writeFile(hostedRunPath, hostedRunBytes);
+
   return {
     root,
     resourcePath,
     resourceReport,
     resourceBytes,
     platformArchive,
+    hostedRunPath,
+    hostedRunReceipt,
+    hostedRunBytes,
     output,
     matrix,
-    platformBundle: {
-      matrixArtifactName,
-      matrixReport: matrix,
-      matrixBytes,
-      sources,
-    },
+    platformBundle,
   };
 }
 
@@ -298,6 +369,49 @@ function workflowContext(commit) {
   };
 }
 
+function makeHostedRun({ commit, runUrl, updatedAt }) {
+  const createdAt = new Date(Date.parse(updatedAt) - 70_000).toISOString();
+  const startedAt = new Date(Date.parse(updatedAt) - 69_000).toISOString();
+  return {
+    attempt: 1,
+    conclusion: "success",
+    createdAt,
+    databaseId: 123456,
+    event: "workflow_dispatch",
+    headBranch: "main",
+    headSha: commit,
+    jobs: REQUIRED_P2_HOSTED_JOBS.map((name, index) => ({
+      databaseId: 900_000 + index,
+      name,
+      status: "completed",
+      conclusion: "success",
+      startedAt,
+      completedAt: updatedAt,
+      url: `${runUrl}/job/${String(900_000 + index)}`,
+    })),
+    startedAt,
+    status: "completed",
+    updatedAt,
+    url: runUrl,
+    workflowName: "CI",
+  };
+}
+
+function makeArchiveReport(platformBundle) {
+  const matrix = platformBundle.matrixReport;
+  return {
+    archived: true,
+    gitCommit: matrix.gitCommit,
+    githubRunAttempt: matrix.workflow.githubRunAttempt,
+    runUrl: matrix.workflow.runUrl,
+    files: platformMatrixBundleEntries(platformBundle).map((entry) => ({
+      relativePath: entry.relativePath,
+      sha256: sha256(entry.bytes),
+      bytes: entry.bytes.length,
+    })),
+  };
+}
+
 function runVerifier(fixture) {
   return spawnSync(
     process.execPath,
@@ -307,6 +421,8 @@ function runVerifier(fixture) {
       fixture.resourcePath,
       "--platform-archive",
       fixture.platformArchive,
+      "--hosted-run",
+      fixture.hostedRunPath,
       "--output",
       fixture.output,
     ],

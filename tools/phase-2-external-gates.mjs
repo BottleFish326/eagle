@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { inspectPlatformMatrixArchive } from "./platform-matrix-archive.mjs";
+import { inspectP2HostedRunReceipt } from "./p2-hosted-run-receipt.mjs";
 import {
   FORMAL_RESOURCE_STABILITY_OPTIONS,
   inspectResourceStabilityReport,
@@ -10,6 +11,8 @@ export function buildPhase2ExternalGatesReport({
   resourceBytes,
   resourceReport,
   platformBundle,
+  hostedRunBytes,
+  hostedRunReceipt,
   commitOrderVerified,
   expectedResourceOptions = FORMAL_RESOURCE_STABILITY_OPTIONS,
 }) {
@@ -23,6 +26,12 @@ export function buildPhase2ExternalGatesReport({
   const platformInspection = inspectPlatformMatrixArchive(platformBundle);
   for (const failure of platformInspection.failures)
     failures.push(`P2-A12: ${failure}`);
+  const hostedRunInspection = inspectP2HostedRunReceipt(
+    hostedRunReceipt,
+    platformBundle,
+  );
+  for (const failure of hostedRunInspection.failures)
+    failures.push(`P2-A12 hosted run: ${failure}`);
 
   if (commitOrderVerified !== true)
     failures.push(
@@ -31,11 +40,16 @@ export function buildPhase2ExternalGatesReport({
 
   const resource = resourceInspection.replayedReport;
   const matrix = platformInspection.replayedReport;
+  const hostedRun = hostedRunInspection.replayedReceipt;
   return {
     schema: 1,
     accepted: failures.length === 0,
     failures,
-    evidenceAt: laterIsoInstant(resource?.completedAt, matrix?.verifiedAt),
+    evidenceAt: laterIsoInstant(
+      resource?.completedAt,
+      matrix?.verifiedAt,
+      hostedRun?.verifiedAt,
+    ),
     commitOrderVerified: commitOrderVerified === true,
     p2A11: {
       accepted: resourceInspection.accepted,
@@ -50,15 +64,18 @@ export function buildPhase2ExternalGatesReport({
       summary: resource?.summary ?? null,
     },
     p2A12: {
-      accepted: platformInspection.accepted,
+      accepted: platformInspection.accepted && hostedRunInspection.accepted,
       matrixArtifactName: platformBundle?.matrixArtifactName ?? null,
       matrixSha256: sha256(platformBundle?.matrixBytes),
+      hostedRunReceiptSha256: sha256(hostedRunBytes),
+      hostedRunVerifiedAt: hostedRun?.verifiedAt ?? null,
       gitCommit: matrix?.gitCommit ?? null,
       verifiedAt: matrix?.verifiedAt ?? null,
       githubRunAttempt: matrix?.workflow?.githubRunAttempt ?? null,
       runUrl: matrix?.workflow?.runUrl ?? null,
       verificationEnvironment: matrix?.verificationEnvironment ?? null,
       artifacts: matrix?.artifacts ?? [],
+      hostedJobs: hostedRun?.jobs ?? [],
     },
   };
 }
@@ -69,8 +86,8 @@ function sha256(bytes) {
     : null;
 }
 
-function laterIsoInstant(left, right) {
-  const values = [left, right].filter(isIsoInstant);
+function laterIsoInstant(...candidates) {
+  const values = candidates.filter(isIsoInstant);
   return values.length === 0
     ? null
     : values

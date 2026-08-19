@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://material-eagle.local/schemas/phase-2-external-gates.schema.json",
   "title": "Phase 2 external acceptance gates",
-  "description": "Deterministic accepted-only summary produced after replaying P2-A11 and P2-A12 evidence.",
+  "description": "Deterministic accepted-only summary produced after replaying P2-A11, P2-A12 artifacts, and the bound hosted workflow receipt.",
   "type": "object",
   "required": [
     "schema",
@@ -151,12 +151,15 @@
         "accepted",
         "matrixArtifactName",
         "matrixSha256",
+        "hostedRunReceiptSha256",
+        "hostedRunVerifiedAt",
         "gitCommit",
         "verifiedAt",
         "githubRunAttempt",
         "runUrl",
         "verificationEnvironment",
-        "artifacts"
+        "artifacts",
+        "hostedJobs"
       ],
       "properties": {
         "accepted": { "const": true },
@@ -165,6 +168,11 @@
           "pattern": "^p2-a12-matrix-[0-9a-f]{40,64}-attempt-[1-9][0-9]*$"
         },
         "matrixSha256": { "$ref": "#/$defs/sha256" },
+        "hostedRunReceiptSha256": { "$ref": "#/$defs/sha256" },
+        "hostedRunVerifiedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
         "gitCommit": { "$ref": "#/$defs/gitCommit" },
         "verifiedAt": { "type": "string", "format": "date-time" },
         "githubRunAttempt": {
@@ -184,6 +192,14 @@
           "maxItems": 3,
           "items": {
             "$ref": "https://material-eagle.local/schemas/platform-matrix-evidence.schema.json#/$defs/acceptedArtifact"
+          }
+        },
+        "hostedJobs": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "$ref": "https://material-eagle.local/schemas/p2-hosted-run-evidence.schema.json#/$defs/job"
           }
         }
       },
