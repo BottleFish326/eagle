@@ -9,7 +9,11 @@ import {
   buildResourceStabilityReport,
   linearSlope,
 } from "./resource-stability-analysis.mjs";
-import { writeJsonAtomic } from "./resource-stability-checkpoint.mjs";
+import {
+  createResourceStabilityCheckpoint,
+  inspectResourceStabilityCheckpoint,
+  writeJsonAtomic,
+} from "./resource-stability-checkpoint.mjs";
 
 const options = {
   durationSeconds: 100,
@@ -117,6 +121,37 @@ test("atomically replaces checkpoint JSON without leaving temporary files", asyn
   }
 });
 
+test("accepts healthy partial evidence and rejects bounded-resource violations", () => {
+  const input = acceptedInput();
+  const checkpoint = createResourceStabilityCheckpoint({
+    startedAt: input.startedAt,
+    gitCommit: input.gitCommit,
+    environment: input.environment,
+    options: input.options,
+    childPid: 123,
+    internalSamples: input.internalSamples,
+    externalSamples: input.externalSamples,
+    sampleParseErrors: [],
+    monitorErrors: [],
+    stderr: "",
+  });
+  const healthy = inspectResourceStabilityCheckpoint(checkpoint);
+  assert.equal(healthy.healthy, true);
+  assert.deepEqual(healthy.failures, []);
+
+  checkpoint.internalSamples[4].cache.entryCount =
+    checkpoint.internalSamples[4].cache.maxEntries + 1;
+  checkpoint.monitorErrors.push("checkpoint write failed");
+  const unhealthy = inspectResourceStabilityCheckpoint(checkpoint);
+  assert.equal(unhealthy.healthy, false);
+  assert.ok(
+    unhealthy.failures.some((failure) => failure.includes("cache exceeded")),
+  );
+  assert.ok(
+    unhealthy.failures.some((failure) => failure.includes("monitor errors")),
+  );
+});
+
 test("reports a least-squares rate per minute", () => {
   assert.equal(
     linearSlope(
@@ -152,6 +187,8 @@ function acceptedInput() {
         maxWaiters: 256,
         activeTotal: 1,
         waitingTotal: 0,
+        peakActiveTotal: 2,
+        peakWaitingTotal: 0,
       },
       cache: {
         entryCount: Math.min(2_000, Math.floor(elapsedMs / 100)),
