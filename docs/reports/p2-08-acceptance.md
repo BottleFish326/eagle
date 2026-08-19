@@ -112,7 +112,7 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 5. 确认 Linux leg 实际执行大小写并存、权限撤销和移动根目录掉线；
 6. 确认最终 `p2-08-platform-matrix.json` 是 `accepted=true`、`failures=[]`、同一 Git commit/run/attempt，且三个源 artifact 的 SHA-256、expected/listed/executed 和 summary 均被重放核对；
 7. 确认采集器输出 `accepted=true`、`failures=[]`、`temporaryDownloadRemoved=true`，提交固定证据目录及 `p2-a12-hosted-run.json`；
-8. 运行 `verify-phase-2-external-gates.mjs`，只有统一报告 `accepted=true` 后才评估阶段 2 退出；
+8. 运行 `npm run verify:p2-external`，只有统一报告 `accepted=true` 后才评估阶段 2 退出；归档审阅可再运行 `npm run inspect:p2-external`，但离线收据检查不能替代原始 artifact 重放；
 9. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。
 
 若首次运行有 leg 失败，必须使用 “Re-run all jobs” 进行正式复验；只重跑失败 job 会保留不同 attempt 的成功 leg，汇总器会按设计拒绝混合证据。

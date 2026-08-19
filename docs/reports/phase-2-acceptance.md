@@ -123,10 +123,10 @@ npm run collect:p2-hosted-evidence -- --run-id <run-id> --attempt <attempt>
 两个正式证据均就位后执行：
 
 ```text
-node tools/verify-phase-2-external-gates.mjs
+npm run verify:p2-external
 ```
 
-工具会从全部原始样本确定性重放 P2-A11，从归档的三个源 JSON 重放 P2-A12，并用四个归档文件的实际字节重放 `p2-a12-hosted-run.json`，核对同一 run/attempt/commit、五个成功 job 与 quality 结果；同时要求 Git 关系满足 `soak commit <= hosted matrix commit <= current HEAD`。通过结果以不可覆盖、相同输入可幂等复核的方式写入 `docs/reports/evidence/p2-external-gates.json`，字段由 [`phase-2-external-gates.schema.json`](../../schemas/phase-2-external-gates.schema.json) 固定，包含三个证据的 SHA-256、精简 summary、run URL、三个 runner 摘要和五个 hosted job，不复制大体积原始样本；拒绝结果只输出到终端并返回非零，不落下可能被误认成正式证据的文件。
+工具会从全部原始样本确定性重放 P2-A11，从归档的三个源 JSON 重放 P2-A12，并用四个归档文件的实际字节重放 `p2-a12-hosted-run.json`，核对同一 run/attempt/commit、五个成功 job 与 quality 结果；同时要求 Git 关系满足 `soak commit <= hosted matrix commit <= current HEAD`。通过结果以不可覆盖、相同输入可幂等复核的方式写入 `docs/reports/evidence/p2-external-gates.json`，字段由 [`phase-2-external-gates.schema.json`](../../schemas/phase-2-external-gates.schema.json) 固定，包含三个证据的 SHA-256、精简 summary、run URL、三个 runner 摘要和五个 hosted job，不复制大体积原始样本；拒绝结果只输出到终端并返回非零，不落下可能被误认成正式证据的文件。归档后可运行 `npm run inspect:p2-external`，用不读取 A11/A12 原始文件的独立路径严格核对固定时长/样本边界、资源上限、三平台测试全集、GitHub hosted 上下文、artifact 命名、五个 job、跨字段绑定和确定性时间；该离线检查不能替代原始证据重放。
 
 只有统一报告 `accepted=true` 且 `failures=[]` 时，P2-A11/P2-A12 两项外部门禁才可一起视为满足。它不替代 P2-A01 至 P2-A10、完整质量门禁、数据安全复核或退出评审，因此不能单独把阶段 2 标成 Accepted。
 

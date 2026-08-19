@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
 import { inspectP2LocalFaultGatesReceipt } from "./p2-local-fault-gates.mjs";
+import { inspectPhase2ExternalGatesReceipt } from "./phase-2-external-gates.mjs";
 import { FORMAL_SOAK_BASELINE_COMMIT } from "./soak-baseline-audit.mjs";
 
 export const P2_FINAL_ALLOWED_AFTER_LOCAL_FAULTS = Object.freeze([
@@ -352,20 +353,9 @@ function isRecord(value) {
 }
 
 function inspectExternalGates(stored, replayed, failures) {
-  if (
-    replayed?.schema !== 1 ||
-    replayed?.accepted !== true ||
-    !Array.isArray(replayed?.failures) ||
-    replayed.failures.length !== 0 ||
-    replayed?.commitOrderVerified !== true ||
-    !isIsoInstant(replayed?.evidenceAt) ||
-    replayed?.p2A11?.accepted !== true ||
-    !isCommit(replayed?.p2A11?.gitCommit) ||
-    replayed?.p2A12?.accepted !== true ||
-    !isCommit(replayed?.p2A12?.gitCommit) ||
-    !isRunUrl(replayed?.p2A12?.runUrl)
-  )
-    failures.push("P2-A11/P2-A12 external gate replay is not accepted");
+  const inspection = inspectPhase2ExternalGatesReceipt(replayed);
+  for (const failure of inspection.failures)
+    failures.push(`P2-A11/P2-A12 external gate replay: ${failure}`);
   if (!isDeepStrictEqual(stored, replayed))
     failures.push("stored external gate evidence does not equal its replay");
 }

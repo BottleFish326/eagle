@@ -100,14 +100,10 @@
         "scheduler"
       ],
       "properties": {
-        "nativeSampleCount": { "$ref": "#/$defs/nonnegativeInteger" },
-        "minimumNativeSampleCount": {
-          "$ref": "#/$defs/nonnegativeInteger"
-        },
-        "internalSampleCount": { "$ref": "#/$defs/nonnegativeInteger" },
-        "minimumInternalSampleCount": {
-          "$ref": "#/$defs/nonnegativeInteger"
-        },
+        "nativeSampleCount": { "type": "integer", "minimum": 4311 },
+        "minimumNativeSampleCount": { "const": 4311 },
+        "internalSampleCount": { "type": "integer", "minimum": 4320 },
+        "minimumInternalSampleCount": { "const": 4320 },
         "invalidInternalSampleCount": { "const": 0 },
         "invalidExternalSampleCount": { "const": 0 },
         "rssGrowthKiB": { "type": "number", "maximum": 262144 },
@@ -123,7 +119,11 @@
         "watcherBatches": { "type": "integer", "minimum": 1 },
         "thumbnailRequests": { "type": "integer", "minimum": 1 },
         "hashRequests": { "type": "integer", "minimum": 1 },
-        "cacheEntries": { "$ref": "#/$defs/nonnegativeInteger" },
+        "cacheEntries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20000
+        },
         "scheduler": {
           "type": "object",
           "required": [
@@ -131,16 +131,20 @@
             "activeTotal",
             "waitingTotal",
             "foregroundLimit",
-            "maxWaiters"
+            "maxWaiters",
+            "peakActiveTotal",
+            "peakWaitingTotal"
           ],
           "properties": {
             "mode": { "enum": ["foreground", "background"] },
             "activeTotal": { "$ref": "#/$defs/nonnegativeInteger" },
             "waitingTotal": { "$ref": "#/$defs/nonnegativeInteger" },
             "foregroundLimit": { "$ref": "#/$defs/nonnegativeInteger" },
-            "maxWaiters": { "$ref": "#/$defs/nonnegativeInteger" }
+            "maxWaiters": { "$ref": "#/$defs/nonnegativeInteger" },
+            "peakActiveTotal": { "$ref": "#/$defs/nonnegativeInteger" },
+            "peakWaitingTotal": { "$ref": "#/$defs/nonnegativeInteger" }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

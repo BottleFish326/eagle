@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildP2LocalFaultGatesReport } from "./p2-local-fault-gates.mjs";
+import { REQUIRED_P2_HOSTED_JOBS } from "./p2-hosted-evidence.mjs";
+import { expectedPlatformPathTests } from "./platform-path-evidence.mjs";
 import {
   buildPhase2ExitGatesReport,
   inspectPhase2ExitGatesReceipt,
@@ -10,19 +12,7 @@ import { FORMAL_SOAK_BASELINE_COMMIT } from "./soak-baseline-audit.mjs";
 
 const candidateCommit = "d".repeat(40);
 const localCommit = "c".repeat(40);
-const externalReport = {
-  schema: 1,
-  accepted: true,
-  failures: [],
-  evidenceAt: "2026-08-20T02:00:00.000Z",
-  commitOrderVerified: true,
-  p2A11: { accepted: true, gitCommit: "a".repeat(40) },
-  p2A12: {
-    accepted: true,
-    gitCommit: "b".repeat(40),
-    runUrl: "https://github.com/owner/repository/actions/runs/123456",
-  },
-};
+const externalReport = makeExternalReport();
 
 test("accepts replayed external evidence and committed local fault evidence in order", () => {
   const fixture = acceptedInputs();
@@ -136,6 +126,157 @@ function acceptedInputs() {
       productInputs: { changedPaths: [] },
     },
     localCandidateDriftPaths: [],
+  };
+}
+
+function makeExternalReport() {
+  const soakCommit = "a".repeat(40);
+  const matrixCommit = "b".repeat(40);
+  const runId = "123456";
+  const attempt = "1";
+  const repository = "owner/repository";
+  const workflowRef = `${repository}/.github/workflows/ci.yml@refs/heads/main`;
+  const runUrl = `https://github.com/${repository}/actions/runs/${runId}`;
+  const matrixVerifiedAt = "2026-08-20T02:30:00.000Z";
+  const hostedRunVerifiedAt = "2026-08-20T02:45:00.000Z";
+  const verificationEnvironment = {
+    nodeVersion: "v24.19.0",
+    githubActions: "true",
+    githubSha: matrixCommit,
+    githubRunId: runId,
+    githubRunAttempt: attempt,
+    githubWorkflowRef: workflowRef,
+    githubRepository: repository,
+    githubServerUrl: "https://github.com",
+    runnerOs: "Linux",
+    runnerArch: "X64",
+    runnerEnvironment: "github-hosted",
+  };
+  const artifacts = ["darwin", "linux", "win32"].map((platform) => {
+    const runnerOs = {
+      darwin: "macOS",
+      linux: "Linux",
+      win32: "Windows",
+    }[platform];
+    const tests = expectedPlatformPathTests(platform);
+    return {
+      artifactName: `p2-a12-source-${runnerOs}-${matrixCommit}-attempt-${attempt}`,
+      fileName: "p2-a12-platform-paths.json",
+      sha256:
+        platform === "darwin"
+          ? "3".repeat(64)
+          : platform === "linux"
+            ? "4".repeat(64)
+            : "5".repeat(64),
+      platform,
+      accepted: true,
+      startedAt: "2026-08-20T02:10:00.000Z",
+      completedAt: "2026-08-20T02:20:00.000Z",
+      environment: {
+        architecture: "x64",
+        nodeVersion: "v24.19.0",
+        rustc: "rustc 1.89.0",
+        cargo: "cargo 1.89.0",
+        runnerOs,
+        runnerArch: "X64",
+        runnerEnvironment: "github-hosted",
+        githubRunId: runId,
+        githubRunAttempt: attempt,
+        githubWorkflowRef: workflowRef,
+        githubRepository: repository,
+        githubServerUrl: "https://github.com",
+      },
+      expectedTests: tests,
+      listedTests: tests,
+      executedTests: tests,
+      summary: {
+        result: "ok",
+        passed: tests.length,
+        failed: 0,
+        ignored: 0,
+        measured: 0,
+        filteredOut: 100,
+      },
+    };
+  });
+  const hostedJobs = REQUIRED_P2_HOSTED_JOBS.map((name, index) => {
+    const databaseId = 900_000 + index;
+    return {
+      databaseId,
+      name,
+      status: "completed",
+      conclusion: "success",
+      startedAt: "2026-08-20T02:05:00.000Z",
+      completedAt: "2026-08-20T02:40:00.000Z",
+      url: `${runUrl}/job/${String(databaseId)}`,
+    };
+  });
+  return {
+    schema: 1,
+    accepted: true,
+    failures: [],
+    evidenceAt: hostedRunVerifiedAt,
+    commitOrderVerified: true,
+    p2A11: {
+      accepted: true,
+      fileName: "p2-06-resource-soak.json",
+      sha256: "1".repeat(64),
+      gitCommit: soakCommit,
+      startedAt: "2026-08-19T18:00:00.000Z",
+      completedAt: "2026-08-20T02:00:00.000Z",
+      durationSeconds: 28_800,
+      fixtureCount: 100_000,
+      environment: {
+        platform: "darwin",
+        architecture: "arm64",
+        nodeVersion: "v24.19.0",
+      },
+      summary: {
+        nativeSampleCount: 5_749,
+        minimumNativeSampleCount: 4_311,
+        internalSampleCount: 5_761,
+        minimumInternalSampleCount: 4_320,
+        invalidInternalSampleCount: 0,
+        invalidExternalSampleCount: 0,
+        rssGrowthKiB: 1_024,
+        rssSlopeKiBPerMinute: 2,
+        maxRssKiB: 200_000,
+        handleGrowth: 2,
+        maxHandles: 12,
+        threadBaseline: 4,
+        maxThreads: 5,
+        maxCpuPercent: 25,
+        scanPasses: 1_440,
+        generatedEvents: 40_000,
+        watcherBatches: 20_000,
+        thumbnailRequests: 400_000,
+        hashRequests: 400_000,
+        cacheEntries: 20_000,
+        scheduler: {
+          mode: "foreground",
+          foregroundLimit: 4,
+          maxWaiters: 256,
+          activeTotal: 1,
+          waitingTotal: 0,
+          peakActiveTotal: 2,
+          peakWaitingTotal: 0,
+        },
+      },
+    },
+    p2A12: {
+      accepted: true,
+      matrixArtifactName: `p2-a12-matrix-${matrixCommit}-attempt-${attempt}`,
+      matrixSha256: "6".repeat(64),
+      hostedRunReceiptSha256: "7".repeat(64),
+      hostedRunVerifiedAt,
+      gitCommit: matrixCommit,
+      verifiedAt: matrixVerifiedAt,
+      githubRunAttempt: attempt,
+      runUrl,
+      verificationEnvironment,
+      artifacts,
+      hostedJobs,
+    },
   };
 }
 

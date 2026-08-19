@@ -133,7 +133,7 @@ function decide(inputs) {
       "external-gates-invalid",
       prefixed("external gates", externalGates.failures),
       "rebuild-external-gates",
-      "node tools/verify-phase-2-external-gates.mjs",
+      "npm run verify:p2-external",
       "Rebuild external evidence only from the complete original inputs.",
     );
   if (externalGates.state === "ready")
@@ -141,7 +141,7 @@ function decide(inputs) {
       "external-gates-pending",
       [],
       "verify-external-gates",
-      "node tools/verify-phase-2-external-gates.mjs",
+      "npm run verify:p2-external",
       "Replay P2-A11 and P2-A12 into the immutable external gate receipt.",
     );
   if (externalGates.state !== "accepted") {

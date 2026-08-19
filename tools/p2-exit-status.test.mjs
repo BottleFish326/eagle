@@ -72,10 +72,7 @@ test("routes complete hosted inputs through external verification", () => {
   input.externalGates = { state: "ready", failures: [] };
   const report = buildP2ExitStatus(input);
   assert.equal(report.stage, "external-gates-pending");
-  assert.equal(
-    report.nextAction.command,
-    "node tools/verify-phase-2-external-gates.mjs",
-  );
+  assert.equal(report.nextAction.command, "npm run verify:p2-external");
 });
 
 test("routes accepted external evidence through local faults and a clean final candidate", () => {

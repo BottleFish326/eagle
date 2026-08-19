@@ -13,6 +13,8 @@
     "audit:p2-soak-baseline": "node tools/verify-soak-baseline-audit.mjs",
     "audit:p2-hosted-readiness": "node tools/inspect-p2-hosted-readiness.mjs",
     "collect:p2-hosted-evidence": "node tools/collect-p2-hosted-evidence.mjs",
+    "verify:p2-external": "node tools/verify-phase-2-external-gates.mjs",
+    "inspect:p2-external": "node tools/inspect-phase-2-external-gates.mjs",
     "test:p2-local-fault-gates": "node tools/verify-p2-local-fault-gates.mjs",
     "verify:p2-exit": "node tools/verify-phase-2-exit-gates.mjs",
     "inspect:p2-exit": "node tools/inspect-phase-2-exit-evidence.mjs",

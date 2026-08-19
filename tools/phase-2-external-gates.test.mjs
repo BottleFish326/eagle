@@ -6,7 +6,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildPhase2ExternalGatesReport } from "./phase-2-external-gates.mjs";
+import {
+  buildPhase2ExternalGatesReport,
+  inspectPhase2ExternalGatesReceipt,
+} from "./phase-2-external-gates.mjs";
 import {
   buildP2HostedRunReceipt,
   inspectP2HostedRun,
@@ -23,6 +26,11 @@ const verifier = path.join(
   repository,
   "tools",
   "verify-phase-2-external-gates.mjs",
+);
+const inspector = path.join(
+  repository,
+  "tools",
+  "inspect-phase-2-external-gates.mjs",
 );
 const workflowRef = "owner/repository/.github/workflows/ci.yml@refs/heads/main";
 
@@ -44,10 +52,63 @@ test("accepts and writes one deterministic verdict after replaying both external
     report.p2A12.hostedRunReceiptSha256,
     sha256(fixture.hostedRunBytes),
   );
+  assert.deepEqual(inspectPhase2ExternalGatesReceipt(report), {
+    accepted: true,
+    failures: [],
+  });
+  const inspected = runInspector(fixture.output);
+  assert.equal(inspected.status, 0, inspected.stderr || inspected.stdout);
+  assert.deepEqual(JSON.parse(inspected.stdout), {
+    accepted: true,
+    failures: [],
+  });
 
   const second = runVerifier(fixture);
   assert.equal(second.status, 0, second.stderr || second.stdout);
   assert.deepEqual(JSON.parse(second.stdout), report);
+});
+
+test("offline external receipt inspection rejects structural and semantic tampering", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const result = runVerifier(fixture);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const report = JSON.parse(await readFile(fixture.output, "utf8"));
+  const mutations = [
+    (value) => {
+      value.unexpected = true;
+    },
+    (value) => {
+      value.evidenceAt = value.p2A11.completedAt;
+    },
+    (value) => {
+      value.p2A11.summary.minimumInternalSampleCount += 1;
+    },
+    (value) => {
+      value.p2A12.artifacts[1].executedTests.pop();
+    },
+    (value) => {
+      value.p2A12.verificationEnvironment.githubSha = "b".repeat(40);
+    },
+    (value) => {
+      value.p2A12.hostedJobs[0].conclusion = "failure";
+    },
+  ];
+  for (const mutate of mutations) {
+    const changed = structuredClone(report);
+    mutate(changed);
+    const inspection = inspectPhase2ExternalGatesReceipt(changed);
+    assert.equal(inspection.accepted, false);
+    assert.ok(inspection.failures.length > 0);
+  }
+
+  const tampered = structuredClone(report);
+  tampered.p2A12.hostedJobs[0].url = "https://example.invalid/job/1";
+  const tamperedPath = path.join(fixture.root, "tampered.json");
+  await writeFile(tamperedPath, `${JSON.stringify(tampered, null, 2)}\n`);
+  const inspected = runInspector(tamperedPath);
+  assert.equal(inspected.status, 1);
+  assert.equal(JSON.parse(inspected.stdout).accepted, false);
 });
 
 test("rejects a changed soak summary and an unverified commit order", async (context) => {
@@ -432,6 +493,13 @@ function runVerifier(fixture) {
       maxBuffer: 16 * 1024 * 1024,
     },
   );
+}
+
+function runInspector(receiptPath) {
+  return spawnSync(process.execPath, [inspector, receiptPath], {
+    cwd: repository,
+    encoding: "utf8",
+  });
 }
 
 function readCommit() {
