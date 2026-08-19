@@ -140,6 +140,8 @@ test("accepts only a commit-bound GitHub-hosted runner context", () => {
       runnerOs: "Linux",
       runnerArch: "X64",
       runnerEnvironment: "github-hosted",
+      githubRepository: "owner/repository",
+      githubServerUrl: "https://github.com",
     },
   });
   assert.deepEqual(accepted, []);
@@ -153,14 +155,18 @@ test("accepts only a commit-bound GitHub-hosted runner context", () => {
       runnerOs: "Linux",
       runnerArch: null,
       runnerEnvironment: "self-hosted",
+      githubRepository: null,
+      githubServerUrl: null,
     },
   });
-  assert.equal(rejected.length, 5);
+  assert.equal(rejected.length, 7);
   assert.ok(rejected.some((failure) => failure.includes("GitHub Actions")));
   assert.ok(rejected.some((failure) => failure.includes("GITHUB_SHA")));
   assert.ok(rejected.some((failure) => failure.includes("RUNNER_OS")));
   assert.ok(rejected.some((failure) => failure.includes("RUNNER_ARCH")));
   assert.ok(rejected.some((failure) => failure.includes("GitHub-hosted")));
+  assert.ok(rejected.some((failure) => failure.includes("GITHUB_REPOSITORY")));
+  assert.ok(rejected.some((failure) => failure.includes("github.com")));
 });
 
 function listedOutput(tests) {

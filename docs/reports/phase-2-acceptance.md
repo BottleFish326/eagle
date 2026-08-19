@@ -78,7 +78,7 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 
 当前工作流 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 已定义 `ubuntu-24.04`、`macos-15`、`windows-2025` 三个独立 `platform-paths` leg，`fail-fast: false`，并定义依赖三者的 `platform-matrix-evidence` 汇总 job。阶段退出需要用户先建立 Git remote 并触发真实 hosted run，然后归档：
 
-- remote URL、workflow run URL、commit SHA、runner image/version 和时间；
+- remote URL、汇总 JSON 自动生成的 workflow `runUrl`、commit SHA、runner image/version 和时间；
 - 三个 leg 均 success，并下载各自保留 90 天的 `p2-a12-source-<runner>-<sha>-attempt-<n>` JSON artifact；
 - 汇总 job success，并下载同一 attempt 的 `p2-a12-matrix-<sha>-attempt-<n>` 中的 `p2-08-platform-matrix.json`；
 - 三个 JSON 都是 `accepted=true`、`failures=[]`、同一 commit，expected/listed/executed 逐项一致；

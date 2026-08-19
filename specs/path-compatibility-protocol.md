@@ -74,7 +74,7 @@ node tools/verify-platform-matrix.mjs \
 
 最终 JSON 的可移植字段契约由 [`schemas/platform-matrix-evidence.schema.json`](../schemas/platform-matrix-evidence.schema.json) 固定；跨 artifact 的平台唯一性、原始输出重放、同一 run/attempt 和字段相互绑定仍由汇总器执行，因为这些约束不能只靠结构 Schema 表达。
 
-汇总器不信任上游的布尔结论：它对每份原始 Cargo 输出重新解析具名测试和 summary，要求 darwin/linux/win32 各且仅各一份、Node 24、同一 HEAD/GitHub run/run attempt/workflow、GitHub-hosted runner、精确命令、完整工具链身份和与 runner OS/commit/run attempt 绑定的 artifact 名；这些字段还必须与当前汇总 job 的真实环境一致。源 artifact 使用 `p2-a12-source-<runner>-<sha>-attempt-<n>`，汇总 artifact 使用 `p2-a12-matrix-<sha>-attempt-<n>`，避免同一 workflow rerun 复用不可变旧产物或下载 pattern 误吞汇总结果。源 JSON 的 SHA-256 与逐平台摘要进入最终报告，原始 stdout/stderr 只保留在各平台 artifact，避免合并报告重复放大。只有 `p2-08-platform-matrix.json` 的 `accepted=true` 且 `failures=[]` 才是 P2-A12 的机器判定入口；单个 leg 的绿色状态或 JSON 不能独立关闭验收。
+汇总器不信任上游的布尔结论：它对每份原始 Cargo 输出重新解析具名测试和 summary，要求 darwin/linux/win32 各且仅各一份、Node 24、同一 HEAD/GitHub run/run attempt/workflow/repository、GitHub-hosted runner、精确命令、完整工具链身份和与 runner OS/commit/run attempt 绑定的 artifact 名；这些字段还必须与当前汇总 job 的真实环境一致。源 artifact 使用 `p2-a12-source-<runner>-<sha>-attempt-<n>`，汇总 artifact 使用 `p2-a12-matrix-<sha>-attempt-<n>`，避免同一 workflow rerun 复用不可变旧产物或下载 pattern 误吞汇总结果。最终报告根据受校验的 `GITHUB_SERVER_URL`、`GITHUB_REPOSITORY` 和 run ID 生成稳定 `runUrl`，同时保存源 JSON 的 SHA-256 与逐平台摘要；原始 stdout/stderr 只保留在各平台 artifact，避免合并报告重复放大。只有 `p2-08-platform-matrix.json` 的 `accepted=true` 且 `failures=[]` 才是 P2-A12 的机器判定入口；单个 leg 的绿色状态或 JSON 不能独立关闭验收。
 
 若某个 leg 失败，GitHub 的“仅重新运行失败 job”不会把旧 attempt 的成功 artifact 混入新结论，因此新汇总会因缺平台而拒绝。正式复验必须选择重新运行全部 job，让三个源 artifact 和汇总器来自同一 run attempt。
 

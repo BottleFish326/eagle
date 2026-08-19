@@ -243,6 +243,8 @@ function inspectSource({
       githubRunId: environment.githubRunId ?? null,
       githubRunAttempt: environment.githubRunAttempt ?? null,
       githubWorkflowRef: environment.githubWorkflowRef ?? null,
+      githubRepository: environment.githubRepository ?? null,
+      githubServerUrl: environment.githubServerUrl ?? null,
     },
     expectedTests: inspection?.expectedTests ?? safeExpectedTests(platform),
     listedTests: inspection?.listedTests ?? [],
@@ -267,7 +269,13 @@ function inspectProcessResult(result, label, failures) {
 }
 
 function commonWorkflowContext(artifacts, failures) {
-  const fields = ["githubRunId", "githubRunAttempt", "githubWorkflowRef"];
+  const fields = [
+    "githubRunId",
+    "githubRunAttempt",
+    "githubWorkflowRef",
+    "githubRepository",
+    "githubServerUrl",
+  ];
   const workflow = {};
   for (const field of fields) {
     const values = artifacts.map((artifact) => artifact.environment[field]);
@@ -290,6 +298,16 @@ function commonWorkflowContext(artifacts, failures) {
     !workflow.githubWorkflowRef.includes("/.github/workflows/ci.yml@")
   )
     failures.push("matrix githubWorkflowRef is not the repository CI workflow");
+  if (!/^[^/\s]+\/[^/\s]+$/u.test(workflow.githubRepository ?? ""))
+    failures.push("matrix githubRepository is invalid");
+  if (workflow.githubServerUrl !== "https://github.com")
+    failures.push("matrix githubServerUrl is not https://github.com");
+  workflow.runUrl =
+    workflow.githubServerUrl === "https://github.com" &&
+    /^[^/\s]+\/[^/\s]+$/u.test(workflow.githubRepository ?? "") &&
+    /^\d+$/u.test(workflow.githubRunId ?? "")
+      ? `${workflow.githubServerUrl}/${workflow.githubRepository}/actions/runs/${workflow.githubRunId}`
+      : null;
   return workflow;
 }
 
@@ -318,6 +336,8 @@ function inspectVerificationEnvironment({
     ["githubRunId", "githubRunId"],
     ["githubRunAttempt", "githubRunAttempt"],
     ["githubWorkflowRef", "githubWorkflowRef"],
+    ["githubRepository", "githubRepository"],
+    ["githubServerUrl", "githubServerUrl"],
   ]) {
     if (workflowContext[contextField] !== workflow[workflowField])
       failures.push(
@@ -331,6 +351,8 @@ function inspectVerificationEnvironment({
     githubRunId: workflowContext.githubRunId ?? null,
     githubRunAttempt: workflowContext.githubRunAttempt ?? null,
     githubWorkflowRef: workflowContext.githubWorkflowRef ?? null,
+    githubRepository: workflowContext.githubRepository ?? null,
+    githubServerUrl: workflowContext.githubServerUrl ?? null,
     runnerOs: workflowContext.runnerOs ?? null,
     runnerArch: workflowContext.runnerArch ?? null,
     runnerEnvironment: workflowContext.runnerEnvironment ?? null,

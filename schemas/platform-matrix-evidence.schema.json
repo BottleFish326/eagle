@@ -77,25 +77,51 @@
     },
     "workflow": {
       "type": "object",
-      "required": ["githubRunId", "githubRunAttempt", "githubWorkflowRef"],
+      "required": [
+        "githubRunId",
+        "githubRunAttempt",
+        "githubWorkflowRef",
+        "githubRepository",
+        "githubServerUrl",
+        "runUrl"
+      ],
       "properties": {
         "githubRunId": { "$ref": "#/$defs/nullableString" },
         "githubRunAttempt": {
           "$ref": "#/$defs/nullablePositiveIntegerString"
         },
-        "githubWorkflowRef": { "$ref": "#/$defs/nullableString" }
+        "githubWorkflowRef": { "$ref": "#/$defs/nullableString" },
+        "githubRepository": { "$ref": "#/$defs/nullableString" },
+        "githubServerUrl": { "$ref": "#/$defs/nullableString" },
+        "runUrl": { "$ref": "#/$defs/nullableString" }
       },
       "additionalProperties": false
     },
     "acceptedWorkflow": {
       "type": "object",
-      "required": ["githubRunId", "githubRunAttempt", "githubWorkflowRef"],
+      "required": [
+        "githubRunId",
+        "githubRunAttempt",
+        "githubWorkflowRef",
+        "githubRepository",
+        "githubServerUrl",
+        "runUrl"
+      ],
       "properties": {
         "githubRunId": { "type": "string", "pattern": "^[0-9]+$" },
         "githubRunAttempt": { "type": "string", "pattern": "^[1-9][0-9]*$" },
         "githubWorkflowRef": {
           "type": "string",
           "pattern": "^.+/\\.github/workflows/ci\\.yml@.+$"
+        },
+        "githubRepository": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[^/\\s]+$"
+        },
+        "githubServerUrl": { "const": "https://github.com" },
+        "runUrl": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/actions/runs/[0-9]+$"
         }
       },
       "additionalProperties": false
@@ -109,6 +135,8 @@
         "githubRunId",
         "githubRunAttempt",
         "githubWorkflowRef",
+        "githubRepository",
+        "githubServerUrl",
         "runnerOs",
         "runnerArch",
         "runnerEnvironment"
@@ -124,6 +152,8 @@
           "$ref": "#/$defs/nullablePositiveIntegerString"
         },
         "githubWorkflowRef": { "$ref": "#/$defs/nullableString" },
+        "githubRepository": { "$ref": "#/$defs/nullableString" },
+        "githubServerUrl": { "$ref": "#/$defs/nullableString" },
         "runnerOs": { "$ref": "#/$defs/nullableString" },
         "runnerArch": { "$ref": "#/$defs/nullableString" },
         "runnerEnvironment": { "$ref": "#/$defs/nullableString" }
@@ -139,6 +169,8 @@
         "githubRunId",
         "githubRunAttempt",
         "githubWorkflowRef",
+        "githubRepository",
+        "githubServerUrl",
         "runnerOs",
         "runnerArch",
         "runnerEnvironment"
@@ -153,6 +185,11 @@
           "type": "string",
           "pattern": "^.+/\\.github/workflows/ci\\.yml@.+$"
         },
+        "githubRepository": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[^/\\s]+$"
+        },
+        "githubServerUrl": { "const": "https://github.com" },
         "runnerOs": { "const": "Linux" },
         "runnerArch": { "type": "string", "minLength": 1, "maxLength": 32 },
         "runnerEnvironment": { "const": "github-hosted" }
@@ -228,7 +265,9 @@
         "runnerEnvironment",
         "githubRunId",
         "githubRunAttempt",
-        "githubWorkflowRef"
+        "githubWorkflowRef",
+        "githubRepository",
+        "githubServerUrl"
       ],
       "properties": {
         "architecture": { "$ref": "#/$defs/nullableString" },
@@ -242,7 +281,9 @@
         "githubRunAttempt": {
           "$ref": "#/$defs/nullablePositiveIntegerString"
         },
-        "githubWorkflowRef": { "$ref": "#/$defs/nullableString" }
+        "githubWorkflowRef": { "$ref": "#/$defs/nullableString" },
+        "githubRepository": { "$ref": "#/$defs/nullableString" },
+        "githubServerUrl": { "$ref": "#/$defs/nullableString" }
       },
       "additionalProperties": false
     },
@@ -266,7 +307,12 @@
             "githubWorkflowRef": {
               "type": "string",
               "pattern": "^.+/\\.github/workflows/ci\\.yml@.+$"
-            }
+            },
+            "githubRepository": {
+              "type": "string",
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "githubServerUrl": { "const": "https://github.com" }
           }
         }
       ]

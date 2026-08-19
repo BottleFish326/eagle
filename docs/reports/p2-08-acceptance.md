@@ -22,6 +22,7 @@
 - 新增独立 matrix 汇总器和 CI job，下载同一提交的三个 artifact、重新解析原始 Cargo 输出，并拒绝缺平台、重复平台、跨提交、跨 workflow run/attempt、产物改名或内容摘要异常；
 - 源/汇总 artifact 都绑定 run attempt，分别命名为 `p2-a12-source-<runner>-<sha>-attempt-<n>` 与 `p2-a12-matrix-<sha>-attempt-<n>`，避免 rerun 冲突或混入旧证据；只有汇总 JSON 为 `accepted=true` 且 `failures=[]` 时代表机器验收通过；
 - 新增最终汇总证据 JSON Schema，固定成功与失败报告、验证 job 环境、三个源 artifact 摘要和精确测试 summary 的可移植字段契约；跨文件一致性继续由重放汇总器判定；
+- 三个源报告与汇总 job 还必须共享 GitHub repository/server；最终报告从受校验字段生成稳定 workflow `runUrl`，正式归档不再依赖人工抄写链接；
 - Windows leg 显式启用长路径策略并要求原生符号链接夹具可创建，验证 260+ UTF-16 路径扫描、Sidecar 创建/替换和循环跳过；
 - Linux leg 增加大小写同名素材并存和扫描中移动根目录的非权威失败夹具，既有撤权夹具继续验证 permission-denied。
 
@@ -93,7 +94,7 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 ## 6. 后续验收动作
 
 1. 建立 Git 远程并推送当前工作流；
-2. 确认 `platform-paths` 的三个 matrix leg 和 `platform-matrix-evidence` 均实际通过，保存运行链接/提交号/run attempt，并下载同一 attempt 的汇总及三个源 artifact；
+2. 确认 `platform-paths` 的三个 matrix leg 和 `platform-matrix-evidence` 均实际通过，核对汇总 JSON 内的 `runUrl`、提交号和 run attempt，并下载同一 attempt 的汇总及三个源 artifact；
 3. 确认 Windows leg 实际执行强制符号链接、260+ 路径扫描及 Sidecar 原子替换，不能以 skip 计为通过；
 4. 确认 Linux leg 实际执行大小写并存、权限撤销和移动根目录掉线；
 5. 确认最终 `p2-08-platform-matrix.json` 是 `accepted=true`、`failures=[]`、同一 Git commit/run/attempt，且三个源 artifact 的 SHA-256、expected/listed/executed 和 summary 均被重放核对；

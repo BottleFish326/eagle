@@ -52,6 +52,14 @@ try {
       githubRunId: process.env.GITHUB_RUN_ID ?? null,
       githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
       githubWorkflowRef: process.env.GITHUB_WORKFLOW_REF ?? null,
+      githubRepository: process.env.GITHUB_REPOSITORY ?? null,
+      githubServerUrl: process.env.GITHUB_SERVER_URL ?? null,
+      runUrl:
+        process.env.GITHUB_SERVER_URL &&
+        process.env.GITHUB_REPOSITORY &&
+        process.env.GITHUB_RUN_ID
+          ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+          : null,
     },
     verificationEnvironment: {
       nodeVersion: process.version,
@@ -101,6 +109,8 @@ function readWorkflowContext() {
     githubRunId: process.env.GITHUB_RUN_ID ?? null,
     githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
     githubWorkflowRef: process.env.GITHUB_WORKFLOW_REF ?? null,
+    githubRepository: process.env.GITHUB_REPOSITORY ?? null,
+    githubServerUrl: process.env.GITHUB_SERVER_URL ?? null,
     runnerOs: process.env.RUNNER_OS ?? null,
     runnerArch: process.env.RUNNER_ARCH ?? null,
     runnerEnvironment: process.env.MATERIAL_EAGLE_RUNNER_ENVIRONMENT ?? null,

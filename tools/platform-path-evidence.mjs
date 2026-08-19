@@ -156,6 +156,10 @@ export function inspectHostedEvidenceContext({
     failures.push("RUNNER_ARCH is missing");
   if (environment.runnerEnvironment !== "github-hosted")
     failures.push("P2-A12 formal evidence must use a GitHub-hosted runner");
+  if (!/^[^/\s]+\/[^/\s]+$/u.test(environment.githubRepository ?? ""))
+    failures.push("GITHUB_REPOSITORY is missing or invalid");
+  if (environment.githubServerUrl !== "https://github.com")
+    failures.push("P2-A12 formal evidence must originate from github.com");
   return failures;
 }
 

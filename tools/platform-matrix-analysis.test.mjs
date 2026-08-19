@@ -23,6 +23,9 @@ test("accepts one replayed native report per hosted platform", () => {
     githubRunAttempt: "1",
     githubWorkflowRef:
       "owner/repository/.github/workflows/ci.yml@refs/heads/main",
+    githubRepository: "owner/repository",
+    githubServerUrl: "https://github.com",
+    runUrl: "https://github.com/owner/repository/actions/runs/123456",
   });
   assert.equal(report.verificationEnvironment.runnerOs, "Linux");
   assert.equal("processResults" in report.artifacts[0], false);
@@ -47,6 +50,7 @@ test("rejects reports from different commits or workflow runs", () => {
   input.sources[0].report.gitCommit = "b".repeat(40);
   input.sources[0].report.environment.gitCommit = "b".repeat(40);
   input.sources[1].report.environment.githubRunId = "999999";
+  input.sources[2].report.environment.githubRepository = "other/repository";
   const report = buildPlatformMatrixReport(input);
   assert.equal(report.accepted, false);
   assert.ok(
@@ -55,6 +59,11 @@ test("rejects reports from different commits or workflow runs", () => {
   assert.ok(
     report.failures.some((failure) =>
       failure.includes("one nonempty githubRunId"),
+    ),
+  );
+  assert.ok(
+    report.failures.some((failure) =>
+      failure.includes("one nonempty githubRepository"),
     ),
   );
 });
@@ -211,6 +220,8 @@ function validInput() {
       githubRunAttempt: "1",
       githubWorkflowRef:
         "owner/repository/.github/workflows/ci.yml@refs/heads/main",
+      githubRepository: "owner/repository",
+      githubServerUrl: "https://github.com",
       runnerOs: "Linux",
       runnerArch: "X64",
       runnerEnvironment: "github-hosted",
@@ -250,6 +261,8 @@ function makeSource(platform) {
         githubRunAttempt: "1",
         githubWorkflowRef:
           "owner/repository/.github/workflows/ci.yml@refs/heads/main",
+        githubRepository: "owner/repository",
+        githubServerUrl: "https://github.com",
         runnerOs,
         runnerArch: "X64",
         runnerEnvironment: "github-hosted",
