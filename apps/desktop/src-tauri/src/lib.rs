@@ -19,7 +19,8 @@ use asset_filesystem::{
     AddLibraryRoot, FsChangeBatch, FsRescanReason, LibraryRoot, LibraryRootManager,
     LibraryRootStatus, ReconciliationReport, RelinkCandidate, RelinkReceipt, RootAccessStatus,
     ScanBatch, ScanCancellation, ScanCompletion, ScanOptions, ScanSummary, UpdateLibraryRoot,
-    WatchSession, apply_relink, inspect_reconciliation, scan_root_incremental_controlled,
+    WatchSession, apply_relink, inspect_reconciliation, inspect_root_access,
+    scan_root_incremental_controlled,
 };
 use asset_index::QueryParseError;
 use asset_link_resolver::{
@@ -159,6 +160,7 @@ enum LibraryScanEvent {
         message: String,
         removed_keys: Vec<String>,
         restored_records: Vec<asset_core::AssetRecord>,
+        root_access_status: Option<RootAccessStatus>,
     },
 }
 
@@ -183,6 +185,7 @@ enum LibraryWatchEvent {
         watch_id: Uuid,
         root_id: Uuid,
         message: String,
+        root_access_status: Option<RootAccessStatus>,
     },
     Stopped {
         watch_id: Uuid,
@@ -1068,6 +1071,7 @@ fn run_library_scan_thread(
             message: "asset catalog lock is poisoned".into(),
             removed_keys: Vec::new(),
             restored_records: Vec::new(),
+            root_access_status: unavailable_root_status(&root.path),
         });
         coordinator.finish(scan_id);
         return;
@@ -1183,6 +1187,7 @@ fn run_library_scan_thread(
         on_event,
         catalog,
         diagnostics,
+        &root.path,
     );
     coordinator.finish(scan_id);
     if authoritative && coordinator.mark_authoritative(root.id).is_err() {
@@ -1264,6 +1269,7 @@ fn publish_scan_result(
     on_event: &Channel<LibraryScanEvent>,
     catalog: &Mutex<AssetCatalog>,
     diagnostics: &DiagnosticService,
+    root_path: &std::path::Path,
 ) -> bool {
     match result {
         Ok(summary) => {
@@ -1281,6 +1287,7 @@ fn publish_scan_result(
                     message: "asset catalog lock is poisoned".into(),
                     removed_keys: Vec::new(),
                     restored_records: Vec::new(),
+                    root_access_status: unavailable_root_status(root_path),
                 });
                 return false;
             };
@@ -1322,10 +1329,16 @@ fn publish_scan_result(
                 message: error.clone(),
                 removed_keys,
                 restored_records,
+                root_access_status: unavailable_root_status(root_path),
             });
             false
         }
     }
+}
+
+fn unavailable_root_status(root: &std::path::Path) -> Option<RootAccessStatus> {
+    let (status, _) = inspect_root_access(root);
+    (status != RootAccessStatus::Available).then_some(status)
 }
 
 #[tauri::command]
@@ -1498,6 +1511,7 @@ fn run_library_watch_thread(
                 watch_id,
                 root_id: root.id,
                 message: error.to_string(),
+                root_access_status: unavailable_root_status(&root.path),
             });
             coordinator.finish(watch_id);
             return;
@@ -1534,6 +1548,13 @@ fn run_library_watch_thread(
                     cancellation.cancel();
                 }
                 if terminal_loss {
+                    let _ = on_event.send(LibraryWatchEvent::Failed {
+                        watch_id,
+                        root_id: root.id,
+                        message: "file watcher channel disconnected; consistency scan required"
+                            .into(),
+                        root_access_status: unavailable_root_status(&root.path),
+                    });
                     break;
                 }
             }
@@ -1550,6 +1571,7 @@ fn run_library_watch_thread(
                     watch_id,
                     root_id: root.id,
                     message: error.to_string(),
+                    root_access_status: unavailable_root_status(&root.path),
                 });
                 break;
             }
@@ -2508,11 +2530,11 @@ mod tests {
     use super::{
         ApplicationPaths, BatchMetadataEditCommandResult, DerivedStateResetReport,
         LibraryScanEvent, LibraryWatchEvent, MAX_ACTIVE_SCANS, MAX_ACTIVE_WATCHES,
-        QueryAssetsError, SCAN_BATCH_QUEUE_CAPACITY, ScanCancellation, ScanCoordinator,
-        ScanDeliveryWindow, ScanPipelineMessage, ThumbnailCommandError, VaultReferenceFailureKind,
-        WatchCoordinator, build_info, ensure_transaction_item_inside_root,
-        failed_batch_transaction_preflight, path_fingerprint, scan_pipeline_channel,
-        transaction_targets, vault_failure_kind,
+        QueryAssetsError, RootAccessStatus, SCAN_BATCH_QUEUE_CAPACITY, ScanCancellation,
+        ScanCoordinator, ScanDeliveryWindow, ScanPipelineMessage, ThumbnailCommandError,
+        VaultReferenceFailureKind, WatchCoordinator, build_info,
+        ensure_transaction_item_inside_root, failed_batch_transaction_preflight, path_fingerprint,
+        scan_pipeline_channel, transaction_targets, vault_failure_kind,
     };
 
     #[test]
@@ -2650,6 +2672,7 @@ mod tests {
             message: "invalid root".into(),
             removed_keys: vec!["/library/stale.png".into()],
             restored_records: Vec::new(),
+            root_access_status: Some(RootAccessStatus::Missing),
         })
         .expect("serialize scan event");
 
@@ -2657,6 +2680,7 @@ mod tests {
         assert_eq!(event["data"]["scanId"], scan_id.to_string());
         assert_eq!(event["data"]["message"], "invalid root");
         assert_eq!(event["data"]["removedKeys"][0], "/library/stale.png");
+        assert_eq!(event["data"]["rootAccessStatus"], "missing");
     }
 
     #[test]

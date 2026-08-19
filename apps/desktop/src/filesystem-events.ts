@@ -1,5 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 
+import type { RootAccessStatus } from "./library-roots";
+
 export type FsChangeKind =
   "create" | "modify" | "move" | "delete" | "rescan-required";
 
@@ -32,7 +34,12 @@ export type LibraryWatchEvent =
     }
   | {
       event: "failed";
-      data: { watchId: string; rootId: string; message: string };
+      data: {
+        watchId: string;
+        rootId: string;
+        message: string;
+        rootAccessStatus: RootAccessStatus | null;
+      };
     }
   | { event: "stopped"; data: { watchId: string; rootId: string } };
 

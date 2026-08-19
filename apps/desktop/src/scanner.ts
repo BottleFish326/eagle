@@ -1,5 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 
+import type { RootAccessStatus } from "./library-roots";
+
 export type AssetIssue =
   | { type: "invalid-sidecar"; message: string }
   | { type: "mismatched-sidecar"; message: string }
@@ -112,6 +114,7 @@ export type LibraryScanEvent =
         message: string;
         removedKeys: string[];
         restoredRecords: AssetRecord[];
+        rootAccessStatus: RootAccessStatus | null;
       };
     };
 

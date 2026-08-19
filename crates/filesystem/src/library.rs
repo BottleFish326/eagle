@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::fs::{self, File};
+use std::fs;
+#[cfg(unix)]
+use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
@@ -9,6 +11,8 @@ use serde_yaml_ng::Value;
 use tempfile::NamedTempFile;
 use thiserror::Error;
 use uuid::Uuid;
+
+use crate::platform::{PathRelation, PlatformFamily, path_relation_for_platform};
 
 pub const LIBRARY_CONFIG_SCHEMA_VERSION: u32 = 1;
 
@@ -433,14 +437,11 @@ fn normalize_ignore(ignore: &[String]) -> Result<Vec<String>, LibraryRootError> 
 
 fn ensure_no_overlap(path: &Path, existing: &[LibraryRoot]) -> Result<(), LibraryRootError> {
     for root in existing {
-        let kind = if path == root.path {
-            Some(RootOverlapKind::Duplicate)
-        } else if path.starts_with(&root.path) {
-            Some(RootOverlapKind::InsideExisting)
-        } else if root.path.starts_with(path) {
-            Some(RootOverlapKind::ContainsExisting)
-        } else {
-            None
+        let kind = match path_relation_for_platform(path, &root.path, PlatformFamily::current()) {
+            PathRelation::Same => Some(RootOverlapKind::Duplicate),
+            PathRelation::Descendant => Some(RootOverlapKind::InsideExisting),
+            PathRelation::Ancestor => Some(RootOverlapKind::ContainsExisting),
+            PathRelation::Distinct => None,
         };
         if let Some(kind) = kind {
             return Err(LibraryRootError::Overlap {
@@ -568,7 +569,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_duplicate_and_overlapping_roots() {
+    fn p2_platform_rejects_duplicate_and_overlapping_roots() {
         let directory = tempdir().expect("tempdir");
         let parent = directory.path().join("parent");
         let child = parent.join("child");

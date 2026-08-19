@@ -39,6 +39,17 @@ export interface UpdateLibraryRootInput {
   ignore?: string[];
 }
 
+export function markLibraryRootAccessFailure(
+  roots: readonly LibraryRootStatus[],
+  rootId: string,
+  accessStatus: RootAccessStatus,
+  accessMessage: string,
+): LibraryRootStatus[] {
+  return roots.map((root) =>
+    root.id === rootId ? { ...root, accessStatus, accessMessage } : root,
+  );
+}
+
 type Invoke = <T>(
   command: string,
   argumentsValue?: Record<string, unknown>,

@@ -37,3 +37,4 @@
 | [ADR-022](022-bounded-thumbnail-cache-lifecycle.md) | 有界缩略图缓存生命周期与中断安全清理 | Accepted |
 | [ADR-023](023-unified-bounded-resource-scheduling.md) | 统一有界资源调度与可观测稳定性 | Accepted |
 | [ADR-024](024-bounded-privacy-safe-support-diagnostics.md) | 有界、脱敏的支持诊断 | Accepted |
+| [ADR-025](025-platform-path-and-offline-root-semantics.md) | 平台路径身份与离线根目录语义 | Accepted |

@@ -15,6 +15,8 @@ use thiserror::Error;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+use crate::library::{RootAccessStatus, inspect_root_access};
+
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
     pub recursive: bool,
@@ -116,6 +118,11 @@ pub enum FilesystemError {
         #[source]
         source: std::io::Error,
     },
+    #[error("scan root became unavailable ({status}): {path}")]
+    RootUnavailable {
+        path: PathBuf,
+        status: RootAccessStatus,
+    },
     #[error("scan batch size must be greater than zero")]
     InvalidBatchSize,
     #[error("file watcher batch size must be greater than zero")]
@@ -192,15 +199,7 @@ where
     if options.batch_size == 0 {
         return Err(FilesystemError::InvalidBatchSize);
     }
-    if !root.is_dir() {
-        return Err(FilesystemError::InvalidRoot(root.to_path_buf()));
-    }
-    let root = root
-        .canonicalize()
-        .map_err(|source| FilesystemError::Canonicalize {
-            path: root.to_path_buf(),
-            source,
-        })?;
+    let root = canonical_scan_root(root)?;
     let ignore = compile_ignore_rules(&options.ignore)?;
     let started = Instant::now();
     let mut sequence = 0;
@@ -230,6 +229,12 @@ where
                     paths.push(path);
                 }
             }
+            Ok(entry) if entry.file_type().is_symlink() => {
+                pending_problems.push(ScanProblem {
+                    path: entry.into_path(),
+                    message: "symbolic link skipped because link traversal is disabled".into(),
+                });
+            }
             Ok(_) => {}
             Err(error) => pending_problems.push(ScanProblem {
                 path: error.path().map_or_else(|| root.clone(), Path::to_path_buf),
@@ -252,6 +257,9 @@ where
             problem_count += batch.problems.len();
             emit(batch);
             sequence += 1;
+            if !cancellation.is_cancelled() {
+                ensure_scan_root_available(&root)?;
+            }
         }
     }
 
@@ -271,6 +279,10 @@ where
         emit(batch);
     }
 
+    if !cancellation.is_cancelled() {
+        ensure_scan_root_available(&root)?;
+    }
+
     Ok(ScanSummary {
         root_id,
         root,
@@ -284,6 +296,29 @@ where
         problem_count,
         elapsed_ms: started.elapsed().as_millis(),
     })
+}
+
+fn canonical_scan_root(root: &Path) -> Result<PathBuf, FilesystemError> {
+    if !root.is_dir() {
+        return Err(FilesystemError::InvalidRoot(root.to_path_buf()));
+    }
+    root.canonicalize()
+        .map_err(|source| FilesystemError::Canonicalize {
+            path: root.to_path_buf(),
+            source,
+        })
+}
+
+fn ensure_scan_root_available(root: &Path) -> Result<(), FilesystemError> {
+    let (status, _) = inspect_root_access(root);
+    if status == RootAccessStatus::Available {
+        Ok(())
+    } else {
+        Err(FilesystemError::RootUnavailable {
+            path: root.to_path_buf(),
+            status,
+        })
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -681,6 +716,8 @@ mod tests {
     use tempfile::tempdir;
     use uuid::Uuid;
 
+    #[cfg(unix)]
+    use super::RootAccessStatus;
     use super::{
         FilesystemError, ScanCancellation, ScanCompletion, ScanOptions, scan_root,
         scan_root_incremental, scan_root_incremental_controlled,
@@ -862,6 +899,114 @@ mod tests {
         )
         .expect_err("invalid glob must fail");
         assert!(matches!(error, FilesystemError::InvalidIgnoreRule { .. }));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn p2_platform_symlink_loop_is_skipped_once_with_an_explicit_diagnostic() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempdir().expect("tempdir");
+        let nested = directory.path().join("nested");
+        fs::create_dir(&nested).expect("create nested directory");
+        fs::write(nested.join("logo.png"), PNG).expect("write png");
+        symlink(directory.path(), nested.join("loop")).expect("create symlink loop");
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan loop");
+        assert_eq!(report.assets.len(), 1);
+        assert_eq!(report.visited_files, 1);
+        assert_eq!(report.problems.len(), 1);
+        assert!(report.problems[0].message.contains("symbolic link skipped"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn p2_platform_disconnect_during_scan_is_non_authoritative() {
+        let directory = tempdir().expect("tempdir");
+        let root = directory.path().join("removable");
+        fs::create_dir(&root).expect("create root");
+        fs::write(root.join("first.png"), PNG).expect("write first png");
+        fs::write(root.join("second.png"), PNG).expect("write second png");
+        let cancellation = ScanCancellation::new();
+        let mut batches = 0;
+
+        let error = scan_root_incremental(
+            None,
+            &root,
+            &ScanOptions {
+                batch_size: 1,
+                ..ScanOptions::default()
+            },
+            &cancellation,
+            |_| {
+                batches += 1;
+                if root.exists() {
+                    fs::remove_dir_all(&root).expect("disconnect root");
+                }
+            },
+        )
+        .expect_err("disconnected scan must not complete authoritatively");
+
+        assert_eq!(batches, 1);
+        assert!(matches!(
+            error,
+            FilesystemError::RootUnavailable {
+                status: RootAccessStatus::Missing,
+                ..
+            }
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn p2_platform_permission_revocation_during_scan_is_non_authoritative() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempdir().expect("tempdir");
+        let root = directory.path().join("network-share");
+        fs::create_dir(&root).expect("create root");
+        fs::write(root.join("first.png"), PNG).expect("write first png");
+        fs::write(root.join("second.png"), PNG).expect("write second png");
+        let cancellation = ScanCancellation::new();
+
+        let result = scan_root_incremental(
+            None,
+            &root,
+            &ScanOptions {
+                batch_size: 1,
+                ..ScanOptions::default()
+            },
+            &cancellation,
+            |_| {
+                fs::set_permissions(&root, fs::Permissions::from_mode(0o000))
+                    .expect("revoke root permissions");
+            },
+        );
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o700))
+            .expect("restore root permissions");
+
+        assert!(matches!(
+            result,
+            Err(FilesystemError::RootUnavailable {
+                status: RootAccessStatus::PermissionDenied,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn p2_platform_scans_native_unicode_path_without_rewriting_it() {
+        let directory = tempdir().expect("tempdir");
+        let file_name = "Caf\u{e9}-\u{7d20}\u{6750}.png";
+        fs::write(directory.path().join(file_name), PNG).expect("write unicode png");
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan unicode");
+        assert_eq!(report.assets.len(), 1);
+        assert_eq!(
+            report.assets[0].relative_path,
+            std::path::Path::new(file_name)
+        );
+        assert!(directory.path().join(file_name).is_file());
     }
 
     #[test]

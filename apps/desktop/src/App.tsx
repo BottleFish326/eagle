@@ -18,7 +18,10 @@ import {
 } from "./desktop-api";
 import { Icon } from "./Icon";
 import { Inspector } from "./Inspector";
-import type { LibraryRootStatus } from "./library-roots";
+import {
+  markLibraryRootAccessFailure,
+  type LibraryRootStatus,
+} from "./library-roots";
 import type { MetadataPatch } from "./metadata-editor";
 import type {
   MetadataConflict,
@@ -171,6 +174,21 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         if (event.event === "finished" || event.event === "failed") {
           activeScanRoots.current.delete(root.id);
         }
+        if (event.event === "failed" && event.data.rootAccessStatus !== null) {
+          const accessStatus = event.data.rootAccessStatus;
+          setRoots((current) =>
+            markLibraryRootAccessFailure(
+              current,
+              root.id,
+              accessStatus,
+              event.data.message,
+            ),
+          );
+          setNotice({
+            tone: "error",
+            message: `${root.name} 已离线或无权限；本次扫描结果已放弃，原有素材视图已保留。`,
+          });
+        }
         if (
           event.event === "finished" &&
           event.data.summary.completion === "completed"
@@ -221,6 +239,10 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
           tone: "error",
           message: `无法扫描 ${root.name}：${errorMessage(error)}`,
         });
+        void api
+          .listLibraryRoots()
+          .then(setRoots)
+          .catch(() => undefined);
       }
     },
     [api],
@@ -364,6 +386,17 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
             scheduleWatchRescan(event.data.rootId);
           } else if (event.event === "failed") {
             watchIds.current.delete(event.data.rootId);
+            if (event.data.rootAccessStatus !== null) {
+              const accessStatus = event.data.rootAccessStatus;
+              setRoots((current) =>
+                markLibraryRootAccessFailure(
+                  current,
+                  event.data.rootId,
+                  accessStatus,
+                  event.data.message,
+                ),
+              );
+            }
             setNotice({
               tone: "error",
               message: `${root.name} 的文件监听已停止：${event.data.message}`,

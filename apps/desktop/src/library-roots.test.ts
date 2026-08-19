@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   addLibraryRoot,
+  markLibraryRootAccessFailure,
   removeLibraryRoot,
   updateLibraryRoot,
 } from "./library-roots";
@@ -32,5 +33,41 @@ describe("library root commands", () => {
     expect(call).toHaveBeenNthCalledWith(2, "remove_library_root", {
       id: "root-id",
     });
+  });
+
+  it("marks only a disconnected root offline without removing its configuration", () => {
+    const roots = [
+      {
+        id: "root-id",
+        path: "/pictures",
+        name: "Pictures",
+        enabled: true,
+        scan: { recursive: true, followSymlinks: false as const, ignore: [] },
+        accessStatus: "available" as const,
+      },
+      {
+        id: "other-id",
+        path: "/other",
+        name: "Other",
+        enabled: true,
+        scan: { recursive: true, followSymlinks: false as const, ignore: [] },
+        accessStatus: "available" as const,
+      },
+    ];
+
+    const updated = markLibraryRootAccessFailure(
+      roots,
+      "root-id",
+      "permission-denied",
+      "access denied",
+    );
+
+    expect(updated).toHaveLength(2);
+    expect(updated[0]).toMatchObject({
+      id: "root-id",
+      accessStatus: "permission-denied",
+      accessMessage: "access denied",
+    });
+    expect(updated[1]).toBe(roots[1]);
   });
 });

@@ -45,6 +45,7 @@ thiserror = "2"
 tauri = "2.11.5"
 tauri-build = "2.6.3"
 uuid = { version = "1", features = ["serde", "v7"] }
+unicode-normalization = "0.1"
 walkdir = "2"
 
 [workspace.lints.rust]
