@@ -17,6 +17,9 @@
 - [P2-04 验收报告](docs/reports/p2-04-acceptance.md)
 - [P2-05 验收报告](docs/reports/p2-05-acceptance.md)
 - [P2-06 验收准备报告](docs/reports/p2-06-acceptance.md)
+- [P2-07 验收报告](docs/reports/p2-07-acceptance.md)
+- [P2-08 验收报告](docs/reports/p2-08-acceptance.md)
+- [P3-01 扩展格式实施准备](docs/reports/p3-01-readiness.md)
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
 - [P1-03 验收报告](docs/reports/p1-03-acceptance.md)
@@ -33,6 +36,7 @@
 - [Obsidian Vault 内引用协议](specs/obsidian-vault-reference-protocol.md)
 - [应用配置与恢复协议](specs/application-recovery-protocol.md)
 - [文件事件与一致性扫描协议](specs/filesystem-event-protocol.md)
+- [扩展格式识别、属性与预览协议](specs/extended-format-protocol.md)
 - [架构决策记录](specs/adr/README.md)
 
 ## 核心原则

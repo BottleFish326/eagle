@@ -38,3 +38,4 @@
 | [ADR-023](023-unified-bounded-resource-scheduling.md) | 统一有界资源调度与可观测稳定性 | Accepted |
 | [ADR-024](024-bounded-privacy-safe-support-diagnostics.md) | 有界、脱敏的支持诊断 | Accepted |
 | [ADR-025](025-platform-path-and-offline-root-semantics.md) | 平台路径身份与离线根目录语义 | Accepted |
+| [ADR-026](026-capability-based-extended-format-pipeline.md) | 能力驱动的扩展格式管线 | Accepted |
