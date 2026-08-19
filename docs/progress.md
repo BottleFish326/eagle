@@ -10,7 +10,7 @@
 | 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
 | 阶段 2：可靠性与恢复 | In progress | P2-01 至 P2-05、P2-07 已完成本地验收；P2-06 等待 P2-A11 连续 8 小时，P2-08 等待 Windows/Linux 托管矩阵完成 P2-A12 |
 | 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出；P3-01 至 P3-07 的完整实施准备均已收敛 |
-| 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出 |
+| 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出；机器级授权、用户态 IPC、离线内存索引与媒体 lease 架构已完成准备 |
 
 ## 阶段 0 工作项
 
@@ -68,6 +68,12 @@
 | P3-06 拖放与剪贴板 | Design ready | 已固定原始文件/引用双拖柄、后端授权 native drag、Copy-only、Vault 内外有序引用和最小剪贴板权限；阶段 2 退出前不计作 P3 开始，见 `reports/p3-06-readiness.md` |
 | P3-07 生产级交互 | Design ready | 已固定后端排序、多密度虚拟网格、key-based 焦点、预览 session、命令面板、Tag 重命名、任务中心和 A10/A11 证据；阶段 2 退出前不计作 P3 开始，见 `reports/p3-07-readiness.md` |
 
+## 阶段 4 实施准备
+
+| 准备项 | 状态 | 证据 |
+|---|---|---|
+| P4-01/P4-02 权限与离线索引 | Architecture ready | 已固定机器级授权 manifest、插件逐根批准、Unix socket/Windows pipe、两阶段内存索引、小图 object URL 和大媒体 Range lease；阶段 3 退出前不计作 P4 开始，见 `reports/p4-01-02-readiness.md` |
+
 ## 已固定的关键决定
 
 - 文件系统与相邻 Sidecar 是唯一真相源；
@@ -103,6 +109,7 @@
 - 重复分析只在运行期执行大小、快速指纹和当前文件完整 SHA-256 分层确认；硬链接别名、独立字节副本和视觉候选分开报告，不提供自动删除、合并或引用改写。
 - 原始文件拖出与引用拖放使用显式双模式；后端从精确选择快照解析并复核路径，本地 native adapter 固定 Copy 且不暴露任意路径 IPC，剪贴板只授予文本/HTML 写入。
 - 生产 UI 的查询与排序由 Rust catalog 唯一执行；虚拟网格按素材 key/revision 维护焦点与选择，三种密度、预览、命令面板和任务状态均保持可访问且不保存素材快照。
+- Obsidian 授权根由桌面端机器级 manifest 发布并由插件逐根批准；在线控制使用当前用户 socket/pipe，离线只建内存索引，小图 object URL 与大媒体短期 Range lease 每次都复核 UUID、realpath 和授权。
 
 ## 当前性能证据
 
@@ -130,6 +137,7 @@
 - [P3-05 重复素材分析实施准备报告](reports/p3-05-readiness.md)
 - [P3-06 拖放与剪贴板实施准备报告](reports/p3-06-readiness.md)
 - [P3-07 生产级交互实施准备报告](reports/p3-07-readiness.md)
+- [P4-01/P4-02 插件权限与离线索引实施准备报告](reports/p4-01-02-readiness.md)
 - [平台差异记录](../specs/platform-notes.md)
 - 参考环境：Apple M4、16 GiB、APFS SSD、macOS 26.5.2；
 - L 数据集：100,000 个素材、20,000 个 sidecar；

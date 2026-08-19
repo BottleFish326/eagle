@@ -908,8 +908,8 @@ tests/                           集成、端到端和性能测试
 | Sidecar 格式与手工编辑 | Resolved | UTF-8 YAML、JSON Schema、保留未知字段和原子写入；见 [ADR-002](../specs/adr/002-sidecar-format-and-identity.md) |
 | 稳定 ID | Resolved | UUIDv7；见 [ADR-002](../specs/adr/002-sidecar-format-and-identity.md) |
 | 扫描快照 | Resolved for current release | 当前不持久化扫描快照；若未来增加，只能是可删除、可重建且不含用户状态的派生缓存；见 [ADR-003](../specs/adr/003-derived-cache-policy.md) |
-| Vault 外渲染传输 | P4 decision required | UUID、授权根、realpath、MIME 和生命周期边界已由 [ADR-008](../specs/adr/008-external-asset-rendering-security.md) 固定；对象 URL 与受限流式代理的最终选择必须在 P4-04 实现前形成补充 ADR |
-| 桌面应用未运行时的稳定 ID 解析 | Contract resolved; implementation pending | 插件从授权根和 Sidecar 建立可重建最小索引；见 [ADR-005](../specs/adr/005-obsidian-reference-strategy.md)，具体索引与性能在 P4-02 前定案 |
+| Vault 外渲染传输 | Architecture resolved; implementation pending | 小型静态图片使用有界 object URL，大媒体使用插件内短期 opaque loopback Range lease；见 [ADR-033](../specs/adr/033-obsidian-machine-authorization-and-runtime.md) |
+| 桌面应用未运行时的稳定 ID 解析 | Architecture resolved; implementation pending | 插件从机器级授权 manifest 分两阶段建立纯内存索引，不持久化素材快照；见 [ADR-033](../specs/adr/033-obsidian-machine-authorization-and-runtime.md) |
 | 视频、音频、PDF 格式与 codec | Architecture resolved; packaging pending | 能力分层、worker 隔离和降级已由 [ADR-026](../specs/adr/026-capability-based-extended-format-pipeline.md) 固定；三平台依赖打包在 P3-01C 至 P3-01F 分片逐项关闭 |
 | 保存过滤器作用域 | Resolved; implementation pending | 用户级 `saved-filters.yml` 独立保存查询、根 ID 作用域和排序，不保存素材结果；见 [ADR-027](../specs/adr/027-user-profile-saved-filters.md) 与 [Schema](../schemas/saved-filters.schema.json) |
 | 文件移动与删除 | Resolved for first public release | 应用只解释文件系统，不提供源素材移动或删除；重复分析只报告候选。未来若增加，必须单独 ADR、默认关闭，删除使用系统废纸篓 |

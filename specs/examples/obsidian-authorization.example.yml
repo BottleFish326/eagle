@@ -1,0 +1,17 @@
+schema: 1
+installationId: 0198a7c2-a001-7a31-b842-f15d39f33c21
+revision: 3
+enabled: true
+updatedAt: '2026-08-20T00:30:00.000Z'
+roots:
+  - id: 0198a7c2-a101-7a31-b842-f15d39f33c22
+    path: /Users/example/Pictures/Materials
+    name: Materials
+    enabled: true
+    scan:
+      recursive: true
+      followSymlinks: false
+      ignore:
+        - '**/.git/**'
+    futureRootPolicy: preserve
+futureManifestField: preserve

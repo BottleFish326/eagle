@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/obsidian-authorization.schema.json",
+  "title": "Material Eagle Obsidian authorization",
+  "type": "object",
+  "required": ["schema", "installationId", "revision", "enabled", "updatedAt", "roots"],
+  "properties": {
+    "schema": { "const": 1 },
+    "installationId": { "$ref": "#/$defs/uuidV7" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "enabled": { "type": "boolean" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "roots": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/root" }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "uuidV7": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "root": {
+      "type": "object",
+      "required": ["id", "path", "name", "enabled", "scan"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuidV7" },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\u0000-\\u001f]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^\\S(?:.{0,126}\\S)?$"
+        },
+        "enabled": { "type": "boolean" },
+        "scan": {
+          "type": "object",
+          "required": ["recursive", "followSymlinks", "ignore"],
+          "properties": {
+            "recursive": { "const": true },
+            "followSymlinks": { "const": false },
+            "ignore": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^[^\\r\\n\\u0000]+$"
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
