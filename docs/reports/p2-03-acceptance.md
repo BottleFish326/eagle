@@ -65,6 +65,10 @@ recovered 01a0193e-069b-74b0-bf3f-dfdc355a69c4 1000
 
 UUID 仅用于本次隔离证据，不是固定测试断言。故障夹具执行后已移入系统废纸篓，不包含用户素材。
 
+阶段 2 退出不再依赖这段人工终端摘录。统一候选门禁使用 `npm run test:p2-local-fault-gates`：它只接受 Node.js 24 和完全干净的 Git 工作树，Release 构建并记录 `transaction-fault`/`cache-fault` 二进制 SHA-256，在系统临时目录真实执行第 317 项 abort 与第二进程续传，确认 `317 -> 1000` 后删除本次精确创建的目录，再以不可覆盖方式生成 `evidence/p2-local-fault-gates.json`。收据结构由 [`p2-local-fault-gates.schema.json`](../../schemas/p2-local-fault-gates.schema.json) 固定；报告生成器的正向、异常退出、错误计数、错误 UUID、缺失故障点、来源与清理拒绝测试已通过。
+
+正式候选收据尚未生成：P2-A11 的 8 小时任务运行期间不执行 Cargo build 或故障负载，以保持资源样本隔离。任务结束且其证据提交后，必须从干净候选提交运行该门禁，不能把本节早期人工结果复制为候选收据。
+
 ## 5. 本地门禁
 
 执行：

@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/p2-local-fault-gates.schema.json",
+  "title": "P2 local process fault gates",
+  "description": "Accepted-only receipt for the P2-A04 transaction crash and both P2-A10 cache crash boundaries.",
+  "type": "object",
+  "required": [
+    "schema",
+    "accepted",
+    "failures",
+    "gitCommit",
+    "executedAt",
+    "repositoryClean",
+    "environment",
+    "build",
+    "p2A04",
+    "p2A10",
+    "temporaryWorkspacesRemoved"
+  ],
+  "properties": {
+    "schema": { "const": 1 },
+    "accepted": { "const": true },
+    "failures": { "type": "array", "maxItems": 0 },
+    "gitCommit": { "$ref": "#/$defs/gitCommit" },
+    "executedAt": { "type": "string", "format": "date-time" },
+    "repositoryClean": { "const": true },
+    "environment": { "$ref": "#/$defs/environment" },
+    "build": { "$ref": "#/$defs/build" },
+    "p2A04": { "$ref": "#/$defs/p2A04" },
+    "p2A10": { "$ref": "#/$defs/p2A10" },
+    "temporaryWorkspacesRemoved": { "const": true }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "positiveInteger": { "type": "integer", "minimum": 1 },
+    "environment": {
+      "type": "object",
+      "required": ["platform", "architecture", "nodeVersion", "rustc", "cargo"],
+      "properties": {
+        "platform": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "architecture": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "nodeVersion": { "type": "string", "pattern": "^v24\\." },
+        "rustc": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "cargo": { "type": "string", "minLength": 1, "maxLength": 256 }
+      },
+      "additionalProperties": false
+    },
+    "build": {
+      "type": "object",
+      "required": ["command", "binaries"],
+      "properties": {
+        "command": {
+          "const": "cargo build --locked --release -p transaction-fault -p cache-fault"
+        },
+        "binaries": {
+          "type": "object",
+          "required": ["transactionFault", "cacheFault"],
+          "properties": {
+            "transactionFault": { "$ref": "#/$defs/sha256" },
+            "cacheFault": { "$ref": "#/$defs/sha256" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "process": {
+      "type": "object",
+      "required": ["status", "signal", "stdoutSha256", "stderrSha256"],
+      "properties": {
+        "status": { "type": ["integer", "null"] },
+        "signal": { "type": ["string", "null"] },
+        "stdoutSha256": { "$ref": "#/$defs/sha256" },
+        "stderrSha256": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "successfulProcess": {
+      "allOf": [
+        { "$ref": "#/$defs/process" },
+        {
+          "properties": {
+            "status": { "const": 0 },
+            "signal": { "const": null }
+          }
+        }
+      ]
+    },
+    "abortedProcess": {
+      "allOf": [
+        { "$ref": "#/$defs/process" },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "status": { "const": null },
+                "signal": { "const": "SIGABRT" }
+              }
+            },
+            {
+              "properties": {
+                "status": {
+                  "type": "integer",
+                  "not": { "const": 0 }
+                },
+                "signal": { "const": null }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "p2A04": {
+      "type": "object",
+      "required": [
+        "count",
+        "abortAfterApplied",
+        "abort",
+        "recover",
+        "transactionId",
+        "discoveredState",
+        "appliedAtDiscovery",
+        "recoveredCount"
+      ],
+      "properties": {
+        "count": { "const": 1000 },
+        "abortAfterApplied": { "const": 317 },
+        "abort": { "$ref": "#/$defs/abortedProcess" },
+        "recover": { "$ref": "#/$defs/successfulProcess" },
+        "transactionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "discoveredState": { "const": "active" },
+        "appliedAtDiscovery": { "const": 317 },
+        "recoveredCount": { "const": 1000 }
+      },
+      "additionalProperties": false
+    },
+    "p2A10": {
+      "type": "object",
+      "required": ["cases"],
+      "properties": {
+        "cases": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "allOf": [
+                { "$ref": "#/$defs/cacheCase" },
+                {
+                  "properties": {
+                    "faultPoint": { "const": "after-cache-rename" }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                { "$ref": "#/$defs/cacheCase" },
+                {
+                  "properties": {
+                    "faultPoint": { "const": "after-cache-recreate" }
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "cacheCase": {
+      "type": "object",
+      "required": [
+        "faultPoint",
+        "seed",
+        "abort",
+        "recover",
+        "seedVerified",
+        "recoveryVerified"
+      ],
+      "properties": {
+        "faultPoint": {
+          "enum": ["after-cache-rename", "after-cache-recreate"]
+        },
+        "seed": { "$ref": "#/$defs/successfulProcess" },
+        "abort": { "$ref": "#/$defs/abortedProcess" },
+        "recover": { "$ref": "#/$defs/successfulProcess" },
+        "seedVerified": { "const": true },
+        "recoveryVerified": { "const": true }
+      },
+      "additionalProperties": false
+    }
+  }
+}

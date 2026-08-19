@@ -78,6 +78,8 @@ recovered disposition=maintained cache=1 asset=true sidecar=true
 
 两个用例都确认：启动成功、旧缓存条目为零、可见请求重新生成而非命中、重建后条目为一、原图摘要不变、Sidecar 摘要不变。测试临时目录验收后已移动到系统废纸篓。
 
+阶段 2 候选退出时，这两处崩溃会与 P2-A04 一起由 `npm run test:p2-local-fault-gates` 重新执行。执行器对 `after-cache-rename`、`after-cache-recreate` 各要求且只允许一个用例，核对 seed/abort/recover 的真实进程状态与恢复输出，记录 Release 二进制 SHA-256，并只在两例都通过且精确临时根已删除后发布不可覆盖的 `evidence/p2-local-fault-gates.json`。当前执行器、纯判定测试与 [`p2-local-fault-gates.schema.json`](../../schemas/p2-local-fault-gates.schema.json) 已就绪；为隔离正在运行的 P2-A11 资源样本，正式候选收据将在 soak 结束并提交后执行。
+
 ## 6. 自动化验收矩阵
 
 | 验收点 | 自动化证据 | 结果 |

@@ -32,13 +32,13 @@
 | P2-A01 | Pass locally | 素材与 Sidecar 成对移动后按唯一 ID 生成移动映射，Tag 与选择迁移，无重复素材 |
 | P2-A02 | Pass locally | 单边移动产生 orphan/missing/三级候选；扫描和诊断不写磁盘 |
 | P2-A03 | Pass locally | 两个完整 SHA-256 相同候选均保持 ambiguous，用户未选择前不操作 |
-| P2-A04 | Pass locally | 1,000 项批次在第 317 项后真实 abort，重启重建状态并继续到 1,000/1,000 |
+| P2-A04 | Pass locally | 1,000 项批次在第 317 项后真实 abort，重启重建状态并继续到 1,000/1,000；候选收据执行器已就绪 |
 | P2-A05 | Pass locally | 事务后外部改写的 Sidecar 保持原字节并成为 conflict，其余项条件恢复 |
 | P2-A06 | Pass locally | 丢失/溢出触发根范围完整扫描，增量模型最终由完整文件系统结果替换 |
 | P2-A07 | Pass locally | Dropbox/Syncthing/通用冲突副本与原件均保留，不自动删除或合并标量字段 |
 | P2-A08 | Pass locally | 扫描中拔盘/撤权返回非权威 root-offline/permission-denied，应用与其他根保持运行 |
 | P2-A09 | Pass locally | 重叠根拒绝；符号链接循环不跟随、不重复计数并输出明确诊断 |
-| P2-A10 | Pass locally | 缓存根轮换的两个进程中断点均可启动恢复，素材与 Sidecar SHA-256 不变 |
+| P2-A10 | Pass locally | 缓存根轮换的两个进程中断点均可启动恢复，素材与 Sidecar SHA-256 不变；候选收据执行器已就绪 |
 | P2-A11 | Running | 正式 28,800 秒 L 数据集任务运行中；只有最终 JSON 自动判定 accepted 才可通过 |
 | P2-A12 | Pending | macOS ARM64 10 项通过；尚无 Windows NTFS/Linux 原生托管结果 |
 
@@ -128,6 +128,24 @@ node tools/verify-phase-2-external-gates.mjs
 
 只有统一报告 `accepted=true` 且 `failures=[]` 时，P2-A11/P2-A12 两项外部门禁才可一起视为满足。它不替代 P2-A01 至 P2-A10、完整质量门禁、数据安全复核或退出评审，因此不能单独把阶段 2 标成 Accepted。
 
+## 5.2 P2-A04/P2-A10 候选故障收据
+
+P2-A04 与 P2-A10 已有本地真实进程证据，但阶段退出还要从最终候选提交重复执行并发布统一机器收据：
+
+```text
+npm run test:p2-local-fault-gates
+```
+
+执行器要求 Node.js 24、无参数、输出文件尚不存在且 Git tracked/untracked 工作树完全干净，然后进行一次锁定依赖的 Release build。它记录候选 commit、Rust/Cargo/Node/平台信息和两个故障二进制 SHA-256，在唯一的系统临时根中完成以下三个真实 abort/recover 用例：
+
+1. 批量事务在 `applied=317` 后 abort，第二进程发现 UUIDv7 `Active` 日志并继续到 1,000；
+2. 缓存根改名后 abort，第二进程确认用户素材/Sidecar 不变并重建缓存；
+3. 新缓存根建立后 abort，第二进程做同样恢复与用户文件校验。
+
+任一进程状态、恢复输出、故障点数量、来源、二进制摘要或临时目录清理不满足时，命令返回非零、保留故障现场且不生成正式收据。全部满足后才删除本次精确创建的临时根，并以不可覆盖方式写入 `docs/reports/evidence/p2-local-fault-gates.json`；[`p2-local-fault-gates.schema.json`](../../schemas/p2-local-fault-gates.schema.json) 只接受成功/abort 状态、固定 317/1000 边界、固定顺序的两个缓存故障点和已清理状态。
+
+该命令会构建并运行 Rust 故障负载，因此不在 P2-A11 采样期间执行。当前执行器、Schema 与五项纯判定测试已通过；正式候选收据仍 pending，必须等 soak 正常结束、partial 消失且候选证据提交后再运行。该本地收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
+
 ## 6. 产品不变量复核
 
 | 不变量 | 当前结论 |
@@ -145,7 +163,7 @@ node tools/verify-phase-2-external-gates.mjs
 |---|---|
 | P2-A01 至 P2-A12 全部通过 | Pending：A11 running，A12 pending；统一外部门禁验证器已就绪 |
 | 完整扫描与增量模型最终一致 | Pass locally |
-| 崩溃测试无截断 Sidecar | Pass locally |
+| 崩溃测试无截断 Sidecar | Pass locally；候选提交统一故障收据 pending |
 | 连续 8 小时无无界资源增长 | Pending |
 | 三平台核心路径原生测试通过 | Pending |
 | P0/P1 数据安全缺陷为零 | Final audit pending；当前报告无已知未解决项 |
@@ -156,11 +174,12 @@ node tools/verify-phase-2-external-gates.mjs
 
 1. 确认 P2-A11 final JSON、P2-A12 已归档 consolidated matrix/三个源 artifact、`p2-a12-hosted-run.json`/hosted logs 与实现 commit 可追溯，并生成 `p2-external-gates.json`；
 2. 执行 `npm run audit:p2-soak-baseline`，确认正式 soak 生成器、原始判定器和该任务已编译的产品代码均未变化；若任一 scope 出现差异则重新跑相应门禁；
-3. 检查 `git status` 只包含预期最终证据，没有 partial、临时 fixture、token 或本机路径；
-4. 更新 P2-06/P2-08、本报告、`docs/progress.md` 和 README 为实际结论；
-5. 运行文档/Schema 检查和最终快速质量门禁；
-6. 提交阶段 2 退出证据，再把阶段 3 从 Not started 改为 In progress。
+3. 提交所有候选代码与上述正式证据，确认没有 partial、临时 fixture、token 或本机路径，且 `git status` 完全干净；
+4. 执行 `npm run test:p2-local-fault-gates`，检查不可覆盖收据通过 Schema 并绑定该干净候选提交；失败时保留现场、修复后从新的干净提交完整重跑；
+5. 更新 P2-03/P2-05/P2-06/P2-08、本报告、`docs/progress.md` 和 README 为实际结论；
+6. 运行文档/Schema 检查和最终快速质量门禁，确认工作树只包含预期本地故障收据与结论更新；
+7. 提交阶段 2 退出证据，再把阶段 3 从 Not started 改为 In progress。
 
 ## 9. 当前结论
 
-P2-A01 至 P2-A10 已有本地自动化/故障注入证据。P2-A11 正在执行，P2-A12 仍受没有 Git remote 的外部托管矩阵阻塞。因此阶段 2 当前结论是 **Not accepted / In progress**，不得提前宣称完成。
+P2-A01 至 P2-A10 已有本地自动化/故障注入证据，A04/A10 的最终候选收据执行器已就绪但为隔离 soak 尚未运行。P2-A11 正在执行，P2-A12 仍受没有 Git remote 的外部托管矩阵阻塞。因此阶段 2 当前结论是 **Not accepted / In progress**，不得提前宣称完成。
