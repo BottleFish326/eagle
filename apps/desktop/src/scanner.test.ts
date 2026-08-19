@@ -30,6 +30,24 @@ describe("scanner commands", () => {
       onEvent: channel,
     });
     expect(receive).toHaveBeenCalledWith(event);
+
+    const batch: LibraryScanEvent = {
+      event: "batch",
+      data: {
+        scanId,
+        batch: {
+          sequence: 7,
+          assets: [],
+          problems: [],
+          visitedFiles: 0,
+        },
+      },
+    };
+    channel.onmessage(batch);
+    expect(call).toHaveBeenLastCalledWith("acknowledge_library_scan_batch", {
+      scanId,
+      sequence: 7,
+    });
   });
 
   it("requests cooperative cancellation by scan id", async () => {

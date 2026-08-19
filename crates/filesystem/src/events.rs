@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::time::{Duration, Instant};
 
 use notify::event::{AccessKind, AccessMode, ModifyKind, RenameMode};
@@ -28,6 +30,7 @@ pub enum FsChangeKind {
 pub enum FsRescanReason {
     AmbiguousRename,
     BatchOverflow,
+    QueueOverflow,
     ChannelDisconnected,
     OutOfScope,
     UnknownEvent,
@@ -92,6 +95,7 @@ pub struct WatchSession {
     _watcher: RecommendedWatcher,
     receiver: Receiver<notify::Result<Event>>,
     options: WatchOptions,
+    queue_overflowed: Arc<AtomicBool>,
 }
 
 impl WatchSession {
@@ -124,10 +128,12 @@ impl WatchSession {
                 path: root.to_path_buf(),
                 source,
             })?;
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::sync_channel(options.max_batch_events);
+        let queue_overflowed = Arc::new(AtomicBool::new(false));
+        let callback_overflowed = Arc::clone(&queue_overflowed);
         let mut watcher = RecommendedWatcher::new(
             move |result| {
-                let _ = sender.send(result);
+                enqueue_watch_result(&sender, &callback_overflowed, result);
             },
             Config::default(),
         )?;
@@ -137,6 +143,7 @@ impl WatchSession {
             _watcher: watcher,
             receiver,
             options,
+            queue_overflowed,
         })
     }
 
@@ -153,6 +160,13 @@ impl WatchSession {
         &self,
         timeout: Duration,
     ) -> Result<Option<FsChangeBatch>, FilesystemError> {
+        if self.queue_overflowed.swap(false, Ordering::AcqRel) {
+            return Ok(Some(rescan_batch(
+                &self.root,
+                FsRescanReason::QueueOverflow,
+                0,
+            )));
+        }
         let first = match self.receiver.recv_timeout(timeout) {
             Ok(result) => result,
             Err(RecvTimeoutError::Timeout) => return Ok(None),
@@ -167,9 +181,23 @@ impl WatchSession {
         let mut raw_event_count = 1;
         let mut changes = Vec::new();
         collect_result(&self.root, first, &mut changes);
+        if self.queue_overflowed.swap(false, Ordering::AcqRel) {
+            return Ok(Some(rescan_batch(
+                &self.root,
+                FsRescanReason::QueueOverflow,
+                raw_event_count,
+            )));
+        }
         let deadline = Instant::now() + self.options.max_batch_latency;
 
         while raw_event_count < self.options.max_batch_events {
+            if self.queue_overflowed.swap(false, Ordering::AcqRel) {
+                return Ok(Some(rescan_batch(
+                    &self.root,
+                    FsRescanReason::QueueOverflow,
+                    raw_event_count,
+                )));
+            }
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
                 break;
@@ -202,6 +230,17 @@ impl WatchSession {
         }
         let batch = coalesce_changes(&self.root, changes, raw_event_count);
         Ok((!batch.changes.is_empty()).then_some(batch))
+    }
+}
+
+fn enqueue_watch_result(
+    sender: &SyncSender<notify::Result<Event>>,
+    overflowed: &AtomicBool,
+    result: notify::Result<Event>,
+) {
+    match sender.try_send(result) {
+        Ok(()) | Err(TrySendError::Disconnected(_)) => {}
+        Err(TrySendError::Full(_)) => overflowed.store(true, Ordering::Release),
     }
 }
 
@@ -393,6 +432,8 @@ fn rescan_batch(root: &Path, reason: FsRescanReason, raw_event_count: usize) -> 
 mod tests {
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc;
     use std::time::Duration;
 
     use notify::event::{
@@ -403,7 +444,7 @@ mod tests {
 
     use super::{
         FsChange, FsChangeKind, FsRescanReason, WatchOptions, WatchSession, coalesce_changes,
-        normalize_event,
+        enqueue_watch_result, normalize_event,
     };
 
     #[test]
@@ -568,11 +609,29 @@ mod tests {
 
         assert_eq!(batch.root, directory.path().canonicalize().expect("root"));
         assert_eq!(batch.raw_event_count, 1);
-        assert_eq!(batch.changes[0].reason, Some(FsRescanReason::BatchOverflow));
+        assert!(matches!(
+            batch.changes[0].reason,
+            Some(FsRescanReason::BatchOverflow | FsRescanReason::QueueOverflow)
+        ));
         assert_eq!(
             batch.changes[0].paths.as_slice(),
             std::slice::from_ref(&batch.root)
         );
+    }
+
+    #[test]
+    fn callback_queue_is_bounded_and_marks_dropped_events() {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let overflowed = AtomicBool::new(false);
+        let event = Event::new(EventKind::Create(CreateKind::File))
+            .add_path(PathBuf::from("/library/new.png"));
+
+        enqueue_watch_result(&sender, &overflowed, Ok(event.clone()));
+        enqueue_watch_result(&sender, &overflowed, Ok(event));
+
+        assert!(overflowed.load(Ordering::Acquire));
+        assert!(receiver.try_recv().is_ok());
+        assert!(receiver.try_recv().is_err());
     }
 
     fn change(kind: FsChangeKind, path: PathBuf) -> FsChange {

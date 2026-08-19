@@ -6,6 +6,7 @@ export type FsChangeKind =
 export type FsRescanReason =
   | "ambiguous-rename"
   | "batch-overflow"
+  | "queue-overflow"
   | "channel-disconnected"
   | "out-of-scope"
   | "unknown-event"

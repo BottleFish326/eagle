@@ -41,6 +41,40 @@ export interface RuntimeRecoveryStatus {
   cacheStats: CacheStats;
 }
 
+export interface WorkResourceSnapshot {
+  active: number;
+  waiting: number;
+  peakActive: number;
+  peakWaiting: number;
+  completed: number;
+  rejected: number;
+  timedOut: number;
+  cancelled: number;
+}
+
+export interface RuntimeResourceStatus {
+  scheduler: {
+    mode: "foreground" | "background";
+    activeTotal: number;
+    waitingTotal: number;
+    peakActiveTotal: number;
+    peakWaitingTotal: number;
+    foregroundLimit: number;
+    backgroundLimit: number;
+    maxWaiters: number;
+    scan: WorkResourceSnapshot;
+    hash: WorkResourceSnapshot;
+    decode: WorkResourceSnapshot;
+  };
+  activeScans: number;
+  activeWatches: number;
+  cache: CacheStats;
+  scanBatchQueueCapacity: number;
+  pendingScanBatches: number;
+  maxActiveScans: number;
+  maxActiveWatches: number;
+}
+
 export interface DerivedStateResetReport {
   cache: {
     removedFiles: number;
@@ -78,6 +112,12 @@ export function getRuntimeRecoveryStatus(
   call: Invoke = invoke,
 ): Promise<RuntimeRecoveryStatus> {
   return call<RuntimeRecoveryStatus>("runtime_recovery_status");
+}
+
+export function getRuntimeResourceStatus(
+  call: Invoke = invoke,
+): Promise<RuntimeResourceStatus> {
+  return call<RuntimeResourceStatus>("runtime_resource_status");
 }
 
 export function resetDerivedState(

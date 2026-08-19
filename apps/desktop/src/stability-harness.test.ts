@@ -83,5 +83,8 @@ function sample(
     assetCards: Math.min(resultCount, 60),
     resultCount,
     eventLoopLagMs: lag,
+    activeObjectUrls: Math.min(resultCount, 60),
+    createdObjectUrls: Math.min(resultCount, 60),
+    revokedObjectUrls: 0,
   };
 }

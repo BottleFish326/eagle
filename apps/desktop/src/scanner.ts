@@ -6,6 +6,7 @@ export type AssetIssue =
   | { type: "unreadable-file"; message: string }
   | { type: "invalid-image-metadata"; message: string }
   | { type: "invalid-native-metadata"; message: string }
+  | { type: "resource-limited"; message: string }
   | { type: "missing-asset" }
   | { type: "unsupported-format" };
 
@@ -132,8 +133,28 @@ export function startLibraryScan(
   createChannel: ChannelFactory = () => new Channel<LibraryScanEvent>(),
 ): Promise<string> {
   const onEvent = createChannel();
-  onEvent.onmessage = receive;
+  onEvent.onmessage = (message) => {
+    try {
+      receive(message);
+    } finally {
+      if (message.event === "batch") {
+        void acknowledgeLibraryScanBatch(
+          message.data.scanId,
+          message.data.batch.sequence,
+          call,
+        ).catch(() => undefined);
+      }
+    }
+  };
   return call<string>("start_library_scan", { rootId, onEvent });
+}
+
+export function acknowledgeLibraryScanBatch(
+  scanId: string,
+  sequence: number,
+  call: Invoke = invoke,
+): Promise<boolean> {
+  return call<boolean>("acknowledge_library_scan_batch", { scanId, sequence });
 }
 
 export function cancelLibraryScan(

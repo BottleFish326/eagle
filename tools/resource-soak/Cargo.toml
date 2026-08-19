@@ -1,0 +1,20 @@
+[package]
+name = "resource-soak"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+asset-core = { path = "../../crates/asset-core" }
+asset-filesystem = { path = "../../crates/filesystem" }
+asset-preview = { path = "../../crates/preview" }
+clap.workspace = true
+metadata = { path = "../../crates/metadata" }
+resource-control = { path = "../../crates/resource-control" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

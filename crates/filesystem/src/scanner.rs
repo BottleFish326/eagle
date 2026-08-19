@@ -3,13 +3,13 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use asset_core::{AssetDimensions, AssetIssue, AssetRecord, NativeImageMetadata, SidecarState};
 use exif::{In, Tag, Value};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use metadata::{quick_fingerprint_file, read_sidecar_versioned, sidecar_path_for};
-use rayon::prelude::*;
+use resource_control::{ResourceController, ResourceError, WorkKind};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -21,6 +21,9 @@ pub struct ScanOptions {
     pub ignore_hidden: bool,
     pub ignore: Vec<String>,
     pub batch_size: usize,
+    pub max_native_metadata_bytes: u64,
+    pub max_sidecar_bytes: u64,
+    pub file_parse_timeout: Duration,
 }
 
 impl Default for ScanOptions {
@@ -30,6 +33,9 @@ impl Default for ScanOptions {
             ignore_hidden: true,
             ignore: Vec::new(),
             batch_size: 64,
+            max_native_metadata_bytes: 256 * 1024 * 1024,
+            max_sidecar_bytes: 4 * 1024 * 1024,
+            file_parse_timeout: Duration::from_secs(5),
         }
     }
 }
@@ -118,6 +124,8 @@ pub enum FilesystemError {
     InvalidIgnoreRule { rule: String, message: String },
     #[error("file watcher error: {0}")]
     Watch(#[from] notify::Error),
+    #[error("scan resource control error: {0}")]
+    Resource(#[from] ResourceError),
 }
 
 /// Scans one authorized root and returns a complete compatibility report.
@@ -156,6 +164,26 @@ pub fn scan_root_incremental<F>(
     root: &Path,
     options: &ScanOptions,
     cancellation: &ScanCancellation,
+    emit: F,
+) -> Result<ScanSummary, FilesystemError>
+where
+    F: FnMut(ScanBatch),
+{
+    let resources = ResourceController::with_defaults();
+    scan_root_incremental_controlled(root_id, root, options, cancellation, &resources, emit)
+}
+
+/// Scans using a shared scheduler so scan, hash, and decode work obey one process bound.
+///
+/// # Errors
+///
+/// Returns [`FilesystemError`] when inputs are invalid or a bounded resource wait fails.
+pub fn scan_root_incremental_controlled<F>(
+    root_id: Option<Uuid>,
+    root: &Path,
+    options: &ScanOptions,
+    cancellation: &ScanCancellation,
+    resources: &ResourceController,
     mut emit: F,
 ) -> Result<ScanSummary, FilesystemError>
 where
@@ -217,7 +245,9 @@ where
                 &mut paths,
                 &mut pending_problems,
                 cancellation,
-            );
+                options,
+                resources,
+            )?;
             asset_count += batch.assets.len();
             problem_count += batch.problems.len();
             emit(batch);
@@ -233,7 +263,9 @@ where
             &mut paths,
             &mut pending_problems,
             cancellation,
-        );
+            options,
+            resources,
+        )?;
         asset_count += batch.assets.len();
         problem_count += batch.problems.len();
         emit(batch);
@@ -254,6 +286,7 @@ where
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn parse_batch(
     sequence: usize,
     root_id: Option<Uuid>,
@@ -261,27 +294,47 @@ fn parse_batch(
     paths: &mut Vec<PathBuf>,
     problems: &mut Vec<ScanProblem>,
     cancellation: &ScanCancellation,
-) -> ScanBatch {
+    options: &ScanOptions,
+    resources: &ResourceController,
+) -> Result<ScanBatch, FilesystemError> {
     let batch_paths = std::mem::take(paths);
-    let assets = batch_paths
-        .par_iter()
-        .filter_map(|path| {
-            if cancellation.is_cancelled() {
-                None
-            } else {
-                parse_asset(root_id, root, path)
-            }
-        })
-        .collect::<Vec<_>>();
-    ScanBatch {
+    let permit = match resources.acquire_cancellable(WorkKind::Scan, || cancellation.is_cancelled())
+    {
+        Ok(permit) => Some(permit),
+        Err(ResourceError::Cancelled(WorkKind::Scan)) => None,
+        Err(error) => return Err(error.into()),
+    };
+    let assets = if permit.is_some() {
+        batch_paths
+            .iter()
+            .filter_map(|path| {
+                if cancellation.is_cancelled() {
+                    None
+                } else {
+                    parse_asset(root_id, root, path, options, cancellation)
+                }
+            })
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    Ok(ScanBatch {
         sequence,
         assets,
         problems: std::mem::take(problems),
         visited_files: batch_paths.len(),
-    }
+    })
 }
 
-fn parse_asset(root_id: Option<Uuid>, root: &Path, path: &Path) -> Option<AssetRecord> {
+#[allow(clippy::too_many_lines)]
+fn parse_asset(
+    root_id: Option<Uuid>,
+    root: &Path,
+    path: &Path,
+    options: &ScanOptions,
+    cancellation: &ScanCancellation,
+) -> Option<AssetRecord> {
+    let started = Instant::now();
     let mime = detect_mime(path);
     if !is_supported_mvp_image(&mime) {
         return None;
@@ -299,6 +352,9 @@ fn parse_asset(root_id: Option<Uuid>, root: &Path, path: &Path) -> Option<AssetR
             ));
         }
     };
+    if cancellation.is_cancelled() {
+        return None;
+    }
     let file_metadata = match fs::metadata(&canonical) {
         Ok(metadata) => metadata,
         Err(error) => {
@@ -336,6 +392,13 @@ fn parse_asset(root_id: Option<Uuid>, root: &Path, path: &Path) -> Option<AssetR
         .and_then(system_time_to_unix_ms);
     asset.file_read_only = Some(file_metadata.permissions().readonly());
 
+    if parse_deadline_exceeded(&mut asset, started, options.file_parse_timeout) {
+        return Some(asset);
+    }
+    if cancellation.is_cancelled() {
+        return None;
+    }
+
     match imagesize::size(&canonical) {
         Ok(size) => match (u32::try_from(size.width), u32::try_from(size.height)) {
             (Ok(width), Ok(height)) => {
@@ -350,10 +413,18 @@ fn parse_asset(root_id: Option<Uuid>, root: &Path, path: &Path) -> Option<AssetR
             .push(AssetIssue::InvalidImageMetadata(error.to_string())),
     }
 
+    if parse_deadline_exceeded(&mut asset, started, options.file_parse_timeout) {
+        return Some(asset);
+    }
+    if cancellation.is_cancelled() {
+        return None;
+    }
+
     if matches!(
         asset.mime.as_str(),
         "image/jpeg" | "image/png" | "image/webp"
-    ) {
+    ) && file_metadata.len() <= options.max_native_metadata_bytes
+    {
         match read_native_image_metadata(&canonical) {
             Ok(metadata) => asset.native_metadata = metadata,
             Err(exif::Error::NotFound(_) | exif::Error::NotSupported(_)) => {}
@@ -361,18 +432,69 @@ fn parse_asset(root_id: Option<Uuid>, root: &Path, path: &Path) -> Option<AssetR
                 .issues
                 .push(AssetIssue::InvalidNativeMetadata(error.to_string())),
         }
+    } else if matches!(
+        asset.mime.as_str(),
+        "image/jpeg" | "image/png" | "image/webp"
+    ) {
+        asset.issues.push(AssetIssue::ResourceLimited(format!(
+            "native metadata skipped because the source exceeds the {} byte safety limit",
+            options.max_native_metadata_bytes
+        )));
     }
 
-    merge_adjacent_sidecar(&mut asset, &canonical, file_metadata.len());
+    if parse_deadline_exceeded(&mut asset, started, options.file_parse_timeout) {
+        return Some(asset);
+    }
+    if cancellation.is_cancelled() {
+        return None;
+    }
+    merge_adjacent_sidecar(
+        &mut asset,
+        &canonical,
+        file_metadata.len(),
+        options.max_sidecar_bytes,
+    );
+    let _ = parse_deadline_exceeded(&mut asset, started, options.file_parse_timeout);
     Some(asset)
 }
 
-fn merge_adjacent_sidecar(asset: &mut AssetRecord, asset_path: &Path, asset_size: u64) {
+fn parse_deadline_exceeded(asset: &mut AssetRecord, started: Instant, timeout: Duration) -> bool {
+    if started.elapsed() < timeout {
+        return false;
+    }
+    if !asset
+        .issues
+        .iter()
+        .any(|issue| matches!(issue, AssetIssue::ResourceLimited(_)))
+    {
+        asset.issues.push(AssetIssue::ResourceLimited(format!(
+            "file enrichment stopped after the {} ms cooperative deadline",
+            timeout.as_millis()
+        )));
+    }
+    true
+}
+
+fn merge_adjacent_sidecar(
+    asset: &mut AssetRecord,
+    asset_path: &Path,
+    asset_size: u64,
+    max_sidecar_bytes: u64,
+) {
     let sidecar_path = sidecar_path_for(asset_path);
     if !sidecar_path.is_file() {
         return;
     }
     asset.sidecar_path = Some(sidecar_path.clone());
+    if sidecar_path
+        .metadata()
+        .is_ok_and(|metadata| metadata.len() > max_sidecar_bytes)
+    {
+        asset.issues.push(AssetIssue::ResourceLimited(format!(
+            "Sidecar parsing skipped because the file exceeds the {max_sidecar_bytes} byte safety limit"
+        )));
+        return;
+    }
     match read_sidecar_versioned(&sidecar_path) {
         Ok((sidecar, version)) => {
             if sidecar.fingerprint.as_ref().is_some_and(|fingerprint| {
@@ -549,17 +671,19 @@ fn system_time_to_unix_ms(time: SystemTime) -> Option<i64> {
 mod tests {
     use std::fs;
     use std::io::Cursor;
+    use std::time::Duration;
 
     use asset_core::AssetIssue;
     use exif::{Field, In, Tag, Value as ExifValue};
     use metadata::{AssetSidecar, ExpectedVersion, sidecar_path_for, write_sidecar_atomic};
+    use resource_control::{ResourceController, ResourceLimits};
     use serde_yaml_ng::Value;
     use tempfile::tempdir;
     use uuid::Uuid;
 
     use super::{
         FilesystemError, ScanCancellation, ScanCompletion, ScanOptions, scan_root,
-        scan_root_incremental,
+        scan_root_incremental, scan_root_incremental_controlled,
     };
 
     const PNG: &[u8] = &[
@@ -738,6 +862,75 @@ mod tests {
         )
         .expect_err("invalid glob must fail");
         assert!(matches!(error, FilesystemError::InvalidIgnoreRule { .. }));
+    }
+
+    #[test]
+    fn shared_scheduler_accounts_scan_work_and_bounds_enrichment() {
+        let directory = tempdir().expect("tempdir");
+        let image = directory.path().join("large.png");
+        fs::write(&image, PNG).expect("write png");
+        let sidecar = AssetSidecar::new();
+        write_sidecar_atomic(
+            &sidecar_path_for(&image),
+            &sidecar,
+            &ExpectedVersion::Missing,
+        )
+        .expect("write sidecar");
+        let resources = ResourceController::new(ResourceLimits {
+            foreground_total: 1,
+            background_total: 1,
+            scan: 1,
+            hash: 1,
+            decode: 1,
+            max_waiters: 2,
+            wait_timeout: Duration::from_secs(1),
+        })
+        .expect("resources");
+        let cancellation = ScanCancellation::new();
+        let mut assets = Vec::new();
+        scan_root_incremental_controlled(
+            None,
+            directory.path(),
+            &ScanOptions {
+                max_native_metadata_bytes: 1,
+                max_sidecar_bytes: 1,
+                ..ScanOptions::default()
+            },
+            &cancellation,
+            &resources,
+            |batch| assets.extend(batch.assets),
+        )
+        .expect("controlled scan");
+
+        assert_eq!(resources.snapshot().expect("snapshot").scan.completed, 1);
+        assert!(assets[0].dimensions.is_some());
+        assert!(assets[0].id.is_none());
+        assert!(
+            assets[0]
+                .issues
+                .iter()
+                .any(|issue| matches!(issue, AssetIssue::ResourceLimited(_)))
+        );
+    }
+
+    #[test]
+    fn zero_parse_deadline_stops_optional_file_enrichment() {
+        let directory = tempdir().expect("tempdir");
+        fs::write(directory.path().join("deadline.png"), PNG).expect("write png");
+        let report = scan_root(
+            directory.path(),
+            &ScanOptions {
+                file_parse_timeout: Duration::ZERO,
+                ..ScanOptions::default()
+            },
+        )
+        .expect("scan");
+
+        assert!(report.assets[0].dimensions.is_none());
+        assert!(matches!(
+            report.assets[0].issues.as_slice(),
+            [AssetIssue::ResourceLimited(_)]
+        ));
     }
 
     fn jpeg_header(width: u16, height: u16) -> Vec<u8> {

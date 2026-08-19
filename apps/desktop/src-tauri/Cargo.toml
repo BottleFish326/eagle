@@ -22,6 +22,7 @@ asset-link-resolver = { path = "../../../crates/link-resolver" }
 asset-preview = { path = "../../../crates/preview" }
 asset-transactions = { path = "../../../crates/transactions" }
 metadata = { path = "../../../crates/metadata" }
+resource-control = { path = "../../../crates/resource-control" }
 serde.workspace = true
 sha2.workspace = true
 tauri.workspace = true

@@ -13,7 +13,7 @@ imagesize.workspace = true
 infer.workspace = true
 kamadak-exif.workspace = true
 notify.workspace = true
-rayon.workspace = true
+resource-control = { path = "../resource-control" }
 serde.workspace = true
 serde_yaml_ng.workspace = true
 tempfile.workspace = true

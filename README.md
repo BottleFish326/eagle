@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段 0 与阶段 1 已通过本地验收。阶段 2 已完成 P2-01 至 P2-05：文件监听可最终收敛，移动与孤立 Sidecar 可安全诊断/显式重联，批量元数据操作具有纯文件事务恢复，并发编辑与同步冲突需要显式解决，缩略图缓存具有容量、期限、精确失效、孤立回收和中断安全清理。下一项为 P2-06 资源与稳定性控制。仓库尚无远程地址，首次托管 CI 仍待远程建立后确认。开发阶段、交付物和验收规范见：
+阶段 0 与阶段 1 已通过本地验收。阶段 2 已完成 P2-01 至 P2-05；P2-06 的统一资源限流、后台降级、协作期限、有界队列和监控工具已经实现，正在等待 P2-A11 的 L 数据集连续 8 小时正式验收。仓库尚无远程地址，首次托管 CI 仍待远程建立后确认。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
@@ -16,6 +16,7 @@
 - [P2-03 验收报告](docs/reports/p2-03-acceptance.md)
 - [P2-04 验收报告](docs/reports/p2-04-acceptance.md)
 - [P2-05 验收报告](docs/reports/p2-05-acceptance.md)
+- [P2-06 验收准备报告](docs/reports/p2-06-acceptance.md)
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
 - [P1-03 验收报告](docs/reports/p1-03-acceptance.md)
@@ -79,9 +80,10 @@ npm ci --prefix integrations/obsidian-bridge
 npm run ci
 npm run test:medium
 npm run test:stability
+npm run test:resource-stability
 ```
 
-`npm run ci` 依次执行格式检查、Rust/TypeScript 静态检查、全部单元测试、S 数据集跨模块测试、Tauri 桌面端构建和 Obsidian 插件构建。`npm run test:medium` 在受标记保护的临时目录生成 10,000 项 M 夹具，验证扫描、复合查询和原始素材摘要后安全清理，用于阶段/每日规模回归，不放入每次提交的快速 CI。`npm run test:stability` 使用独立 Chrome 对同规模界面预热 60 秒并连续滚动、筛选 30 分钟，自动拒绝堆增长、主线程阻塞、全量卡片挂载、错误结果、页面重载和采集超时；默认需要 macOS Google Chrome，可用 `-- --chrome <path>` 覆盖浏览器路径。
+`npm run ci` 依次执行格式检查、Rust/TypeScript 静态检查、全部单元测试、S 数据集跨模块测试、Tauri 桌面端构建和 Obsidian 插件构建。`npm run test:medium` 在受标记保护的临时目录生成 10,000 项 M 夹具，验证扫描、复合查询和原始素材摘要后安全清理，用于阶段/每日规模回归，不放入每次提交的快速 CI。`npm run test:stability` 使用独立 Chrome 对同规模界面预热 60 秒并连续滚动、筛选 30 分钟，自动拒绝堆增长、主线程阻塞、全量卡片挂载、对象 URL 越界、错误结果、页面重载和采集超时；默认需要 macOS Google Chrome，可用 `-- --chrome <path>` 覆盖浏览器路径。`npm run test:resource-stability` 默认生成 L 数据集并运行 8 小时原生负载，采集 RSS、CPU、线程、句柄、调度与缓存曲线；它是 P2-A11 的阶段验收，不属于每次提交的快速 CI。
 
 ## 阶段 0 原型单独验证
 

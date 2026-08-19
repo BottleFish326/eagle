@@ -2,6 +2,7 @@ import type { AssetQuery, QueryAssetsResult } from "./asset-query";
 import type {
   ApplicationConfig,
   RuntimeRecoveryStatus,
+  RuntimeResourceStatus,
 } from "./application-runtime";
 import type { DesktopApi } from "./desktop-api";
 import type { LibraryRootStatus } from "./library-roots";
@@ -78,6 +79,42 @@ export function createDemoDesktopApi(
       recoveryStatus.cacheStats.fileCount = previewKeys.size * 2;
       recoveryStatus.cacheStats.byteCount = previewKeys.size * 4096;
       return structuredClone(recoveryStatus);
+    },
+    async getRuntimeResourceStatus() {
+      const idleWork = {
+        active: 0,
+        waiting: 0,
+        peakActive: 0,
+        peakWaiting: 0,
+        completed: 0,
+        rejected: 0,
+        timedOut: 0,
+        cancelled: 0,
+      };
+      const status: RuntimeResourceStatus = {
+        scheduler: {
+          mode:
+            document.visibilityState === "hidden" ? "background" : "foreground",
+          activeTotal: 0,
+          waitingTotal: 0,
+          peakActiveTotal: 0,
+          peakWaitingTotal: 0,
+          foregroundLimit: 4,
+          backgroundLimit: 2,
+          maxWaiters: 256,
+          scan: { ...idleWork },
+          hash: { ...idleWork },
+          decode: { ...idleWork },
+        },
+        activeScans: 0,
+        activeWatches: watchTimers.size,
+        cache: structuredClone(recoveryStatus.cacheStats),
+        scanBatchQueueCapacity: 8,
+        pendingScanBatches: 0,
+        maxActiveScans: 8,
+        maxActiveWatches: 64,
+      };
+      return status;
     },
     async resetDerivedState() {
       const removedFiles = previewKeys.size;

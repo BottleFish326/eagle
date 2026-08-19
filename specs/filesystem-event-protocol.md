@@ -11,6 +11,7 @@ type FsChange = {
   reason?:
     | "ambiguous-rename"
     | "batch-overflow"
+    | "queue-overflow"
     | "channel-disconnected"
     | "out-of-scope"
     | "unknown-event"
@@ -34,7 +35,7 @@ type FsChangeBatch = {
 };
 ```
 
-默认静默窗口为 120 毫秒，持续事件的单批最长收集时间为 750 毫秒，原始事件上限为 4,096。输出按移动路径对和单路径排序，便于测试与诊断。空批次不会发送到桌面界面。
+默认静默窗口为 120 毫秒，持续事件的单批最长收集时间为 750 毫秒，原始事件上限为 4,096。操作系统回调到批处理器之间使用同容量同步通道；通道满时丢弃新增提示并返回 `queue-overflow`，由完整扫描恢复真相。输出按移动路径对和单路径排序，便于测试与诊断。空批次不会发送到桌面界面。
 
 批内折叠规则：
 
@@ -59,6 +60,8 @@ stop_library_watch(watchId) -> boolean
 ```
 
 `start_library_watch` 只接受已配置、启用且当前可访问的根 ID，不接受路径。每个根同时最多一个监听器。事件形状为 `started`、`changes`、`failed`、`stopped`；通道发送失败会协作停止对应线程。
+
+扫描生产者到桌面消费端另有每个扫描 8 批次的同步通道。前端处理 `batch` 后调用 `acknowledge_library_scan_batch(scanId, sequence)`；未确认窗口最多 8 项，30 秒没有释放容量则扫描失败且不发布权威完成结果。消费变慢会反压扫描生产者，不保留无界批次。
 
 ## 4. 一致性扫描
 

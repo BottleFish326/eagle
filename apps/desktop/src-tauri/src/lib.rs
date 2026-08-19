@@ -1,7 +1,8 @@
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use app_config::{
     APPLICATION_CONFIG_SCHEMA_VERSION, ApplicationConfig, ApplicationConfigManager,
@@ -14,10 +15,10 @@ use asset_catalog::{
     EditFailureKind, MetadataEditFailure, QueryAssetsInput, QueryAssetsResult,
 };
 use asset_filesystem::{
-    AddLibraryRoot, FilesystemError, FsChangeBatch, FsRescanReason, LibraryRoot,
-    LibraryRootManager, LibraryRootStatus, ReconciliationReport, RelinkCandidate, RelinkReceipt,
-    RootAccessStatus, ScanBatch, ScanCancellation, ScanCompletion, ScanOptions, ScanSummary,
-    UpdateLibraryRoot, WatchSession, apply_relink, inspect_reconciliation, scan_root_incremental,
+    AddLibraryRoot, FsChangeBatch, FsRescanReason, LibraryRoot, LibraryRootManager,
+    LibraryRootStatus, ReconciliationReport, RelinkCandidate, RelinkReceipt, RootAccessStatus,
+    ScanBatch, ScanCancellation, ScanCompletion, ScanOptions, ScanSummary, UpdateLibraryRoot,
+    WatchSession, apply_relink, inspect_reconciliation, scan_root_incremental_controlled,
 };
 use asset_index::QueryParseError;
 use asset_link_resolver::{
@@ -32,6 +33,7 @@ use asset_transactions::{
     MetadataTransactionStore, TransactionFailureKind, TransactionRecoveryResult,
     TransactionScopeItem, TransactionSummary, TransactionTarget,
 };
+use resource_control::{ResourceController, ResourceMode, ResourceSnapshot, WorkKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{Manager, State, ipc::Channel, ipc::Response};
@@ -69,6 +71,35 @@ struct RuntimeRecoveryStatus {
     paths: ApplicationPaths,
     cache_startup: CacheStartupReport,
     cache_stats: CacheStats,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeResourceStatus {
+    scheduler: ResourceSnapshot,
+    active_scans: usize,
+    active_watches: usize,
+    cache: CacheStats,
+    scan_batch_queue_capacity: usize,
+    pending_scan_batches: usize,
+    max_active_scans: usize,
+    max_active_watches: usize,
+}
+
+const SCAN_BATCH_QUEUE_CAPACITY: usize = 8;
+const MAX_ACTIVE_SCANS: usize = 8;
+const MAX_ACTIVE_WATCHES: usize = 64;
+
+enum ScanPipelineMessage {
+    Batch(ScanBatch),
+    Finished(Result<ScanSummary, String>),
+}
+
+fn scan_pipeline_channel() -> (
+    SyncSender<ScanPipelineMessage>,
+    Receiver<ScanPipelineMessage>,
+) {
+    std::sync::mpsc::sync_channel(SCAN_BATCH_QUEUE_CAPACITY)
 }
 
 #[derive(Debug, Clone)]
@@ -245,7 +276,8 @@ impl From<PreviewError> for ThumbnailCommandError {
             },
             PreviewError::InvalidConcurrency(_)
             | PreviewError::InvalidCachePolicy(_)
-            | PreviewError::PoisonedLock(_) => Self::Internal {
+            | PreviewError::PoisonedLock(_)
+            | PreviewError::Resource(_) => Self::Internal {
                 message: error.to_string(),
             },
         }
@@ -262,6 +294,103 @@ struct ScanCoordinator {
 struct ActiveScan {
     root_id: Uuid,
     cancellation: ScanCancellation,
+    delivery: Arc<ScanDeliveryWindow>,
+}
+
+#[derive(Debug, Default)]
+struct ScanDeliveryWindow {
+    in_flight: Mutex<BTreeSet<usize>>,
+    acknowledged: Condvar,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScanDeliveryError {
+    Cancelled,
+    TimedOut,
+    Poisoned,
+    DuplicateSequence,
+}
+
+impl ScanDeliveryError {
+    const fn message(self) -> &'static str {
+        match self {
+            Self::Cancelled => "scan delivery cancelled",
+            Self::TimedOut => "scan UI acknowledgement timed out after 30 seconds",
+            Self::Poisoned => "scan delivery acknowledgement lock is poisoned",
+            Self::DuplicateSequence => "scan delivery received a duplicate batch sequence",
+        }
+    }
+}
+
+impl ScanDeliveryWindow {
+    fn pending_count(&self) -> usize {
+        self.in_flight.lock().map_or(0, |in_flight| in_flight.len())
+    }
+
+    fn reserve(
+        &self,
+        sequence: usize,
+        cancellation: &ScanCancellation,
+    ) -> Result<(), ScanDeliveryError> {
+        let started = Instant::now();
+        let mut in_flight = self
+            .in_flight
+            .lock()
+            .map_err(|_| ScanDeliveryError::Poisoned)?;
+        while in_flight.len() >= SCAN_BATCH_QUEUE_CAPACITY {
+            if cancellation.is_cancelled() {
+                return Err(ScanDeliveryError::Cancelled);
+            }
+            let remaining = Duration::from_secs(30).saturating_sub(started.elapsed());
+            if remaining.is_zero() {
+                return Err(ScanDeliveryError::TimedOut);
+            }
+            let (next, _) = self
+                .acknowledged
+                .wait_timeout(in_flight, remaining.min(Duration::from_millis(50)))
+                .map_err(|_| ScanDeliveryError::Poisoned)?;
+            in_flight = next;
+        }
+        if !in_flight.insert(sequence) {
+            return Err(ScanDeliveryError::DuplicateSequence);
+        }
+        Ok(())
+    }
+
+    fn acknowledge(&self, sequence: usize) -> Result<bool, String> {
+        let removed = self
+            .in_flight
+            .lock()
+            .map_err(|_| ScanDeliveryError::Poisoned.message().to_owned())?
+            .remove(&sequence);
+        if removed {
+            self.acknowledged.notify_all();
+        }
+        Ok(removed)
+    }
+
+    fn wait_until_empty(&self, cancellation: &ScanCancellation) -> Result<(), ScanDeliveryError> {
+        let started = Instant::now();
+        let mut in_flight = self
+            .in_flight
+            .lock()
+            .map_err(|_| ScanDeliveryError::Poisoned)?;
+        while !in_flight.is_empty() {
+            if cancellation.is_cancelled() {
+                return Err(ScanDeliveryError::Cancelled);
+            }
+            let remaining = Duration::from_secs(30).saturating_sub(started.elapsed());
+            if remaining.is_zero() {
+                return Err(ScanDeliveryError::TimedOut);
+            }
+            let (next, _) = self
+                .acknowledged
+                .wait_timeout(in_flight, remaining.min(Duration::from_millis(50)))
+                .map_err(|_| ScanDeliveryError::Poisoned)?;
+            in_flight = next;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -327,6 +456,11 @@ impl WatchCoordinator {
         if active.values().any(|watch| watch.root_id == root_id) {
             return Err(format!("library root is already watched: {root_id}"));
         }
+        if active.len() >= MAX_ACTIVE_WATCHES {
+            return Err(format!(
+                "active library watcher limit reached: {MAX_ACTIVE_WATCHES}"
+            ));
+        }
         active.insert(
             watch_id,
             ActiveWatch {
@@ -354,7 +488,6 @@ impl WatchCoordinator {
         }
     }
 
-    #[cfg(test)]
     fn active_count(&self) -> usize {
         self.active.lock().map_or(0, |active| active.len())
     }
@@ -366,7 +499,7 @@ impl ScanCoordinator {
         scan_id: Uuid,
         root_id: Uuid,
         cancellation: ScanCancellation,
-    ) -> Result<(), String> {
+    ) -> Result<Arc<ScanDeliveryWindow>, String> {
         let mut active = self
             .active
             .lock()
@@ -374,19 +507,26 @@ impl ScanCoordinator {
         if active.values().any(|scan| scan.root_id == root_id) {
             return Err(format!("library root is already being scanned: {root_id}"));
         }
+        if active.len() >= MAX_ACTIVE_SCANS {
+            return Err(format!(
+                "active library scan limit reached: {MAX_ACTIVE_SCANS}"
+            ));
+        }
         let mut authoritative = self
             .authoritative_roots
             .lock()
             .map_err(|_| "scan authority lock is poisoned".to_owned())?;
+        let delivery = Arc::new(ScanDeliveryWindow::default());
         active.insert(
             scan_id,
             ActiveScan {
                 root_id,
                 cancellation,
+                delivery: Arc::clone(&delivery),
             },
         );
         authoritative.remove(&root_id);
-        Ok(())
+        Ok(delivery)
     }
 
     fn cancel(&self, scan_id: Uuid) -> Result<bool, String> {
@@ -406,8 +546,28 @@ impl ScanCoordinator {
         }
     }
 
+    fn acknowledge(&self, scan_id: Uuid, sequence: usize) -> Result<bool, String> {
+        let delivery = self
+            .active
+            .lock()
+            .map_err(|_| "scan coordinator lock is poisoned".to_owned())?
+            .get(&scan_id)
+            .map(|scan| Arc::clone(&scan.delivery))
+            .ok_or_else(|| format!("scan is no longer active: {scan_id}"))?;
+        delivery.acknowledge(sequence)
+    }
+
     fn active_count(&self) -> usize {
         self.active.lock().map_or(0, |active| active.len())
+    }
+
+    fn pending_batch_count(&self) -> usize {
+        self.active.lock().map_or(0, |active| {
+            active
+                .values()
+                .map(|scan| scan.delivery.pending_count())
+                .sum()
+        })
     }
 
     fn mark_authoritative(&self, root_id: Uuid) -> Result<(), String> {
@@ -510,6 +670,26 @@ async fn runtime_recovery_status(
         paths: state.paths.clone(),
         cache_startup: state.cache_startup,
         cache_stats,
+    })
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn runtime_resource_status(
+    resources: State<'_, ResourceController>,
+    scans: State<'_, Arc<ScanCoordinator>>,
+    watches: State<'_, Arc<WatchCoordinator>>,
+    previews: State<'_, Arc<ThumbnailService>>,
+) -> Result<RuntimeResourceStatus, String> {
+    Ok(RuntimeResourceStatus {
+        scheduler: resources.snapshot().map_err(|error| error.to_string())?,
+        active_scans: scans.active_count(),
+        active_watches: watches.active_count(),
+        cache: previews.cache_stats().map_err(|error| error.to_string())?,
+        scan_batch_queue_capacity: SCAN_BATCH_QUEUE_CAPACITY,
+        pending_scan_batches: scans.pending_batch_count(),
+        max_active_scans: MAX_ACTIVE_SCANS,
+        max_active_watches: MAX_ACTIVE_WATCHES,
     })
 }
 
@@ -671,7 +851,7 @@ fn vault_failure_kind(error: &VaultError) -> VaultReferenceFailureKind {
 }
 
 #[tauri::command]
-#[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
 fn start_library_scan(
     root_id: Uuid,
     on_event: Channel<LibraryScanEvent>,
@@ -680,6 +860,7 @@ fn start_library_scan(
     catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
     previews: State<'_, Arc<ThumbnailService>>,
     diagnostics: State<'_, Arc<DiagnosticService>>,
+    resources: State<'_, ResourceController>,
 ) -> Result<Uuid, String> {
     let root_statuses = roots
         .lock()
@@ -707,11 +888,12 @@ fn start_library_scan(
 
     let scan_id = Uuid::now_v7();
     let cancellation = ScanCancellation::new();
-    scans.register(scan_id, root_id, cancellation.clone())?;
+    let delivery = scans.register(scan_id, root_id, cancellation.clone())?;
     let coordinator = Arc::clone(scans.inner());
     let catalog = Arc::clone(catalog.inner());
     let previews = Arc::clone(previews.inner());
     let diagnostics = Arc::clone(diagnostics.inner());
+    let resources = resources.inner().clone();
     let root = root_status.root;
     let thread_name = format!("library-scan-{}", &scan_id.to_string()[..8]);
     let spawn_result = std::thread::Builder::new()
@@ -727,6 +909,8 @@ fn start_library_scan(
                 &previews,
                 &required_roots,
                 &diagnostics,
+                &resources,
+                &delivery,
             );
         });
     if let Err(error) = spawn_result {
@@ -736,7 +920,7 @@ fn start_library_scan(
     Ok(scan_id)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn run_library_scan_thread(
     scan_id: Uuid,
     root: LibraryRoot,
@@ -747,6 +931,8 @@ fn run_library_scan_thread(
     previews: &ThumbnailService,
     required_roots: &BTreeSet<Uuid>,
     diagnostics: &DiagnosticService,
+    resources: &ResourceController,
+    delivery: &ScanDeliveryWindow,
 ) {
     let previous_records = if let Ok(catalog) = catalog.lock() {
         catalog.root_records(root.id)
@@ -795,21 +981,80 @@ fn run_library_scan_thread(
         ..ScanOptions::default()
     };
     let mut scanned_records = Vec::new();
-    let result =
-        scan_root_incremental(Some(root.id), &root.path, &options, cancellation, |batch| {
-            scanned_records.extend(batch.assets.iter().cloned());
-            if let Ok(mut catalog) = catalog.lock() {
-                catalog.ingest(batch.assets.iter().cloned());
-            } else {
-                cancellation.cancel();
-            }
-            if on_event
-                .send(LibraryScanEvent::Batch { scan_id, batch })
-                .is_err()
-            {
-                cancellation.cancel();
-            }
+    let result = std::thread::scope(|scope| {
+        let (sender, receiver) = scan_pipeline_channel();
+        let scan_root_id = root.id;
+        let scan_root_path = &root.path;
+        let worker = scope.spawn(move || {
+            let result = scan_root_incremental_controlled(
+                Some(scan_root_id),
+                scan_root_path,
+                &options,
+                cancellation,
+                resources,
+                |batch| {
+                    if sender.send(ScanPipelineMessage::Batch(batch)).is_err() {
+                        cancellation.cancel();
+                    }
+                },
+            )
+            .map_err(|error| error.to_string());
+            let _ = sender.send(ScanPipelineMessage::Finished(result));
         });
+        let mut result = Err("scan batch producer disconnected before completion".to_owned());
+        let mut delivery_error = None;
+        while let Ok(message) = receiver.recv() {
+            match message {
+                ScanPipelineMessage::Batch(batch) => {
+                    scanned_records.extend(batch.assets.iter().cloned());
+                    if let Ok(mut catalog) = catalog.lock() {
+                        catalog.ingest(batch.assets.iter().cloned());
+                    } else {
+                        cancellation.cancel();
+                    }
+                    if delivery_error.is_none() && !cancellation.is_cancelled() {
+                        match delivery.reserve(batch.sequence, cancellation) {
+                            Ok(()) => {
+                                let sequence = batch.sequence;
+                                if on_event
+                                    .send(LibraryScanEvent::Batch { scan_id, batch })
+                                    .is_err()
+                                {
+                                    let _ = delivery.acknowledge(sequence);
+                                    cancellation.cancel();
+                                }
+                            }
+                            Err(ScanDeliveryError::Cancelled) => {}
+                            Err(error) => {
+                                cancellation.cancel();
+                                delivery_error = Some(error.message().to_owned());
+                            }
+                        }
+                    }
+                }
+                ScanPipelineMessage::Finished(scan_result) => {
+                    result = scan_result;
+                    break;
+                }
+            }
+        }
+        if worker.join().is_err() {
+            Err("scan batch producer panicked".to_owned())
+        } else if let Some(error) = delivery_error {
+            Err(error)
+        } else {
+            match delivery.wait_until_empty(cancellation) {
+                Ok(()) | Err(ScanDeliveryError::Cancelled) => result,
+                Err(error) => Err(error.message().to_owned()),
+            }
+        }
+    });
+    let result = result.map(|mut summary| {
+        if cancellation.is_cancelled() {
+            summary.completion = ScanCompletion::Cancelled;
+        }
+        summary
+    });
     let authoritative = publish_scan_result(
         scan_id,
         root.id,
@@ -886,6 +1131,7 @@ const fn cache_error_category(error: &PreviewError) -> &'static str {
         PreviewError::InvalidCacheKey(_) => "invalid-key",
         PreviewError::MissingCacheEntry(_) => "missing-entry",
         PreviewError::PoisonedLock(_) => "poisoned-lock",
+        PreviewError::Resource(_) => "resource-control",
     }
 }
 
@@ -893,7 +1139,7 @@ const fn cache_error_category(error: &PreviewError) -> &'static str {
 fn publish_scan_result(
     scan_id: Uuid,
     root_id: Uuid,
-    result: Result<ScanSummary, FilesystemError>,
+    result: Result<ScanSummary, String>,
     scanned_records: Vec<asset_core::AssetRecord>,
     previous_records: &[asset_core::AssetRecord],
     on_event: &Channel<LibraryScanEvent>,
@@ -954,7 +1200,7 @@ fn publish_scan_result(
             );
             let _ = on_event.send(LibraryScanEvent::Failed {
                 scan_id,
-                message: error.to_string(),
+                message: error.clone(),
                 removed_keys,
                 restored_records,
             });
@@ -974,12 +1220,26 @@ fn cancel_library_scan(
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
+fn acknowledge_library_scan_batch(
+    scan_id: Uuid,
+    sequence: usize,
+    scans: State<'_, Arc<ScanCoordinator>>,
+) -> Result<bool, String> {
+    scans.acknowledge(scan_id, sequence)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn inspect_library_reconciliation(
     root_id: Uuid,
     roots: State<'_, Mutex<LibraryRootManager>>,
     catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
     reconciliation: State<'_, Arc<ReconciliationCoordinator>>,
+    resources: State<'_, ResourceController>,
 ) -> Result<ReconciliationReport, String> {
+    let _permit = resources
+        .acquire(WorkKind::Hash)
+        .map_err(|error| error.to_string())?;
     let root_status = roots
         .lock()
         .map_err(|_| "library root manager lock is poisoned".to_owned())?
@@ -1013,7 +1273,11 @@ fn confirm_library_relink(
     roots: State<'_, Mutex<LibraryRootManager>>,
     scans: State<'_, Arc<ScanCoordinator>>,
     reconciliation: State<'_, Arc<ReconciliationCoordinator>>,
+    resources: State<'_, ResourceController>,
 ) -> Result<RelinkReceipt, String> {
+    let _permit = resources
+        .acquire(WorkKind::Hash)
+        .map_err(|error| error.to_string())?;
     let candidate = reconciliation.candidate(candidate_id)?;
     if scans.is_root_active(candidate.root_id) {
         return Err(format!(
@@ -1239,7 +1503,11 @@ fn edit_asset_metadata(
     transactions: State<'_, Arc<MetadataTransactionStore>>,
     conflicts: State<'_, Arc<MetadataConflictStore>>,
     diagnostics: State<'_, Arc<DiagnosticService>>,
+    resources: State<'_, ResourceController>,
 ) -> Result<BatchMetadataEditCommandResult, String> {
+    let _permit = resources
+        .acquire(WorkKind::Hash)
+        .map_err(|error| error.to_string())?;
     let targets = {
         let catalog = catalog
             .lock()
@@ -1353,7 +1621,11 @@ fn resolve_metadata_conflict(
     scans: State<'_, Arc<ScanCoordinator>>,
     catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
     diagnostics: State<'_, Arc<DiagnosticService>>,
+    resources: State<'_, ResourceController>,
 ) -> Result<asset_core::AssetRecord, String> {
+    let _permit = resources
+        .acquire(WorkKind::Hash)
+        .map_err(|error| error.to_string())?;
     let pending = conflicts.get(input.conflict_id)?;
     let root = roots
         .lock()
@@ -1510,7 +1782,11 @@ fn continue_metadata_transaction(
     transactions: State<'_, Arc<MetadataTransactionStore>>,
     scans: State<'_, Arc<ScanCoordinator>>,
     roots: State<'_, Mutex<LibraryRootManager>>,
+    resources: State<'_, ResourceController>,
 ) -> Result<TransactionRecoveryResult, String> {
+    let _permit = resources
+        .acquire(WorkKind::Hash)
+        .map_err(|error| error.to_string())?;
     ensure_transaction_scope_available(id, transactions.inner(), scans.inner(), &roots)?;
     transactions
         .continue_transaction(id)
@@ -1524,7 +1800,11 @@ fn restore_metadata_transaction(
     transactions: State<'_, Arc<MetadataTransactionStore>>,
     scans: State<'_, Arc<ScanCoordinator>>,
     roots: State<'_, Mutex<LibraryRootManager>>,
+    resources: State<'_, ResourceController>,
 ) -> Result<TransactionRecoveryResult, String> {
+    let _permit = resources
+        .acquire(WorkKind::Hash)
+        .map_err(|error| error.to_string())?;
     ensure_transaction_scope_available(id, transactions.inner(), scans.inner(), &roots)?;
     transactions
         .restore_transaction(id)
@@ -1960,9 +2240,22 @@ fn record_diagnostic<const N: usize>(
 /// # Panics
 ///
 /// Panics when Tauri cannot initialize or run the application event loop.
+#[allow(clippy::too_many_lines)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(focused) = event
+                && let Some(resources) = window.app_handle().try_state::<ResourceController>()
+            {
+                let mode = if *focused {
+                    ResourceMode::Foreground
+                } else {
+                    ResourceMode::Background
+                };
+                let _ = resources.set_mode(mode);
+            }
+        })
         .setup(|app| {
             let config_directory = app.path().app_config_dir()?;
             let cache_directory = app.path().app_cache_dir()?;
@@ -1982,9 +2275,14 @@ pub fn run() {
                 config_directory.join("metadata-transactions-v1"),
             )?));
             app.manage(Arc::new(MetadataConflictStore::default()));
-            let previews = Arc::new(ThumbnailService::open(&cache_directory, 4)?);
+            let resources = ResourceController::with_defaults();
+            let previews = Arc::new(ThumbnailService::open_with_resources(
+                &cache_directory,
+                resources.clone(),
+            )?);
             let cache_startup = previews.startup_report();
             app.manage(previews);
+            app.manage(resources);
             let diagnostics = Arc::new(DiagnosticService::new(log_directory.join("diagnostics")));
             record_diagnostic(
                 &diagnostics,
@@ -2012,6 +2310,7 @@ pub fn run() {
             get_application_config,
             update_application_config,
             runtime_recovery_status,
+            runtime_resource_status,
             list_library_roots,
             add_library_root,
             update_library_root,
@@ -2023,6 +2322,7 @@ pub fn run() {
             resolve_obsidian_vault_references,
             start_library_scan,
             cancel_library_scan,
+            acknowledge_library_scan_batch,
             inspect_library_reconciliation,
             confirm_library_relink,
             start_library_watch,
@@ -2051,11 +2351,15 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
     use std::fs;
     use std::path::Path;
+    use std::sync::Arc;
+    use std::sync::mpsc::{self, RecvTimeoutError, TrySendError};
+    use std::time::Duration;
 
     use asset_catalog::{AssetCatalog, AssetEditTarget, BatchMetadataEdit, EditFailureKind};
     use asset_core::{AssetRecord, SidecarState};
     use asset_filesystem::{
         FsChange, FsChangeBatch, FsChangeKind, FsRescanReason, LibraryRoot, RootScanSettings,
+        ScanBatch,
     };
     use asset_preview::{CacheClearReport, CacheMaintenanceReport, CacheStats};
     use asset_transactions::{TransactionScopeItem, TransactionState, TransactionSummary};
@@ -2067,9 +2371,11 @@ mod tests {
 
     use super::{
         ApplicationPaths, BatchMetadataEditCommandResult, DerivedStateResetReport,
-        LibraryScanEvent, LibraryWatchEvent, QueryAssetsError, ScanCancellation, ScanCoordinator,
-        ThumbnailCommandError, VaultReferenceFailureKind, WatchCoordinator, build_info,
-        ensure_transaction_item_inside_root, failed_batch_transaction_preflight, path_fingerprint,
+        LibraryScanEvent, LibraryWatchEvent, MAX_ACTIVE_SCANS, MAX_ACTIVE_WATCHES,
+        QueryAssetsError, SCAN_BATCH_QUEUE_CAPACITY, ScanCancellation, ScanCoordinator,
+        ScanDeliveryWindow, ScanPipelineMessage, ThumbnailCommandError, VaultReferenceFailureKind,
+        WatchCoordinator, build_info, ensure_transaction_item_inside_root,
+        failed_batch_transaction_preflight, path_fingerprint, scan_pipeline_channel,
         transaction_targets, vault_failure_kind,
     };
 
@@ -2083,14 +2389,73 @@ mod tests {
     }
 
     #[test]
+    fn scan_pipeline_applies_a_fixed_batch_bound() {
+        let (sender, _receiver) = scan_pipeline_channel();
+        for sequence in 0..SCAN_BATCH_QUEUE_CAPACITY {
+            sender
+                .try_send(ScanPipelineMessage::Batch(ScanBatch {
+                    sequence,
+                    assets: Vec::new(),
+                    problems: Vec::new(),
+                    visited_files: 0,
+                }))
+                .expect("queue slot");
+        }
+        assert!(matches!(
+            sender.try_send(ScanPipelineMessage::Batch(ScanBatch {
+                sequence: SCAN_BATCH_QUEUE_CAPACITY,
+                assets: Vec::new(),
+                problems: Vec::new(),
+                visited_files: 0,
+            })),
+            Err(TrySendError::Full(_))
+        ));
+    }
+
+    #[test]
+    fn scan_delivery_waits_for_frontend_acknowledgement() {
+        let delivery = Arc::new(ScanDeliveryWindow::default());
+        let cancellation = ScanCancellation::new();
+        for sequence in 0..SCAN_BATCH_QUEUE_CAPACITY {
+            delivery
+                .reserve(sequence, &cancellation)
+                .expect("delivery slot");
+        }
+        let pending_delivery = Arc::clone(&delivery);
+        let pending_cancellation = cancellation.clone();
+        let (sender, receiver) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            sender
+                .send(pending_delivery.reserve(SCAN_BATCH_QUEUE_CAPACITY, &pending_cancellation))
+                .expect("send result");
+        });
+        assert_eq!(
+            receiver.recv_timeout(Duration::from_millis(20)),
+            Err(RecvTimeoutError::Timeout)
+        );
+        assert_eq!(delivery.acknowledge(0), Ok(true));
+        assert!(
+            receiver
+                .recv_timeout(Duration::from_secs(1))
+                .expect("unblocked delivery")
+                .is_ok()
+        );
+        worker.join().expect("join delivery worker");
+        assert_eq!(delivery.pending_count(), SCAN_BATCH_QUEUE_CAPACITY);
+    }
+
+    #[test]
     fn scan_coordinator_cancels_and_releases_registered_scans() {
         let coordinator = ScanCoordinator::default();
         let scan_id = Uuid::now_v7();
         let root_id = Uuid::now_v7();
         let cancellation = ScanCancellation::new();
-        coordinator
+        let delivery = coordinator
             .register(scan_id, root_id, cancellation.clone())
             .expect("register scan");
+        delivery.reserve(7, &cancellation).expect("reserve batch");
+        assert_eq!(coordinator.acknowledge(scan_id, 7), Ok(true));
+        assert_eq!(coordinator.acknowledge(scan_id, 7), Ok(false));
         assert!(coordinator.is_root_active(root_id));
         let required = BTreeSet::from([root_id]);
         assert_eq!(coordinator.pending_authoritative(&required), Ok(1));
@@ -2111,6 +2476,34 @@ mod tests {
             .mark_authoritative(root_id)
             .expect("mark complete scan");
         assert_eq!(coordinator.pending_authoritative(&required), Ok(0));
+    }
+
+    #[test]
+    fn coordinators_bound_active_scan_and_watcher_threads() {
+        let scans = ScanCoordinator::default();
+        let watches = WatchCoordinator::default();
+        for _ in 0..MAX_ACTIVE_SCANS {
+            scans
+                .register(Uuid::now_v7(), Uuid::now_v7(), ScanCancellation::new())
+                .expect("scan capacity");
+        }
+        assert!(
+            scans
+                .register(Uuid::now_v7(), Uuid::now_v7(), ScanCancellation::new())
+                .expect_err("scan limit")
+                .contains("limit")
+        );
+        for _ in 0..MAX_ACTIVE_WATCHES {
+            watches
+                .register(Uuid::now_v7(), Uuid::now_v7(), ScanCancellation::new())
+                .expect("watch capacity");
+        }
+        assert!(
+            watches
+                .register(Uuid::now_v7(), Uuid::now_v7(), ScanCancellation::new())
+                .expect_err("watch limit")
+                .contains("limit")
+        );
     }
 
     #[test]

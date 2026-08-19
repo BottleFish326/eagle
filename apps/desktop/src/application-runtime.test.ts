@@ -6,6 +6,7 @@ import {
   exportDiagnostics,
   getApplicationConfig,
   getRuntimeRecoveryStatus,
+  getRuntimeResourceStatus,
   resetDerivedState,
   updateApplicationConfig,
 } from "./application-runtime";
@@ -23,6 +24,7 @@ describe("application recovery command wire", () => {
       call,
     );
     await getRuntimeRecoveryStatus(call);
+    await getRuntimeResourceStatus(call);
     await resetDerivedState(call);
     await exportDiagnostics(call);
 
@@ -39,6 +41,7 @@ describe("application recovery command wire", () => {
         },
       ],
       ["runtime_recovery_status"],
+      ["runtime_resource_status"],
       ["reset_derived_state"],
       ["export_diagnostics"],
     ]);

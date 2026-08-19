@@ -190,6 +190,7 @@ function buildEvidence(state) {
       assetCards: sample.assetCards,
       resultCount: sample.resultCount,
       eventLoopLagMs: sample.eventLoopLagMs,
+      activeObjectUrls: sample.activeObjectUrls,
     };
   });
   return {

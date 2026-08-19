@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 
 import type { DesktopApi } from "./desktop-api";
 import { Icon } from "./Icon";
+import {
+  createTrackedObjectUrl,
+  revokeTrackedObjectUrl,
+} from "./object-url-registry";
 import type { AssetRecord } from "./scanner";
 
 type PreviewState =
@@ -56,7 +60,7 @@ export function AssetThumbnail({
         }
         const bytes = await api.readThumbnail(outcome.thumbnail.cacheKey);
         if (!active) return;
-        objectUrl = URL.createObjectURL(
+        objectUrl = createTrackedObjectUrl(
           new Blob([bytes], { type: outcome.thumbnail.mime }),
         );
         setPreview({ status: "ready", url: objectUrl });
@@ -71,7 +75,7 @@ export function AssetThumbnail({
       });
     return () => {
       active = false;
-      if (objectUrl !== undefined) URL.revokeObjectURL(objectUrl);
+      if (objectUrl !== undefined) revokeTrackedObjectUrl(objectUrl);
     };
   }, [api, asset.key, visible]);
 

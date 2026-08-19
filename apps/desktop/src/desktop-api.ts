@@ -5,12 +5,14 @@ import type {
   DerivedStateResetReport,
   DiagnosticExportReport,
   RuntimeRecoveryStatus,
+  RuntimeResourceStatus,
   UiPreferences,
 } from "./application-runtime";
 import {
   exportDiagnostics,
   getApplicationConfig,
   getRuntimeRecoveryStatus,
+  getRuntimeResourceStatus,
   resetDerivedState,
   updateApplicationConfig,
 } from "./application-runtime";
@@ -87,6 +89,7 @@ export interface DesktopApi {
   getApplicationConfig(): Promise<ApplicationConfig>;
   updateApplicationConfig(input: UiPreferences): Promise<ApplicationConfig>;
   getRuntimeRecoveryStatus(): Promise<RuntimeRecoveryStatus>;
+  getRuntimeResourceStatus(): Promise<RuntimeResourceStatus>;
   resetDerivedState(): Promise<DerivedStateResetReport>;
   exportDiagnostics(): Promise<DiagnosticExportReport>;
   listLibraryRoots(): Promise<LibraryRootStatus[]>;
@@ -139,6 +142,7 @@ export const tauriDesktopApi: DesktopApi = {
   getApplicationConfig,
   updateApplicationConfig,
   getRuntimeRecoveryStatus,
+  getRuntimeResourceStatus,
   resetDerivedState,
   exportDiagnostics,
   listLibraryRoots,

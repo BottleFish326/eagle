@@ -1,3 +1,5 @@
+import { objectUrlSnapshot } from "./object-url-registry";
+
 export interface StabilitySample {
   elapsedMs: number;
   usedJsHeapBytes: number | null;
@@ -6,6 +8,9 @@ export interface StabilitySample {
   assetCards: number;
   resultCount: number | null;
   eventLoopLagMs: number;
+  activeObjectUrls: number;
+  createdObjectUrls: number;
+  revokedObjectUrls: number;
 }
 
 export interface StabilityResultObservation {
@@ -25,6 +30,8 @@ export interface StabilitySummary {
   heapSlopeBytesPerMinute: number | null;
   maxDomNodes: number;
   maxAssetCards: number;
+  maxActiveObjectUrls: number;
+  finalActiveObjectUrls: number;
   eventLoopLagP95Ms: number;
   eventLoopLagMaxMs: number;
   longTaskCount: number;
@@ -187,6 +194,7 @@ async function runStabilityHarness(
   const capture = () => {
     const now = performance.now();
     const memory = readBrowserMemory();
+    const objectUrls = objectUrlSnapshot();
     state.samples.push({
       elapsedMs: Math.round(now - started),
       usedJsHeapBytes: memory?.usedJSHeapSize ?? null,
@@ -195,6 +203,9 @@ async function runStabilityHarness(
       assetCards: document.querySelectorAll("[data-asset-card]").length,
       resultCount: currentResultCount(),
       eventLoopLagMs: Math.max(0, Math.round(now - expectedSampleAt)),
+      activeObjectUrls: objectUrls.active,
+      createdObjectUrls: objectUrls.created,
+      revokedObjectUrls: objectUrls.revoked,
     });
     publishState(state);
     expectedSampleAt = now + SAMPLE_INTERVAL_MS;
@@ -390,6 +401,25 @@ export function summarizeStabilityState(
       `asset card count ${maxCards} exceeds virtual window limit ${VIRTUAL_CARD_LIMIT}`,
     );
   }
+  const maxActiveObjectUrls = Math.max(
+    0,
+    ...state.samples.map((sample) => sample.activeObjectUrls),
+  );
+  const finalObjectUrlSample = state.samples.at(-1);
+  const finalActiveObjectUrls = finalObjectUrlSample?.activeObjectUrls ?? 0;
+  if (maxActiveObjectUrls > VIRTUAL_CARD_LIMIT) {
+    failures.push(
+      `active object URL count ${maxActiveObjectUrls} exceeds ${VIRTUAL_CARD_LIMIT}`,
+    );
+  }
+  if (
+    finalObjectUrlSample !== undefined &&
+    finalObjectUrlSample.createdObjectUrls -
+      finalObjectUrlSample.revokedObjectUrls !==
+      finalActiveObjectUrls
+  ) {
+    failures.push("object URL accounting is inconsistent");
+  }
   if (
     state.resultObservations.some(
       (result) => result.observed !== result.expected,
@@ -408,6 +438,8 @@ export function summarizeStabilityState(
     heapSlopeBytesPerMinute: heapSlope,
     maxDomNodes: Math.max(0, ...state.samples.map((sample) => sample.domNodes)),
     maxAssetCards: maxCards,
+    maxActiveObjectUrls,
+    finalActiveObjectUrls,
     eventLoopLagP95Ms: lagP95,
     eventLoopLagMaxMs: Math.max(0, ...lags),
     longTaskCount: state.longTaskCount,

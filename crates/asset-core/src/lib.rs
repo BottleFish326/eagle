@@ -39,6 +39,7 @@ pub enum AssetIssue {
     UnreadableFile(String),
     InvalidImageMetadata(String),
     InvalidNativeMetadata(String),
+    ResourceLimited(String),
     MissingAsset,
     UnsupportedFormat,
 }

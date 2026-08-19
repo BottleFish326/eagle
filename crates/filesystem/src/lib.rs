@@ -19,5 +19,5 @@ pub use reconciliation::{
 };
 pub use scanner::{
     FilesystemError, ScanBatch, ScanCancellation, ScanCompletion, ScanOptions, ScanProblem,
-    ScanReport, ScanSummary, scan_root, scan_root_incremental,
+    ScanReport, ScanSummary, scan_root, scan_root_incremental, scan_root_incremental_controlled,
 };

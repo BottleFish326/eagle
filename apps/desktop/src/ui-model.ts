@@ -127,6 +127,8 @@ export function issueLabel(issue: AssetIssue): string {
       return "图片已损坏";
     case "invalid-native-metadata":
       return "原生元数据异常";
+    case "resource-limited":
+      return "已限制高开销解析";
     case "missing-asset":
       return "文件已丢失";
     case "unsupported-format":

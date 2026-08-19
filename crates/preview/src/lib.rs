@@ -4,17 +4,16 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use asset_core::{AssetKind, AssetRecord};
+use resource_control::{ResourceController, ResourceError, ResourceLimits, WorkKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use cache::ThumbnailCache;
 use decoder::decode_thumbnail;
-use limiter::DecodeLimiter;
 
 mod cache;
 mod decoder;
-mod limiter;
 
 pub const THUMBNAIL_DECODER_VERSION: &str = "image-0.25.9-triangle-png-v1";
 pub const THUMBNAIL_CACHE_LAYOUT_VERSION: u32 = 2;
@@ -178,12 +177,14 @@ pub enum PreviewError {
     MissingCacheEntry(String),
     #[error("shared state lock is poisoned: {0}")]
     PoisonedLock(&'static str),
+    #[error("thumbnail resource control error: {0}")]
+    Resource(#[from] ResourceError),
 }
 
 #[derive(Debug)]
 pub struct ThumbnailService {
     cache: ThumbnailCache,
-    limiter: DecodeLimiter,
+    resources: ResourceController,
     startup: CacheStartupReport,
 }
 
@@ -219,10 +220,46 @@ impl ThumbnailService {
                 "max bytes, max entries, and max age must all be positive".into(),
             ));
         }
+        let resources =
+            ResourceController::new(ResourceLimits::for_decode_capacity(max_concurrent))?;
+        Self::open_with_policy_and_resources(base_cache_directory, policy, resources)
+    }
+
+    /// Opens the cache on a process-wide resource controller shared with scan and hash work.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PreviewError`] when the cache cannot be opened safely.
+    pub fn open_with_resources(
+        base_cache_directory: &Path,
+        resources: ResourceController,
+    ) -> Result<Self, PreviewError> {
+        Self::open_with_policy_and_resources(
+            base_cache_directory,
+            CachePolicy::default(),
+            resources,
+        )
+    }
+
+    /// Opens the cache with explicit lifecycle bounds and a shared work scheduler.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PreviewError`] when the policy is empty or the cache is unsafe.
+    pub fn open_with_policy_and_resources(
+        base_cache_directory: &Path,
+        policy: CachePolicy,
+        resources: ResourceController,
+    ) -> Result<Self, PreviewError> {
+        if policy.max_bytes == 0 || policy.max_entries == 0 || policy.max_age.is_zero() {
+            return Err(PreviewError::InvalidCachePolicy(
+                "max bytes, max entries, and max age must all be positive".into(),
+            ));
+        }
         let (cache, startup) = ThumbnailCache::open(base_cache_directory, policy)?;
         Ok(Self {
             cache,
-            limiter: DecodeLimiter::new(max_concurrent),
+            resources,
             startup,
         })
     }
@@ -272,7 +309,7 @@ impl ThumbnailService {
             ));
         }
 
-        let _permit = self.limiter.acquire()?;
+        let _permit = self.resources.acquire(WorkKind::Decode)?;
         let Some(latest) = read_source_version(&record.path) else {
             return Ok(placeholder(
                 record,
@@ -474,8 +511,6 @@ mod tests {
     use std::fs::{self, File, FileTimes, OpenOptions};
     use std::io::BufWriter;
     use std::path::{Path, PathBuf};
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Barrier};
     use std::thread;
     use std::time::{Duration, SystemTime};
 
@@ -486,8 +521,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        CachePolicy, CacheStartupDisposition, DecodeLimiter, ThumbnailOutcome,
-        ThumbnailPlaceholderReason, ThumbnailService,
+        CachePolicy, CacheStartupDisposition, ThumbnailOutcome, ThumbnailPlaceholderReason,
+        ThumbnailService,
     };
 
     #[test]
@@ -928,34 +963,6 @@ mod tests {
         assert_eq!(value["status"], "placeholder");
         assert_eq!(value["assetKey"], asset_key);
         assert_eq!(value["reason"], "unsupported-format");
-    }
-
-    #[test]
-    fn limiter_never_exceeds_configured_concurrency() {
-        let limiter = Arc::new(DecodeLimiter::new(2));
-        let barrier = Arc::new(Barrier::new(9));
-        let active = Arc::new(AtomicUsize::new(0));
-        let peak = Arc::new(AtomicUsize::new(0));
-        let mut threads = Vec::new();
-        for _ in 0..8 {
-            let limiter = Arc::clone(&limiter);
-            let barrier = Arc::clone(&barrier);
-            let active = Arc::clone(&active);
-            let peak = Arc::clone(&peak);
-            threads.push(thread::spawn(move || {
-                barrier.wait();
-                let _permit = limiter.acquire().expect("permit");
-                let now = active.fetch_add(1, Ordering::SeqCst) + 1;
-                peak.fetch_max(now, Ordering::SeqCst);
-                thread::sleep(Duration::from_millis(10));
-                active.fetch_sub(1, Ordering::SeqCst);
-            }));
-        }
-        barrier.wait();
-        for thread in threads {
-            thread.join().expect("join");
-        }
-        assert_eq!(peak.load(Ordering::SeqCst), 2);
     }
 
     fn record(path: &Path) -> AssetRecord {
