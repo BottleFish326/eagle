@@ -58,6 +58,8 @@ macOS ARM64 共 10 项通过：
 
 归档器另有 2 项真实文件测试，覆盖四文件重放、原始字节保存、目录级原子发布、幂等复核，以及 matrix 字段或源文件字节改变时写前拒绝。
 
+阶段退出统一验证器另有 2 项测试，以完整 28,800 秒采样数量的合成证据同时重放 P2-A11/P2-A12、生成确定性结论并验证幂等写入；soak summary 篡改或 commit 顺序未经证明时均拒绝。
+
 本机真实 `cargo --list`/`cargo test` 输出交给同一单平台分析器后，得到 macOS expected/listed/executed 各 10 项、summary 10 passed/0 failed/0 ignored。以上只验证证据链实现，不替代 hosted P2-A12。
 
 ## 3. P2 验收项结论
@@ -102,6 +104,7 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 4. 确认 Linux leg 实际执行大小写并存、权限撤销和移动根目录掉线；
 5. 确认最终 `p2-08-platform-matrix.json` 是 `accepted=true`、`failures=[]`、同一 Git commit/run/attempt，且三个源 artifact 的 SHA-256、expected/listed/executed 和 summary 均被重放核对；
 6. 对四个解压 artifact 运行 `archive-platform-matrix-evidence.mjs`，提交固定证据目录；
-7. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。
+7. 运行 `verify-phase-2-external-gates.mjs`，只有统一报告 `accepted=true` 后才评估阶段 2 退出；
+8. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。
 
 若首次运行有 leg 失败，必须使用 “Re-run all jobs” 进行正式复验；只重跑失败 job 会保留不同 attempt 的成功 leg，汇总器会按设计拒绝混合证据。

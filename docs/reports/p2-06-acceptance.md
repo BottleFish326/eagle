@@ -79,6 +79,8 @@ npm run test:resource-stability
 
 最终验收不能只读取 `accepted`。`inspectResourceStabilityReport` 会固定正式参数为 28,800/60/100,000/5/60，使用报告内的原始内部/原生样本、退出状态、stderr、环境和时间重新构造完整报告；重放结果必须继续通过并与磁盘 JSON 在语义上完全一致。
 
+P2-A12 证据归档后，`verify-phase-2-external-gates.mjs` 会再次调用该重放器，并将最终 JSON 原始字节 SHA-256、受测 commit、参数、环境和 summary 写入统一外部门禁结论。该统一结论不替代本节 8 小时判据。
+
 ## 5. 尚未完成的验收
 
 P2-A11 明确要求连续 8 小时。当前只执行了缩短版 smoke，因此本报告状态不能标记为 `Passed locally`，P2-06 也不能标记为完成。完成 8 小时命令并归档通过证据后，才能更新本报告、开发进度和下一工作项。

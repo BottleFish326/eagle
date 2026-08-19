@@ -96,6 +96,18 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 
 下载四个 artifact 后运行 `node tools/archive-platform-matrix-evidence.mjs --input-directory <downloaded-artifacts>`。归档器会再次重放、确认受测 commit 是当前 HEAD 祖先，并把原始字节目录级原子保存到 `docs/reports/evidence/p2-a12-platform-evidence/`；不得用手工复制结果替代该步骤。
 
+## 5.1 P2-A11/P2-A12 统一机器结论
+
+两个正式证据均就位后执行：
+
+```text
+node tools/verify-phase-2-external-gates.mjs
+```
+
+工具会从全部原始样本确定性重放 P2-A11，从归档的三个源 JSON 重放 P2-A12，并要求 Git 关系满足 `soak commit <= hosted matrix commit <= current HEAD`。通过结果以不可覆盖、相同输入可幂等复核的方式写入 `docs/reports/evidence/p2-external-gates.json`，包含两个证据的 SHA-256、精简 summary、run URL 和三个 runner 摘要，不复制大体积原始样本；拒绝结果只输出到终端并返回非零，不落下可能被误认成正式证据的文件。
+
+只有统一报告 `accepted=true` 且 `failures=[]` 时，P2-A11/P2-A12 两项外部门禁才可一起视为满足。它不替代 P2-A01 至 P2-A10、完整质量门禁、数据安全复核或退出评审，因此不能单独把阶段 2 标成 Accepted。
+
 ## 6. 产品不变量复核
 
 | 不变量 | 当前结论 |
@@ -111,7 +123,7 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 
 | 条件 | 当前状态 |
 |---|---|
-| P2-A01 至 P2-A12 全部通过 | Pending：A11 running，A12 pending |
+| P2-A01 至 P2-A12 全部通过 | Pending：A11 running，A12 pending；统一外部门禁验证器已就绪 |
 | 完整扫描与增量模型最终一致 | Pass locally |
 | 崩溃测试无截断 Sidecar | Pass locally |
 | 连续 8 小时无无界资源增长 | Pending |
@@ -122,7 +134,7 @@ partial 只证明任务仍可审计，不能提交、不能当作通过证据。
 
 只有第 4、5 节证据都通过后，执行一次候选提交审计：
 
-1. 确认 P2-A11 final JSON、P2-A12 已归档 consolidated matrix/三个源 artifact/hosted logs 与实现 commit 可追溯；
+1. 确认 P2-A11 final JSON、P2-A12 已归档 consolidated matrix/三个源 artifact/hosted logs 与实现 commit 可追溯，并生成 `p2-external-gates.json`；
 2. 确认从 `c18e1ca` 起只有未被受测进程加载的只读 inspector/证据/文档变化；若有产品或验收器判定代码变化，重新跑相应门禁；
 3. 检查 `git status` 只包含预期最终证据，没有 partial、临时 fixture、token 或本机路径；
 4. 更新 P2-06/P2-08、本报告、`docs/progress.md` 和 README 为实际结论；
