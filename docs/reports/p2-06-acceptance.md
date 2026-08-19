@@ -81,11 +81,13 @@ npm run test:resource-stability
 
 阶段退出时运行 `npm run audit:p2-soak-baseline`。该只读门禁固定基线 SHA 和上述三份运行时输入，同时检查 `Cargo.toml`、锁文件、Node 版本、全部产品 crate/应用/Obsidian Bridge、夹具生成器与 soak 负载；它覆盖从基线到当前工作树的 tracked 差异和 scope 内未跟踪文件，并要求当前 HEAD 是受测 commit 的后代。只有机器输出 `accepted=true`、两个 `changedPaths` 均为空时，才能证明后续证据链改动没有污染正在运行的受测实现。
 
+运行期间及后续门禁切换统一使用 `npm run status:p2-exit`。该只读命令会识别 final/partial 冲突、重放健康 checkpoint、汇总托管环境与已存在证据，并在 `soak-running` 状态只给出等待/检查动作；它不会启动第二个 soak、构建 Rust、写入证据、推送提交或触发 GitHub workflow。
+
 P2-A12 证据归档后，`verify-phase-2-external-gates.mjs` 会再次调用该重放器，并将最终 JSON 原始字节 SHA-256、受测 commit、参数、环境和 summary 写入统一外部门禁结论。该统一结论不替代本节 8 小时判据。
 
 ## 5. 尚未完成的验收
 
-P2-A11 明确要求连续 8 小时。当前只执行了缩短版 smoke，因此本报告状态不能标记为 `Passed locally`，P2-06 也不能标记为完成。完成 8 小时命令并归档通过证据后，才能更新本报告、开发进度和下一工作项。
+P2-A11 明确要求连续 8 小时。正式 28,800 秒任务已从固定提交 `c18e1ca` 启动，当前 partial 持续通过只读健康检查；partial 只能证明进程仍在运行，不能替代 complete 样本或最终确定性重放。因此本报告仍不能标记为 `Passed locally`，P2-06 也不能标记为完成。任务正常结束、partial 被最终 JSON 替换并归档通过证据后，才能更新本报告、开发进度和下一工作项。
 
 ## 6. 当前质量门禁
 
