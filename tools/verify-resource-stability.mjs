@@ -1,13 +1,6 @@
 import { spawn } from "node:child_process";
 import { execFile } from "node:child_process";
-import {
-  mkdtemp,
-  mkdir,
-  readdir,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -16,6 +9,10 @@ import {
   assertResourceStabilityRuntime,
   buildResourceStabilityReport,
 } from "./resource-stability-analysis.mjs";
+import {
+  createResourceStabilityCheckpoint,
+  writeJsonAtomic,
+} from "./resource-stability-checkpoint.mjs";
 
 const runFile = promisify(execFile);
 const repository = path.resolve(import.meta.dirname, "..");
@@ -25,6 +22,7 @@ const defaults = {
   warmupSeconds: 60,
   fixtureCount: 100_000,
   sampleIntervalSeconds: 5,
+  checkpointIntervalSeconds: 60,
   output: path.join(
     repository,
     "docs",
@@ -37,6 +35,9 @@ const options = parseArguments(process.argv.slice(2));
 const repositoryState = await readRepositoryState();
 let workspace;
 let child;
+let externalTimer;
+let checkpointTimer;
+let checkpointWrites = Promise.resolve();
 
 try {
   workspace = await mkdtemp(path.join(os.tmpdir(), "material-eagle-p2-soak-"));
@@ -60,9 +61,17 @@ try {
   const internalSamples = [];
   const externalSamples = [];
   const sampleParseErrors = [];
+  const monitorErrors = [];
   const stderr = [];
   const startedAt = new Date();
   const monotonicStarted = performance.now();
+  const environment = {
+    platform: process.platform,
+    architecture: process.arch,
+    nodeVersion: process.version,
+  };
+  const checkpointPath = `${options.output}.partial`;
+  await mkdir(path.dirname(options.output), { recursive: true });
   child = spawn(
     path.join(repository, "target", "release", "resource-soak"),
     [
@@ -113,14 +122,44 @@ try {
     pendingExternalSamples.add(task);
     void task.finally(() => pendingExternalSamples.delete(task));
   };
-  const externalTimer = setInterval(
+  externalTimer = setInterval(
     captureExternalSample,
     options.sampleIntervalSeconds * 1_000,
   );
   const firstExternal = await sampleProcess(child.pid, 0);
   if (firstExternal !== undefined) externalSamples.push(firstExternal);
+  const captureCheckpoint = () => {
+    checkpointWrites = checkpointWrites
+      .then(() =>
+        writeJsonAtomic(
+          checkpointPath,
+          createResourceStabilityCheckpoint({
+            startedAt,
+            gitCommit: repositoryState.gitCommit,
+            environment,
+            options,
+            childPid: child.pid,
+            internalSamples,
+            externalSamples,
+            sampleParseErrors,
+            monitorErrors,
+            stderr: stderr.join(""),
+          }),
+        ),
+      )
+      .catch((error) => monitorErrors.push(String(error)));
+  };
+  captureCheckpoint();
+  checkpointTimer = setInterval(
+    captureCheckpoint,
+    options.checkpointIntervalSeconds * 1_000,
+  );
   const exit = await waitForExit(child);
   clearInterval(externalTimer);
+  externalTimer = undefined;
+  clearInterval(checkpointTimer);
+  checkpointTimer = undefined;
+  await checkpointWrites;
   await Promise.allSettled([...pendingExternalSamples]);
   const finalExternal = await sampleProcess(
     child.pid,
@@ -135,16 +174,13 @@ try {
     internalSamples,
     externalSamples,
     sampleParseErrors,
+    monitorErrors,
     options,
     gitCommit: repositoryState.gitCommit,
-    environment: {
-      platform: process.platform,
-      architecture: process.arch,
-      nodeVersion: process.version,
-    },
+    environment,
   });
-  await mkdir(path.dirname(options.output), { recursive: true });
-  await writeReportAtomic(options.output, report);
+  await writeJsonAtomic(options.output, report);
+  await rm(checkpointPath, { force: true });
   if (!report.accepted) {
     throw new Error(
       `resource stability rejected: ${report.failures.join("; ")}`,
@@ -153,6 +189,9 @@ try {
   console.log(`Resource stability accepted ${JSON.stringify(report.summary)}`);
   console.log(`Evidence written to ${options.output}`);
 } finally {
+  if (externalTimer !== undefined) clearInterval(externalTimer);
+  if (checkpointTimer !== undefined) clearInterval(checkpointTimer);
+  await checkpointWrites;
   if (child !== undefined && child.exitCode === null) child.kill("SIGTERM");
   if (workspace !== undefined) {
     await rm(workspace, { recursive: true, force: true, maxRetries: 3 });
@@ -238,18 +277,6 @@ async function readRepositoryState() {
   return { gitCommit: revision.trim() };
 }
 
-async function writeReportAtomic(output, report) {
-  const temporary = `${output}.tmp-${String(process.pid)}-${String(Date.now())}`;
-  try {
-    await writeFile(temporary, `${JSON.stringify(report, null, 2)}\n`, {
-      flag: "wx",
-    });
-    await rename(temporary, output);
-  } finally {
-    await rm(temporary, { force: true });
-  }
-}
-
 function parseArguments(args) {
   const parsed = { ...defaults };
   for (let index = 0; index < args.length; index += 2) {
@@ -268,6 +295,9 @@ function parseArguments(args) {
         break;
       case "--sample-interval-seconds":
         parsed.sampleIntervalSeconds = positiveInteger(value, args[index]);
+        break;
+      case "--checkpoint-interval-seconds":
+        parsed.checkpointIntervalSeconds = positiveInteger(value, args[index]);
         break;
       case "--output":
         parsed.output = path.resolve(value);

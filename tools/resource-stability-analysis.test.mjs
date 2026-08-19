@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -6,12 +9,14 @@ import {
   buildResourceStabilityReport,
   linearSlope,
 } from "./resource-stability-analysis.mjs";
+import { writeJsonAtomic } from "./resource-stability-checkpoint.mjs";
 
 const options = {
   durationSeconds: 100,
   warmupSeconds: 10,
   fixtureCount: 10,
   sampleIntervalSeconds: 5,
+  checkpointIntervalSeconds: 10,
 };
 
 test("accepts a complete bounded run with representative sample coverage", () => {
@@ -94,6 +99,24 @@ test("requires the repository Node.js major before starting expensive work", () 
   );
 });
 
+test("atomically replaces checkpoint JSON without leaving temporary files", async () => {
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "material-eagle-checkpoint-test-"),
+  );
+  const output = path.join(directory, "evidence.partial");
+  try {
+    await writeJsonAtomic(output, { sequence: 1 });
+    await writeJsonAtomic(output, { sequence: 2 });
+
+    assert.deepEqual(JSON.parse(await readFile(output, "utf8")), {
+      sequence: 2,
+    });
+    assert.deepEqual(await readdir(directory), ["evidence.partial"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("reports a least-squares rate per minute", () => {
   assert.equal(
     linearSlope(
@@ -155,6 +178,7 @@ function acceptedInput() {
     internalSamples,
     externalSamples,
     sampleParseErrors: [],
+    monitorErrors: [],
     options: { ...options },
     gitCommit: "a".repeat(40),
     environment: {

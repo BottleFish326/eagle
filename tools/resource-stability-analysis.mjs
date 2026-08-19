@@ -7,6 +7,7 @@ export function buildResourceStabilityReport({
   internalSamples,
   externalSamples,
   sampleParseErrors,
+  monitorErrors,
   options: runOptions,
   gitCommit,
   environment,
@@ -86,6 +87,11 @@ export function buildResourceStabilityReport({
   if (sampleParseErrors.length > 0) {
     failures.push(
       `${String(sampleParseErrors.length)} internal samples were not valid JSON`,
+    );
+  }
+  if (monitorErrors.length > 0) {
+    failures.push(
+      `${String(monitorErrors.length)} evidence checkpoint writes failed`,
     );
   }
   if (invalidInternalSampleCount > 0) {
@@ -208,6 +214,7 @@ export function buildResourceStabilityReport({
       `--warmup-seconds ${String(runOptions.warmupSeconds)}`,
       `--fixture-count ${String(runOptions.fixtureCount)}`,
       `--sample-interval-seconds ${String(runOptions.sampleIntervalSeconds)}`,
+      `--checkpoint-interval-seconds ${String(runOptions.checkpointIntervalSeconds)}`,
     ].join(" "),
     startedAt: startedAt.toISOString(),
     completedAt: new Date().toISOString(),
@@ -215,6 +222,7 @@ export function buildResourceStabilityReport({
     warmupSeconds: runOptions.warmupSeconds,
     fixtureCount: runOptions.fixtureCount,
     sampleIntervalSeconds: runOptions.sampleIntervalSeconds,
+    checkpointIntervalSeconds: runOptions.checkpointIntervalSeconds,
     gitCommit,
     environment,
     exit,
@@ -246,6 +254,7 @@ export function buildResourceStabilityReport({
     internalSamples,
     externalSamples: validExternalSamples,
     sampleParseErrors,
+    monitorErrors,
     stderr: stderr.trim(),
   };
 }
