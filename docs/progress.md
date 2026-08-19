@@ -8,7 +8,7 @@
 |---|---|---|
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
 | 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
-| 阶段 2：可靠性与恢复 | In progress | P2-01 至 P2-05 已完成本地验收；P2-06 已实现，等待 P2-A11 连续 8 小时验收 |
+| 阶段 2：可靠性与恢复 | In progress | P2-01 至 P2-05、P2-07 已完成本地验收；P2-06 已实现，等待 P2-A11 连续 8 小时验收；下一项 P2-08 |
 | 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出 |
 
@@ -53,6 +53,7 @@
 | P2-04 并发编辑与同步冲突 | Completed locally | mtime/大小/SHA-256 三元版本、Tag 显式三方合并、标量字段逐项选择、二次版本复核及同步冲突副本只读诊断通过；见 `reports/p2-04-acceptance.md` |
 | P2-05 缓存生命周期 | Completed locally | 20,000 项/1 GiB/30 天边界、LRU、解码器描述精确失效、扫描后孤立回收、手动回收及双崩溃点安全轮换通过；见 `reports/p2-05-acceptance.md` |
 | P2-06 资源与稳定性控制 | Acceptance pending | 统一限流、后台降级、协作期限、双有界队列与资源监控已通过短时 smoke；P2-A11 的 L 数据集连续 8 小时证据待生成，见 `reports/p2-06-acceptance.md` |
+| P2-07 诊断和支持工具 | Completed locally | 1 MiB × 5 JSONL 滚动日志、路径值脱敏、Schema 2 错误/性能导出、512 条有界只读一致性报告和 UUID 素材追踪通过；见 `reports/p2-07-acceptance.md` |
 
 ## 已固定的关键决定
 
@@ -81,6 +82,7 @@
 - 全量缓存清理先写所有权标记并把固定根原子轮换为 UUIDv7 tombstone，再建立新根；启动只回收名称和标记均匹配的遗留目录。
 - 扫描、哈希和解码共享单一运行期资源控制器；窗口失焦降低全局容量，许可等待、监听事件和扫描 UI 批次都具有硬上限，溢出依靠已授权根完整扫描收敛。
 - 文件解析在不可分割 I/O 之间检查取消和 5 秒协作期限，超过 256 MiB 的素材跳过可选原生元数据，超过 4 MiB 的 Sidecar 跳过 YAML；该限制不隐藏素材，也不修改源文件。
+- 运行支持事件同时进入 256 条内存缓冲和最多 5 × 1 MiB 的 JSONL 滚动日志；路径值落盘前指纹化，诊断导出聚合错误与性能，一致性/素材追踪只读且不接受任意路径。
 
 ## 当前性能证据
 
@@ -99,6 +101,7 @@
 - [P2-04 并发编辑与同步冲突验收报告](reports/p2-04-acceptance.md)
 - [P2-05 缓存生命周期验收报告](reports/p2-05-acceptance.md)
 - [P2-06 资源与稳定性验收准备报告](reports/p2-06-acceptance.md)
+- [P2-07 诊断和支持工具验收报告](reports/p2-07-acceptance.md)
 - [平台差异记录](../specs/platform-notes.md)
 - 参考环境：Apple M4、16 GiB、APFS SSD、macOS 26.5.2；
 - L 数据集：100,000 个素材、20,000 个 sidecar；

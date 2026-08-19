@@ -12,6 +12,10 @@ import type {
   ResolveVaultReferencesResult,
 } from "./obsidian-vaults";
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
+import type {
+  AssetTraceReport,
+  LibraryConsistencyReport,
+} from "./support-tools";
 import type { ThumbnailOutcome } from "./thumbnail";
 import { matchesDemoExpression } from "./ui-model";
 
@@ -132,6 +136,99 @@ export function createDemoDesktopApi(
         eventCount: 6,
         sizeBytes: 2048,
       };
+    },
+    async inspectLibraryConsistency() {
+      const findings = assets
+        .flatMap((asset) =>
+          asset.issues.map((issue) => ({
+            severity: "warning" as const,
+            code: issue.type,
+            rootId: asset.rootId,
+            assetId: asset.id,
+            relativePath: asset.relativePath,
+            pathFingerprint: demoFingerprint(asset.key),
+            message: "演示素材包含解析提示",
+          })),
+        )
+        .slice(0, 512);
+      return {
+        generatedUnixMs: Date.now(),
+        authoritative: true,
+        summary: {
+          configuredRoots: roots.length,
+          catalogAssets: assets.length,
+          findings: findings.length,
+          warnings: findings.length,
+          errors: 0,
+        },
+        roots: roots.map((root) => ({
+          rootId: root.id,
+          enabled: root.enabled,
+          accessStatus: root.accessStatus,
+          catalogAssets: assets.filter((asset) => asset.rootId === root.id)
+            .length,
+          warnings: findings.filter((finding) => finding.rootId === root.id)
+            .length,
+          errors: 0,
+        })),
+        findings,
+        truncated: false,
+      } satisfies LibraryConsistencyReport;
+    },
+    async traceAssetSupport(assetId) {
+      const matched = assets.filter((asset) => asset.id === assetId);
+      const report: AssetTraceReport = {
+        generatedUnixMs: Date.now(),
+        assetId,
+        matchCount: matched.length,
+        matches: matched.map((asset) => ({
+          rootId: asset.rootId,
+          rootAccessStatus: "available",
+          relativePath: asset.relativePath,
+          pathFingerprint: demoFingerprint(asset.key),
+          assetPresent: true,
+          sidecarPresent: asset.sidecarPath !== null,
+          sidecarIdMatches: asset.sidecarPath === null ? null : true,
+          mime: asset.mime,
+          issueCodes: asset.issues.map((issue) => issue.type),
+        })),
+        steps: [
+          {
+            matchIndex: null,
+            stage: "catalog-lookup",
+            outcome: matched.length === 1 ? "passed" : "error",
+            code: matched.length === 1 ? "unique-match" : "not-found",
+            message: `演示目录匹配 ${String(matched.length)} 条记录`,
+          },
+          ...matched.flatMap((asset, index) => [
+            {
+              matchIndex: index,
+              stage: "root-association",
+              outcome: "passed" as const,
+              code: "configured-root",
+              message: "素材属于可用演示根目录",
+            },
+            {
+              matchIndex: index,
+              stage: "sidecar-parse",
+              outcome: "passed" as const,
+              code: "id-matched",
+              message: "相邻 Sidecar 提供相同稳定 ID",
+            },
+            {
+              matchIndex: index,
+              stage: "parser-outcome",
+              outcome:
+                asset.issues.length === 0
+                  ? ("passed" as const)
+                  : ("warning" as const),
+              code: asset.issues.length === 0 ? "clean" : "issues-present",
+              message: `目录记录包含 ${String(asset.issues.length)} 个解析提示`,
+            },
+          ]),
+        ],
+      };
+      return structuredClone(report);
     },
     async listLibraryRoots() {
       return structuredClone(roots);
@@ -689,6 +786,15 @@ function demoAssets(count = DEFAULT_DEMO_ASSET_COUNT): AssetRecord[] {
       issues: row.issue ? [row.issue] : [],
     } satisfies AssetRecord;
   });
+}
+
+function demoFingerprint(value: string): string {
+  let hash = 2166136261;
+  for (const character of value) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash).toString(16).padStart(16, "0").slice(0, 16);
 }
 
 function batchEvent(

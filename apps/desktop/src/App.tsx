@@ -36,6 +36,10 @@ import { RootManager } from "./RootManager";
 import type { ReconciliationReport, RelinkCandidate } from "./reconciliation";
 import { SettingsManager } from "./SettingsManager";
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
+import type {
+  AssetTraceReport,
+  LibraryConsistencyReport,
+} from "./support-tools";
 import type { CacheMaintenanceReport } from "./thumbnail";
 import {
   composeAssetQuery,
@@ -111,6 +115,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const [resetBusy, setResetBusy] = useState(false);
   const [cacheMaintenanceBusy, setCacheMaintenanceBusy] = useState(false);
   const [diagnosticBusy, setDiagnosticBusy] = useState(false);
+  const [supportBusy, setSupportBusy] = useState<"consistency" | "trace">();
   const [metadataTransactions, setMetadataTransactions] = useState<
     MetadataTransactionSummary[]
   >([]);
@@ -135,6 +140,9 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     useState<CacheMaintenanceReport>();
   const [diagnosticReport, setDiagnosticReport] =
     useState<DiagnosticExportReport>();
+  const [consistencyReport, setConsistencyReport] =
+    useState<LibraryConsistencyReport>();
+  const [assetTraceReport, setAssetTraceReport] = useState<AssetTraceReport>();
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [booting, setBooting] = useState(true);
   const [notice, setNotice] = useState<Notice>();
@@ -1021,6 +1029,46 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     }
   };
 
+  const inspectConsistency = async () => {
+    setSupportBusy("consistency");
+    try {
+      const report = await api.inspectLibraryConsistency();
+      setConsistencyReport(report);
+      setNotice({
+        tone: report.summary.errors === 0 ? "info" : "error",
+        message: report.authoritative
+          ? `一致性检查完成：${String(report.summary.errors)} 个错误，${String(report.summary.warnings)} 个警告`
+          : "一致性检查完成，但仍有素材根尚未完成权威扫描",
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `一致性检查失败：${errorMessage(error)}`,
+      });
+    } finally {
+      setSupportBusy(undefined);
+    }
+  };
+
+  const traceAsset = async (assetId: string) => {
+    setSupportBusy("trace");
+    try {
+      const report = await api.traceAssetSupport(assetId);
+      setAssetTraceReport(report);
+      setNotice({
+        tone: report.matchCount === 1 ? "info" : "error",
+        message: `素材追踪完成：匹配 ${String(report.matchCount)} 条目录记录`,
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `素材追踪失败：${errorMessage(error)}`,
+      });
+    } finally {
+      setSupportBusy(undefined);
+    }
+  };
+
   const addVault = async (path: string, name: string) => {
     setVaultBusy(true);
     try {
@@ -1512,11 +1560,13 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         vaults={vaults}
       />
       <SettingsManager
+        assetTraceReport={assetTraceReport}
         cacheMaintenanceBusy={cacheMaintenanceBusy}
         cacheMaintenanceReport={cacheMaintenanceReport}
         config={displayedApplicationConfig}
         diagnosticBusy={diagnosticBusy}
         diagnosticReport={diagnosticReport}
+        consistencyReport={consistencyReport}
         onClose={() => setSettingsOpen(false)}
         onCopyDiagnosticPath={copyDiagnosticPath}
         onContinueTransaction={(transaction) =>
@@ -1524,17 +1574,20 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         }
         onDismissTransaction={dismissMetadataTransaction}
         onExportDiagnostics={createDiagnosticExport}
+        onInspectConsistency={inspectConsistency}
         onMaintainCache={reclaimThumbnailCache}
         onResetDerived={rebuildDerivedState}
         onResetView={resetSavedView}
         onRestoreTransaction={(transaction) =>
           recoverMetadataTransaction(transaction, "restore")
         }
+        onTraceAsset={traceAsset}
         open={settingsOpen}
         recovery={recoveryStatus}
         resetBusy={resetBusy}
         resetReport={resetReport}
         scanActive={activeScans.length > 0}
+        supportBusy={supportBusy}
         transactionBusy={transactionBusy}
         transactions={metadataTransactions}
       />

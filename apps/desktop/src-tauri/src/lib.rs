@@ -7,8 +7,9 @@ use std::time::{Duration, Instant};
 use app_config::{
     APPLICATION_CONFIG_SCHEMA_VERSION, ApplicationConfig, ApplicationConfigManager,
     DiagnosticAccessSummary, DiagnosticBuild, DiagnosticCacheSummary, DiagnosticCatalogSummary,
-    DiagnosticConfigurationSummary, DiagnosticExportReport, DiagnosticLevel, DiagnosticRuntime,
-    DiagnosticService, DiagnosticSnapshot, UpdateUiPreferences,
+    DiagnosticConfigurationSummary, DiagnosticExportReport, DiagnosticLevel,
+    DiagnosticPerformanceSummary, DiagnosticRuntime, DiagnosticService, DiagnosticSnapshot,
+    UpdateUiPreferences,
 };
 use asset_catalog::{
     AssetCatalog, BatchMetadataEdit, BatchMetadataEditResult, CatalogRootReconciliation,
@@ -40,9 +41,16 @@ use tauri::{Manager, State, ipc::Channel, ipc::Response};
 use uuid::Uuid;
 
 mod metadata_conflicts;
+mod support;
 
 use metadata_conflicts::{
     MetadataConflictStore, MetadataConflictView, ResolveMetadataConflictInput,
+};
+use support::{
+    AssetTraceReport, LibraryConsistencyReport, append_reconciliation_failure,
+    append_reconciliation_findings,
+    inspect_library_consistency as build_library_consistency_report,
+    trace_asset as build_asset_trace,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -691,6 +699,117 @@ fn runtime_resource_status(
         max_active_scans: MAX_ACTIVE_SCANS,
         max_active_watches: MAX_ACTIVE_WATCHES,
     })
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+async fn inspect_library_consistency(
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    scans: State<'_, Arc<ScanCoordinator>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+    resources: State<'_, ResourceController>,
+) -> Result<LibraryConsistencyReport, String> {
+    let roots = roots
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .roots();
+    let records = catalog
+        .lock()
+        .map_err(|_| "asset catalog lock is poisoned".to_owned())?
+        .records();
+    let required_roots = roots
+        .iter()
+        .filter(|root| root.root.enabled && root.access_status == RootAccessStatus::Available)
+        .map(|root| root.root.id)
+        .collect::<BTreeSet<_>>();
+    let authoritative = scans.active_count() == 0
+        && scans
+            .pending_authoritative(&required_roots)
+            .map_err(|message| format!("cannot inspect scan authority: {message}"))?
+            == 0;
+    let diagnostics = Arc::clone(diagnostics.inner());
+    let resources = resources.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _permit = resources
+            .acquire(WorkKind::Hash)
+            .map_err(|error| error.to_string())?;
+        let mut report = build_library_consistency_report(&roots, &records, authoritative);
+        for root in roots
+            .iter()
+            .filter(|root| root.root.enabled && root.access_status == RootAccessStatus::Available)
+        {
+            let root_records = records
+                .iter()
+                .filter(|record| record.root_id == Some(root.root.id))
+                .cloned()
+                .collect::<Vec<_>>();
+            let options = ScanOptions {
+                recursive: root.root.scan.recursive,
+                ignore: root.root.scan.ignore.clone(),
+                ..ScanOptions::default()
+            };
+            match inspect_reconciliation(root.root.id, &root.root.path, &options, &root_records) {
+                Ok(reconciliation) => {
+                    append_reconciliation_findings(&mut report, root, &reconciliation);
+                }
+                Err(_) => append_reconciliation_failure(&mut report, root),
+            }
+        }
+        record_diagnostic(
+            &diagnostics,
+            if report.summary.errors == 0 {
+                DiagnosticLevel::Info
+            } else {
+                DiagnosticLevel::Warning
+            },
+            "support",
+            "consistency-inspected",
+            [
+                ("assetCount", report.summary.catalog_assets.to_string()),
+                ("findingCount", report.summary.findings.to_string()),
+                ("errorCount", report.summary.errors.to_string()),
+                ("authoritative", report.authoritative.to_string()),
+            ],
+        );
+        Ok(report)
+    })
+    .await
+    .map_err(|error| format!("library consistency task failed: {error}"))?
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn trace_asset_support(
+    asset_id: Uuid,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+) -> Result<AssetTraceReport, String> {
+    let roots = roots
+        .lock()
+        .map_err(|_| "library root manager lock is poisoned".to_owned())?
+        .roots();
+    let records = catalog
+        .lock()
+        .map_err(|_| "asset catalog lock is poisoned".to_owned())?
+        .records();
+    let report = build_asset_trace(asset_id, &roots, &records);
+    record_diagnostic(
+        diagnostics.inner(),
+        if report.match_count == 1 {
+            DiagnosticLevel::Info
+        } else {
+            DiagnosticLevel::Warning
+        },
+        "support",
+        "asset-traced",
+        [
+            ("assetId", asset_id.to_string()),
+            ("matchCount", report.match_count.to_string()),
+        ],
+    );
+    Ok(report)
 }
 
 #[tauri::command]
@@ -2104,13 +2223,16 @@ async fn reset_derived_state(
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 async fn export_diagnostics(
     roots: State<'_, Mutex<LibraryRootManager>>,
     vaults: State<'_, Mutex<VaultManager>>,
     config: State<'_, Mutex<ApplicationConfigManager>>,
     catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
     scans: State<'_, Arc<ScanCoordinator>>,
+    watches: State<'_, Arc<WatchCoordinator>>,
     previews: State<'_, Arc<ThumbnailService>>,
+    resources: State<'_, ResourceController>,
     runtime: State<'_, RuntimeState>,
     diagnostics: State<'_, Arc<DiagnosticService>>,
 ) -> Result<DiagnosticExportReport, String> {
@@ -2131,6 +2253,8 @@ async fn export_diagnostics(
         .map_err(|_| "asset catalog lock is poisoned".to_owned())?
         .len();
     let active_scan_count = scans.active_count();
+    let active_watch_count = watches.active_count();
+    let resource_snapshot = resources.snapshot().map_err(|error| error.to_string())?;
     let previews_for_stats = Arc::clone(previews.inner());
     let cache_stats =
         tauri::async_runtime::spawn_blocking(move || previews_for_stats.cache_stats())
@@ -2167,6 +2291,16 @@ async fn export_diagnostics(
         catalog: DiagnosticCatalogSummary {
             asset_count,
             active_scan_count,
+        },
+        performance: DiagnosticPerformanceSummary {
+            active_scans: active_scan_count,
+            active_watches: active_watch_count,
+            scheduler_active: resource_snapshot.active_total,
+            scheduler_waiting: resource_snapshot.waiting_total,
+            scheduler_peak_active: resource_snapshot.peak_active_total,
+            scheduler_peak_waiting: resource_snapshot.peak_waiting_total,
+            cache_entries: cache_stats.entry_count,
+            cache_bytes: cache_stats.byte_count,
         },
         library_roots: root_statuses
             .iter()
@@ -2311,6 +2445,8 @@ pub fn run() {
             update_application_config,
             runtime_recovery_status,
             runtime_resource_status,
+            inspect_library_consistency,
+            trace_asset_support,
             list_library_roots,
             add_library_root,
             update_library_root,

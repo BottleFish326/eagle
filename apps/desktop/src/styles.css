@@ -1550,6 +1550,89 @@ textarea:focus-visible {
   color: var(--accent);
 }
 
+.support-result {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 88%, var(--accent) 12%);
+  font-size: 12px;
+}
+
+.support-result > span {
+  color: var(--muted);
+}
+
+.support-result > strong {
+  overflow-wrap: anywhere;
+}
+
+.support-findings,
+.support-trace-steps {
+  display: grid;
+  gap: 5px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.support-findings li,
+.support-trace-steps li {
+  display: grid;
+  grid-template-columns: minmax(112px, auto) 1fr;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.support-findings code,
+.support-trace-steps code {
+  color: var(--accent-ink);
+  font-size: 11px;
+}
+
+.support-findings span,
+.support-trace-steps span {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.support-trace-steps li[data-outcome="error"] code {
+  color: var(--danger);
+}
+
+.support-trace-steps li[data-outcome="warning"] code {
+  color: var(--gold);
+}
+
+.support-trace-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.support-trace-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  font: inherit;
+}
+
+.asset-identity code {
+  overflow-wrap: anywhere;
+  color: var(--accent-ink);
+  font-size: 11px;
+}
+
 .settings-facts--paths > div {
   grid-template-columns: 42px minmax(0, 1fr);
 }

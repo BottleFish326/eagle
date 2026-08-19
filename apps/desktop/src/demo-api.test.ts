@@ -25,4 +25,18 @@ describe("demo dataset selection", () => {
       10_000,
     );
   });
+
+  it("provides read-only consistency and stable-ID trace support data", async () => {
+    const api = createDemoDesktopApi();
+    const consistency = await api.inspectLibraryConsistency();
+    const trace = await api.traceAssetSupport(
+      "0198a9b2-43c0-7cb0-a733-000000000001",
+    );
+
+    expect(consistency.authoritative).toBe(true);
+    expect(consistency.summary.catalogAssets).toBe(16);
+    expect(trace.matchCount).toBe(1);
+    expect(trace.steps.some((step) => step.code === "id-matched")).toBe(true);
+    expect(JSON.stringify(trace)).not.toContain("/Users/demo");
+  });
 });

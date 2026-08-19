@@ -9,6 +9,10 @@ import {
 } from "./application-runtime";
 import { Icon } from "./Icon";
 import type { MetadataTransactionSummary } from "./metadata-transactions";
+import type {
+  AssetTraceReport,
+  LibraryConsistencyReport,
+} from "./support-tools";
 import type { CacheMaintenanceReport } from "./thumbnail";
 import { formatBytes } from "./ui-model";
 
@@ -19,15 +23,20 @@ export function SettingsManager({
   cacheMaintenanceReport,
   resetReport,
   diagnosticReport,
+  consistencyReport,
+  assetTraceReport,
   scanActive,
   resetBusy,
   cacheMaintenanceBusy,
   diagnosticBusy,
+  supportBusy,
   onClose,
   onResetView,
   onResetDerived,
   onMaintainCache,
   onExportDiagnostics,
+  onInspectConsistency,
+  onTraceAsset,
   onCopyDiagnosticPath,
   transactions,
   transactionBusy,
@@ -41,10 +50,13 @@ export function SettingsManager({
   cacheMaintenanceReport?: CacheMaintenanceReport;
   resetReport?: DerivedStateResetReport;
   diagnosticReport?: DiagnosticExportReport;
+  consistencyReport?: LibraryConsistencyReport;
+  assetTraceReport?: AssetTraceReport;
   scanActive: boolean;
   resetBusy: boolean;
   cacheMaintenanceBusy: boolean;
   diagnosticBusy: boolean;
+  supportBusy?: "consistency" | "trace";
   transactions: readonly MetadataTransactionSummary[];
   transactionBusy?: string;
   onClose: () => void;
@@ -52,6 +64,8 @@ export function SettingsManager({
   onResetDerived: () => Promise<void>;
   onMaintainCache: () => Promise<void>;
   onExportDiagnostics: () => Promise<void>;
+  onInspectConsistency: () => Promise<void>;
+  onTraceAsset: (assetId: string) => Promise<void>;
   onCopyDiagnosticPath: () => Promise<void>;
   onContinueTransaction: (
     transaction: MetadataTransactionSummary,
@@ -66,6 +80,7 @@ export function SettingsManager({
   const closeButton = useRef<HTMLButtonElement>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDismiss, setConfirmDismiss] = useState<string>();
+  const [traceAssetId, setTraceAssetId] = useState("");
 
   useEffect(() => {
     if (open) closeButton.current?.focus();
@@ -104,6 +119,100 @@ export function SettingsManager({
         </header>
 
         <div className="settings-sections">
+          <section className="settings-card">
+            <div className="settings-card-heading">
+              <span className="settings-card-icon">
+                <Icon name="search" size={17} />
+              </span>
+              <div>
+                <h3>一致性与素材追踪</h3>
+                <p>
+                  只读核对当前目录与文件状态；报告使用相对路径和短指纹，不修改素材或
+                  Sidecar。
+                </p>
+              </div>
+            </div>
+            <button
+              className="wide-action"
+              disabled={supportBusy !== undefined}
+              onClick={() => void onInspectConsistency()}
+              type="button"
+            >
+              <Icon name="refresh" size={15} />
+              {supportBusy === "consistency" ? "正在检查…" : "检查库一致性"}
+            </button>
+            {consistencyReport ? (
+              <div className="support-result" role="status">
+                <strong>
+                  {consistencyReport.authoritative
+                    ? "权威快照"
+                    : "扫描尚未收敛"}{" "}
+                  · {consistencyReport.summary.catalogAssets} 项素材
+                </strong>
+                <span>
+                  {consistencyReport.summary.errors} 个错误 ·{" "}
+                  {consistencyReport.summary.warnings} 个警告
+                  {consistencyReport.truncated ? " · 明细已截断" : ""}
+                </span>
+                {consistencyReport.findings.length > 0 ? (
+                  <ul className="support-findings">
+                    {consistencyReport.findings
+                      .slice(0, 8)
+                      .map((finding, index) => (
+                        <li key={`${finding.code}-${String(index)}`}>
+                          <code>{finding.code}</code>
+                          <span>
+                            {finding.relativePath ??
+                              finding.pathFingerprint ??
+                              finding.message}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                ) : (
+                  <span>当前快照未发现一致性问题。</span>
+                )}
+              </div>
+            ) : null}
+            <label className="support-trace-field">
+              <span>按稳定素材 ID 追踪</span>
+              <input
+                onChange={(event) => setTraceAssetId(event.target.value)}
+                placeholder="UUIDv7"
+                spellCheck={false}
+                value={traceAssetId}
+              />
+            </label>
+            <button
+              className="wide-action"
+              disabled={supportBusy !== undefined || traceAssetId.trim() === ""}
+              onClick={() => void onTraceAsset(traceAssetId.trim())}
+              type="button"
+            >
+              <Icon name="search" size={15} />
+              {supportBusy === "trace" ? "正在追踪…" : "查看解析与关联过程"}
+            </button>
+            {assetTraceReport ? (
+              <div className="support-result" role="status">
+                <strong>
+                  匹配 {assetTraceReport.matchCount} 条目录记录 ·{" "}
+                  {assetTraceReport.assetId}
+                </strong>
+                <ol className="support-trace-steps">
+                  {assetTraceReport.steps.slice(0, 12).map((step, index) => (
+                    <li
+                      data-outcome={step.outcome}
+                      key={`${step.stage}-${String(index)}`}
+                    >
+                      <code>{step.stage}</code>
+                      <span>{step.message}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+          </section>
+
           <section className="settings-card">
             <div className="settings-card-heading">
               <span className="settings-card-icon">

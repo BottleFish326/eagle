@@ -73,6 +73,11 @@ import {
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
 import { cancelLibraryScan, startLibraryScan } from "./scanner";
 import type {
+  AssetTraceReport,
+  LibraryConsistencyReport,
+} from "./support-tools";
+import { inspectLibraryConsistency, traceAssetSupport } from "./support-tools";
+import type {
   CacheClearReport,
   CacheMaintenanceReport,
   ThumbnailOutcome,
@@ -92,6 +97,8 @@ export interface DesktopApi {
   getRuntimeResourceStatus(): Promise<RuntimeResourceStatus>;
   resetDerivedState(): Promise<DerivedStateResetReport>;
   exportDiagnostics(): Promise<DiagnosticExportReport>;
+  inspectLibraryConsistency(): Promise<LibraryConsistencyReport>;
+  traceAssetSupport(assetId: string): Promise<AssetTraceReport>;
   listLibraryRoots(): Promise<LibraryRootStatus[]>;
   addLibraryRoot(input: AddLibraryRootInput): Promise<LibraryRootStatus>;
   updateLibraryRoot(input: UpdateLibraryRootInput): Promise<LibraryRootStatus>;
@@ -145,6 +152,8 @@ export const tauriDesktopApi: DesktopApi = {
   getRuntimeResourceStatus,
   resetDerivedState,
   exportDiagnostics,
+  inspectLibraryConsistency,
+  traceAssetSupport,
   listLibraryRoots,
   addLibraryRoot,
   updateLibraryRoot,

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, VecDeque};
-use std::fs;
 #[cfg(unix)]
 use std::fs::File;
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -9,16 +9,21 @@ use std::sync::Mutex;
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
+use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 use thiserror::Error;
 use uuid::Uuid;
 
 pub const APPLICATION_CONFIG_SCHEMA_VERSION: u32 = 1;
-pub const DIAGNOSTIC_SCHEMA_VERSION: u32 = 1;
+pub const DIAGNOSTIC_SCHEMA_VERSION: u32 = 2;
 const MAX_QUERY_LENGTH: usize = 4_096;
 const MAX_TAG_FILTERS: usize = 512;
 const MAX_TAG_LENGTH: usize = 256;
 const MAX_DIAGNOSTIC_EVENTS: usize = 256;
+const MAX_DIAGNOSTIC_DETAILS: usize = 16;
+const MAX_DIAGNOSTIC_NAME_LENGTH: usize = 64;
+const MAX_DIAGNOSTIC_VALUE_LENGTH: usize = 256;
+const RUNTIME_LOG_FILE: &str = "runtime-events.jsonl";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -249,7 +254,7 @@ fn write_yaml_atomic(
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DiagnosticLevel {
     Info,
@@ -314,6 +319,38 @@ pub struct DiagnosticCatalogSummary {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DiagnosticPerformanceSummary {
+    pub active_scans: usize,
+    pub active_watches: usize,
+    pub scheduler_active: usize,
+    pub scheduler_waiting: usize,
+    pub scheduler_peak_active: usize,
+    pub scheduler_peak_waiting: usize,
+    pub cache_entries: u64,
+    pub cache_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticEventSummary {
+    pub level: DiagnosticLevel,
+    pub category: String,
+    pub code: String,
+    pub count: usize,
+    pub last_seen: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticLogSummary {
+    pub file_count: usize,
+    pub byte_count: u64,
+    pub max_file_bytes: u64,
+    pub retained_files: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiagnosticAccessSummary {
     pub name: String,
     pub enabled: bool,
@@ -331,6 +368,9 @@ pub struct DiagnosticSnapshot {
     pub configuration: DiagnosticConfigurationSummary,
     pub cache: DiagnosticCacheSummary,
     pub catalog: DiagnosticCatalogSummary,
+    pub performance: DiagnosticPerformanceSummary,
+    pub runtime_log: DiagnosticLogSummary,
+    pub event_summary: Vec<DiagnosticEventSummary>,
     pub library_roots: Vec<DiagnosticAccessSummary>,
     pub obsidian_vaults: Vec<DiagnosticAccessSummary>,
     pub recent_events: Vec<DiagnosticEvent>,
@@ -346,6 +386,9 @@ impl Default for DiagnosticSnapshot {
             configuration: DiagnosticConfigurationSummary::default(),
             cache: DiagnosticCacheSummary::default(),
             catalog: DiagnosticCatalogSummary::default(),
+            performance: DiagnosticPerformanceSummary::default(),
+            runtime_log: DiagnosticLogSummary::default(),
+            event_summary: Vec::new(),
             library_roots: Vec::new(),
             obsidian_vaults: Vec::new(),
             recent_events: Vec::new(),
@@ -364,7 +407,7 @@ pub struct DiagnosticExportReport {
 
 #[derive(Debug, Error)]
 pub enum DiagnosticError {
-    #[error("diagnostic event buffer lock is poisoned")]
+    #[error("diagnostic state lock is poisoned")]
     PoisonedLock,
     #[error("diagnostic export I/O error at {path}: {source}")]
     Io {
@@ -374,11 +417,32 @@ pub enum DiagnosticError {
     },
     #[error("cannot serialize diagnostic export: {0}")]
     Serialize(#[from] serde_json::Error),
+    #[error("invalid diagnostic log policy")]
+    InvalidLogPolicy,
+    #[error("unsafe diagnostic log entry at {0}")]
+    UnsafeLogEntry(PathBuf),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiagnosticLogPolicy {
+    pub max_file_bytes: u64,
+    pub retained_files: usize,
+}
+
+impl Default for DiagnosticLogPolicy {
+    fn default() -> Self {
+        Self {
+            max_file_bytes: 1024 * 1024,
+            retained_files: 5,
+        }
+    }
 }
 
 pub struct DiagnosticService {
     export_directory: PathBuf,
+    log_policy: DiagnosticLogPolicy,
     events: Mutex<VecDeque<DiagnosticEvent>>,
+    runtime_log: Mutex<()>,
 }
 
 impl DiagnosticService {
@@ -386,15 +450,38 @@ impl DiagnosticService {
     pub fn new(export_directory: PathBuf) -> Self {
         Self {
             export_directory,
+            log_policy: DiagnosticLogPolicy::default(),
             events: Mutex::new(VecDeque::with_capacity(MAX_DIAGNOSTIC_EVENTS)),
+            runtime_log: Mutex::new(()),
         }
+    }
+
+    /// Creates a diagnostic service with explicit per-file and retention limits.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DiagnosticError::InvalidLogPolicy`] for zero limits.
+    pub fn with_log_policy(
+        export_directory: PathBuf,
+        log_policy: DiagnosticLogPolicy,
+    ) -> Result<Self, DiagnosticError> {
+        if log_policy.max_file_bytes == 0 || log_policy.retained_files == 0 {
+            return Err(DiagnosticError::InvalidLogPolicy);
+        }
+        Ok(Self {
+            export_directory,
+            log_policy,
+            events: Mutex::new(VecDeque::with_capacity(MAX_DIAGNOSTIC_EVENTS)),
+            runtime_log: Mutex::new(()),
+        })
     }
 
     /// Adds a path-free structured event to the bounded in-memory support log.
     ///
     /// # Errors
     ///
-    /// Returns [`DiagnosticError`] only if the event buffer lock is poisoned.
+    /// Returns [`DiagnosticError`] if bounded state is unavailable or the rolling
+    /// runtime log cannot be written safely.
     pub fn record(
         &self,
         level: DiagnosticLevel,
@@ -402,26 +489,65 @@ impl DiagnosticService {
         code: impl Into<String>,
         details: BTreeMap<String, String>,
     ) -> Result<(), DiagnosticError> {
-        let mut events = self
-            .events
-            .lock()
-            .map_err(|_| DiagnosticError::PoisonedLock)?;
-        if events.len() == MAX_DIAGNOSTIC_EVENTS {
-            events.pop_front();
-        }
-        events.push_back(DiagnosticEvent {
+        let event = DiagnosticEvent {
             timestamp: now(),
             level,
-            category: category.into(),
-            code: code.into(),
-            details,
-        });
-        Ok(())
+            category: bounded_text(&category.into(), MAX_DIAGNOSTIC_NAME_LENGTH),
+            code: bounded_text(&code.into(), MAX_DIAGNOSTIC_NAME_LENGTH),
+            details: sanitize_details(details),
+        };
+        {
+            let mut events = self
+                .events
+                .lock()
+                .map_err(|_| DiagnosticError::PoisonedLock)?;
+            if events.len() == MAX_DIAGNOSTIC_EVENTS {
+                events.pop_front();
+            }
+            events.push_back(event.clone());
+        }
+        self.append_runtime_event(&event)
     }
 
     #[must_use]
     pub fn event_count(&self) -> usize {
         self.events.lock().map_or(0, |events| events.len())
+    }
+
+    /// Returns the current bounded rolling-log footprint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when an existing log entry is unsafe or cannot be inspected.
+    pub fn runtime_log_summary(&self) -> Result<DiagnosticLogSummary, DiagnosticError> {
+        let _guard = self
+            .runtime_log
+            .lock()
+            .map_err(|_| DiagnosticError::PoisonedLock)?;
+        let runtime_directory = self.runtime_log_directory();
+        ensure_directory_or_missing(&runtime_directory)?;
+        if !runtime_directory.exists() {
+            return Ok(DiagnosticLogSummary {
+                max_file_bytes: self.log_policy.max_file_bytes,
+                retained_files: self.log_policy.retained_files,
+                ..DiagnosticLogSummary::default()
+            });
+        }
+        let mut file_count = 0;
+        let mut byte_count = 0_u64;
+        for index in 0..self.log_policy.retained_files {
+            let path = self.runtime_log_path(index);
+            if let Some(size) = safe_regular_file_size(&path)? {
+                file_count += 1;
+                byte_count = byte_count.saturating_add(size);
+            }
+        }
+        Ok(DiagnosticLogSummary {
+            file_count,
+            byte_count,
+            max_file_bytes: self.log_policy.max_file_bytes,
+            retained_files: self.log_policy.retained_files,
+        })
     }
 
     /// Writes a redacted JSON support snapshot with a bounded recent-event log.
@@ -442,7 +568,10 @@ impl DiagnosticService {
             .iter()
             .cloned()
             .collect();
+        snapshot.event_summary = summarize_events(&snapshot.recent_events);
+        snapshot.runtime_log = self.runtime_log_summary()?;
         let bytes = serde_json::to_vec_pretty(&snapshot)?;
+        ensure_directory_or_missing(&self.export_directory)?;
         fs::create_dir_all(&self.export_directory).map_err(|source| DiagnosticError::Io {
             path: self.export_directory.clone(),
             source,
@@ -483,6 +612,206 @@ impl DiagnosticService {
             size_bytes: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
         })
     }
+
+    fn append_runtime_event(&self, event: &DiagnosticEvent) -> Result<(), DiagnosticError> {
+        let _guard = self
+            .runtime_log
+            .lock()
+            .map_err(|_| DiagnosticError::PoisonedLock)?;
+        let runtime_directory = self.runtime_log_directory();
+        ensure_directory_or_missing(&self.export_directory)?;
+        ensure_directory_or_missing(&runtime_directory)?;
+        fs::create_dir_all(&runtime_directory).map_err(|source| DiagnosticError::Io {
+            path: runtime_directory.clone(),
+            source,
+        })?;
+        let mut bytes = serde_json::to_vec(event)?;
+        bytes.push(b'\n');
+        let current = self.runtime_log_path(0);
+        let current_size = safe_regular_file_size(&current)?.unwrap_or(0);
+        if current_size > 0
+            && current_size.saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX))
+                > self.log_policy.max_file_bytes
+        {
+            self.rotate_runtime_logs()?;
+        }
+        ensure_regular_or_missing(&current)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&current)
+            .map_err(|source| DiagnosticError::Io {
+                path: current.clone(),
+                source,
+            })?;
+        file.write_all(&bytes)
+            .and_then(|()| file.flush())
+            .map_err(|source| DiagnosticError::Io {
+                path: current.clone(),
+                source,
+            })?;
+        if event.level != DiagnosticLevel::Info {
+            file.sync_data().map_err(|source| DiagnosticError::Io {
+                path: current.clone(),
+                source,
+            })?;
+            sync_directory(&runtime_directory).map_err(|source| DiagnosticError::Io {
+                path: runtime_directory,
+                source,
+            })?;
+        }
+        Ok(())
+    }
+
+    fn rotate_runtime_logs(&self) -> Result<(), DiagnosticError> {
+        let last = self.log_policy.retained_files.saturating_sub(1);
+        if last == 0 {
+            remove_regular_file_if_exists(&self.runtime_log_path(0))?;
+            return Ok(());
+        }
+        remove_regular_file_if_exists(&self.runtime_log_path(last))?;
+        for index in (1..last).rev() {
+            rename_regular_file_if_exists(
+                &self.runtime_log_path(index),
+                &self.runtime_log_path(index + 1),
+            )?;
+        }
+        rename_regular_file_if_exists(&self.runtime_log_path(0), &self.runtime_log_path(1))
+    }
+
+    fn runtime_log_directory(&self) -> PathBuf {
+        self.export_directory.join("runtime")
+    }
+
+    fn runtime_log_path(&self, index: usize) -> PathBuf {
+        if index == 0 {
+            self.runtime_log_directory().join(RUNTIME_LOG_FILE)
+        } else {
+            self.runtime_log_directory()
+                .join(format!("runtime-events.{index}.jsonl"))
+        }
+    }
+}
+
+fn sanitize_details(details: BTreeMap<String, String>) -> BTreeMap<String, String> {
+    details
+        .into_iter()
+        .take(MAX_DIAGNOSTIC_DETAILS)
+        .map(|(key, value)| {
+            (
+                bounded_text(&key, MAX_DIAGNOSTIC_NAME_LENGTH),
+                sanitize_detail_value(&value),
+            )
+        })
+        .collect()
+}
+
+fn sanitize_detail_value(value: &str) -> String {
+    if looks_like_path(value) {
+        let digest = Sha256::digest(value.as_bytes());
+        let fingerprint = format!("{digest:x}");
+        return format!("[redacted-path:{}]", &fingerprint[..16]);
+    }
+    bounded_text(value, MAX_DIAGNOSTIC_VALUE_LENGTH)
+}
+
+fn looks_like_path(value: &str) -> bool {
+    Path::new(value).is_absolute()
+        || value.starts_with("~/")
+        || value.starts_with("~\\")
+        || value.starts_with("\\\\")
+        || value.as_bytes().get(1) == Some(&b':')
+        || value.contains("/Users/")
+        || value.contains("\\Users\\")
+}
+
+fn bounded_text(value: &str, max_chars: usize) -> String {
+    let mut characters = value.chars();
+    let bounded = characters.by_ref().take(max_chars).collect::<String>();
+    if characters.next().is_some() {
+        format!("{bounded}…")
+    } else {
+        bounded
+    }
+}
+
+fn summarize_events(events: &[DiagnosticEvent]) -> Vec<DiagnosticEventSummary> {
+    let mut summaries = BTreeMap::<(DiagnosticLevel, String, String), (usize, String)>::new();
+    for event in events
+        .iter()
+        .filter(|event| event.level != DiagnosticLevel::Info)
+    {
+        let entry = summaries
+            .entry((event.level, event.category.clone(), event.code.clone()))
+            .or_insert((0, event.timestamp.clone()));
+        entry.0 += 1;
+        entry.1.clone_from(&event.timestamp);
+    }
+    summaries
+        .into_iter()
+        .map(
+            |((level, category, code), (count, last_seen))| DiagnosticEventSummary {
+                level,
+                category,
+                code,
+                count,
+                last_seen,
+            },
+        )
+        .collect()
+}
+
+fn safe_regular_file_size(path: &Path) -> Result<Option<u64>, DiagnosticError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            Err(DiagnosticError::UnsafeLogEntry(path.to_path_buf()))
+        }
+        Ok(metadata) => Ok(Some(metadata.len())),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(source) => Err(DiagnosticError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
+}
+
+fn ensure_regular_or_missing(path: &Path) -> Result<(), DiagnosticError> {
+    safe_regular_file_size(path).map(|_| ())
+}
+
+fn ensure_directory_or_missing(path: &Path) -> Result<(), DiagnosticError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            Err(DiagnosticError::UnsafeLogEntry(path.to_path_buf()))
+        }
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(DiagnosticError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
+}
+
+fn remove_regular_file_if_exists(path: &Path) -> Result<(), DiagnosticError> {
+    if safe_regular_file_size(path)?.is_none() {
+        return Ok(());
+    }
+    fs::remove_file(path).map_err(|source| DiagnosticError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+fn rename_regular_file_if_exists(from: &Path, to: &Path) -> Result<(), DiagnosticError> {
+    if safe_regular_file_size(from)?.is_none() {
+        return Ok(());
+    }
+    ensure_regular_or_missing(to)?;
+    fs::rename(from, to).map_err(|source| DiagnosticError::Io {
+        path: from.to_path_buf(),
+        source,
+    })
 }
 
 fn now() -> String {
@@ -503,14 +832,17 @@ const fn sync_directory(_path: &Path) -> io::Result<()> {
 mod tests {
     use std::collections::BTreeMap;
     use std::fs;
+    use std::sync::Arc;
+    use std::thread;
 
     use sha2::{Digest, Sha256};
     use tempfile::tempdir;
     use uuid::Uuid;
 
     use super::{
-        ApplicationConfigError, ApplicationConfigManager, DiagnosticAccessSummary, DiagnosticLevel,
-        DiagnosticService, DiagnosticSnapshot, TagFilterPreference, UpdateUiPreferences,
+        ApplicationConfigError, ApplicationConfigManager, DiagnosticAccessSummary, DiagnosticError,
+        DiagnosticLevel, DiagnosticLogPolicy, DiagnosticService, DiagnosticSnapshot,
+        TagFilterPreference, UpdateUiPreferences,
     };
 
     #[test]
@@ -637,6 +969,118 @@ mod tests {
         let contents = fs::read_to_string(report.path).expect("read");
         assert!(!contents.contains(private_path));
         assert!(contents.contains(&fingerprint[..16]));
-        assert!(contents.contains("\"schema\": 1"));
+        assert!(contents.contains("\"schema\": 2"));
+    }
+
+    #[test]
+    fn runtime_log_rotates_and_redacts_path_values() {
+        let temp = tempdir().expect("tempdir");
+        let service = DiagnosticService::with_log_policy(
+            temp.path().join("diagnostics"),
+            DiagnosticLogPolicy {
+                max_file_bytes: 220,
+                retained_files: 3,
+            },
+        )
+        .expect("service");
+        let private_path = "/Users/alice/Secret/logo.png";
+        for index in 0..20 {
+            service
+                .record(
+                    DiagnosticLevel::Warning,
+                    "scanner",
+                    "read-failed",
+                    BTreeMap::from([
+                        ("sequence".into(), index.to_string()),
+                        ("path".into(), private_path.into()),
+                    ]),
+                )
+                .expect("record");
+        }
+
+        let summary = service.runtime_log_summary().expect("summary");
+        assert_eq!(summary.file_count, 3);
+        assert!(summary.byte_count <= summary.max_file_bytes * 3 + 512);
+        for entry in fs::read_dir(temp.path().join("diagnostics/runtime")).expect("read logs") {
+            let contents = fs::read_to_string(entry.expect("entry").path()).expect("read log");
+            assert!(!contents.contains(private_path));
+            for line in contents.lines() {
+                serde_json::from_str::<serde_json::Value>(line).expect("JSON line");
+            }
+        }
+        let export = service
+            .export(DiagnosticSnapshot::default())
+            .expect("export");
+        let contents = fs::read_to_string(export.path).expect("read export");
+        assert!(!contents.contains(private_path));
+        assert!(contents.contains("eventSummary"));
+    }
+
+    #[test]
+    fn concurrent_runtime_events_remain_complete_json_lines() {
+        let temp = tempdir().expect("tempdir");
+        let service = Arc::new(DiagnosticService::new(temp.path().join("diagnostics")));
+        let threads = (0..8)
+            .map(|worker| {
+                let service = Arc::clone(&service);
+                thread::spawn(move || {
+                    for sequence in 0..20 {
+                        service
+                            .record(
+                                DiagnosticLevel::Info,
+                                "concurrency",
+                                "event",
+                                BTreeMap::from([
+                                    ("worker".into(), worker.to_string()),
+                                    ("sequence".into(), sequence.to_string()),
+                                ]),
+                            )
+                            .expect("record");
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        for worker in threads {
+            worker.join().expect("join");
+        }
+
+        let contents =
+            fs::read_to_string(temp.path().join("diagnostics/runtime/runtime-events.jsonl"))
+                .expect("read log");
+        assert_eq!(contents.lines().count(), 160);
+        for line in contents.lines() {
+            serde_json::from_str::<serde_json::Value>(line).expect("JSON line");
+        }
+        assert_eq!(service.event_count(), 160);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runtime_log_rejects_symlink_targets_without_modifying_them() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempdir().expect("tempdir");
+        let diagnostics = temp.path().join("diagnostics");
+        let runtime = diagnostics.join("runtime");
+        fs::create_dir_all(&runtime).expect("runtime directory");
+        let outside = temp.path().join("outside.jsonl");
+        fs::write(&outside, b"owned outside").expect("outside");
+        symlink(&outside, runtime.join("runtime-events.jsonl")).expect("symlink");
+        let service = DiagnosticService::new(diagnostics);
+
+        assert!(matches!(
+            service.record(
+                DiagnosticLevel::Error,
+                "security",
+                "unsafe-log",
+                BTreeMap::new(),
+            ),
+            Err(DiagnosticError::UnsafeLogEntry(_))
+        ));
+        assert_eq!(
+            fs::read(&outside).expect("outside unchanged"),
+            b"owned outside"
+        );
+        assert_eq!(service.event_count(), 1);
     }
 }

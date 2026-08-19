@@ -175,6 +175,15 @@ export function Inspector({
         />
       ))}
 
+      <div className="inspector-section asset-identity">
+        <span className="field-label">稳定素材 ID</span>
+        {asset.id ? (
+          <code title={asset.id}>{asset.id}</code>
+        ) : (
+          <span className="muted-copy">尚未建立 Sidecar，暂无稳定 ID</span>
+        )}
+      </div>
+
       {asset.issues.length > 0 ? (
         <div className="asset-warning" role="status">
           <Icon name="alert" size={16} />
