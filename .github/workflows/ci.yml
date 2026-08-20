@@ -416,7 +416,7 @@ jobs:
           EAGLE_GIT_COMMIT: ${{ github.sha }}
           MATERIAL_EAGLE_BUNDLE: ${{ matrix.bundle }}
         run: |
-          npm --prefix apps/desktop exec tauri -- build \
+          npm --prefix apps/desktop run tauri -- build \
             --config '{"bundle":{"active":true}}' \
             --bundles "$MATERIAL_EAGLE_BUNDLE" \
             --ci \
@@ -428,7 +428,7 @@ jobs:
         env:
           EAGLE_GIT_COMMIT: ${{ github.sha }}
         run: |
-          npm --prefix apps/desktop exec tauri -- build `
+          npm --prefix apps/desktop run tauri -- build `
             --config '{"bundle":{"active":true}}' `
             --bundles nsis `
             --ci `

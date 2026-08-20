@@ -62,4 +62,9 @@ test("pins every bundled worker to decoder-only libheif 1.23.1 dependencies", as
     workflow,
     /\$\{\{ github\.workspace \}\}\/apps\/desktop\/src-tauri\/resources\/format-workers\/libheif/u,
   );
+  assert.doesNotMatch(workflow, /npm --prefix apps\/desktop exec tauri/u);
+  assert.equal(
+    workflow.match(/npm --prefix apps\/desktop run tauri -- build/gu)?.length,
+    2,
+  );
 });
