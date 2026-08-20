@@ -45,6 +45,20 @@
       "workaround": null,
       "targetVersion": null,
       "resolvedAt": "2026-08-20T04:34:16.000Z"
+    },
+    {
+      "id": "DEF-0004",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "P2 外部门禁生成器保留正式资源调度器明细与 GitHub 秒精度时间戳，但独立检查器及 JSON Schema 仍限定旧的精简调度器字段和毫秒精度时间戳，导致合法收据无法离线验收。",
+      "evidence": [
+        "tools/phase-2-external-gates.test.mjs covers the production ResourceSnapshot shape",
+        "tools/p2-acceptance-test-fixtures.mjs covers GitHub seconds-precision timestamps",
+        "schemas/phase-2-external-gates.schema.json and the independent inspector now enforce the same complete scheduler contract"
+      ],
+      "workaround": null,
+      "targetVersion": null,
+      "resolvedAt": "2026-08-20T12:24:00.000Z"
     }
   ]
 }

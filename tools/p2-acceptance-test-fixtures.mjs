@@ -14,7 +14,7 @@ export function makeP2ExternalReceiptFixture() {
   const workflowRef = `${repository}/.github/workflows/ci.yml@refs/heads/main`;
   const runUrl = `https://github.com/${repository}/actions/runs/${runId}`;
   const matrixVerifiedAt = "2026-08-20T02:30:00.000Z";
-  const hostedRunVerifiedAt = "2026-08-20T02:45:00.000Z";
+  const hostedRunVerifiedAt = "2026-08-20T02:45:00Z";
   const verificationEnvironment = {
     nodeVersion: "v24.19.0",
     githubActions: "true",
@@ -82,8 +82,8 @@ export function makeP2ExternalReceiptFixture() {
       name,
       status: "completed",
       conclusion: "success",
-      startedAt: "2026-08-20T02:05:00.000Z",
-      completedAt: "2026-08-20T02:40:00.000Z",
+      startedAt: "2026-08-20T02:05:00Z",
+      completedAt: "2026-08-20T02:40:00Z",
       url: `${runUrl}/job/${String(databaseId)}`,
     };
   });
@@ -136,6 +136,10 @@ export function makeP2ExternalReceiptFixture() {
           waitingTotal: 0,
           peakActiveTotal: 2,
           peakWaitingTotal: 0,
+          backgroundLimit: 2,
+          scan: makeWorkSnapshot(1_440),
+          hash: makeWorkSnapshot(400_000),
+          decode: makeWorkSnapshot(400_000),
         },
       },
     },
@@ -153,6 +157,19 @@ export function makeP2ExternalReceiptFixture() {
       artifacts,
       hostedJobs,
     },
+  };
+}
+
+function makeWorkSnapshot(completed) {
+  return {
+    active: 0,
+    waiting: 0,
+    peakActive: 1,
+    peakWaiting: 0,
+    completed,
+    rejected: 0,
+    timedOut: 0,
+    cancelled: 0,
   };
 }
 

@@ -276,12 +276,16 @@ function inspectScheduler(value, maxCpuPercent, failures) {
     value,
     [
       "mode",
-      "foregroundLimit",
-      "maxWaiters",
       "activeTotal",
       "waitingTotal",
       "peakActiveTotal",
       "peakWaitingTotal",
+      "foregroundLimit",
+      "backgroundLimit",
+      "maxWaiters",
+      "scan",
+      "hash",
+      "decode",
     ],
     failures,
     "P2-A11 external scheduler",
@@ -295,9 +299,20 @@ function inspectScheduler(value, maxCpuPercent, failures) {
     "waitingTotal",
     "peakActiveTotal",
     "peakWaitingTotal",
+    "backgroundLimit",
   ])
     if (!isNonnegativeInteger(value?.[field]))
       failures.push(`P2-A11 external scheduler ${field} is invalid`);
+  for (const kind of ["scan", "hash", "decode"])
+    inspectWorkSnapshot(value?.[kind], kind, failures);
+  if (
+    isNonnegativeInteger(value?.backgroundLimit) &&
+    isNonnegativeInteger(value?.foregroundLimit) &&
+    value.backgroundLimit > value.foregroundLimit
+  )
+    failures.push(
+      "P2-A11 external scheduler background capacity exceeds foreground capacity",
+    );
   if (
     isNonnegativeInteger(value?.activeTotal) &&
     isNonnegativeInteger(value?.foregroundLimit) &&
@@ -328,6 +343,36 @@ function inspectScheduler(value, maxCpuPercent, failures) {
     maxCpuPercent > value.foregroundLimit * 100 + 50
   )
     failures.push("P2-A11 external CPU exceeds its scheduler envelope");
+}
+
+function inspectWorkSnapshot(value, kind, failures) {
+  const fields = [
+    "active",
+    "waiting",
+    "peakActive",
+    "peakWaiting",
+    "completed",
+    "rejected",
+    "timedOut",
+    "cancelled",
+  ];
+  const label = `P2-A11 external scheduler ${kind}`;
+  checkExactKeys(value, fields, failures, label);
+  for (const field of fields)
+    if (!isNonnegativeInteger(value?.[field]))
+      failures.push(`${label} ${field} is invalid`);
+  if (
+    isNonnegativeInteger(value?.active) &&
+    isNonnegativeInteger(value?.peakActive) &&
+    value.active > value.peakActive
+  )
+    failures.push(`${label} active work exceeds its peak`);
+  if (
+    isNonnegativeInteger(value?.waiting) &&
+    isNonnegativeInteger(value?.peakWaiting) &&
+    value.waiting > value.peakWaiting
+  )
+    failures.push(`${label} waiting work exceeds its peak`);
 }
 
 function inspectPlatformReceipt(value, failures) {
@@ -714,8 +759,10 @@ function laterIsoInstant(...candidates) {
 
 function isIsoInstant(value) {
   if (typeof value !== "string") return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(value))
+    return false;
   const timestamp = Date.parse(value);
-  return (
-    Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value
-  );
+  if (!Number.isFinite(timestamp)) return false;
+  const canonical = new Date(timestamp).toISOString();
+  return canonical === value || canonical === value.replace(/Z$/u, ".000Z");
 }

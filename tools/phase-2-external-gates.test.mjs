@@ -323,6 +323,10 @@ function makeResourceReport({ commit, startedAt, completedAt }) {
         waitingTotal: 0,
         peakActiveTotal: 2,
         peakWaitingTotal: 0,
+        backgroundLimit: 2,
+        scan: makeWorkSnapshot(Math.max(1, Math.floor(elapsedMs / 20_000))),
+        hash: makeWorkSnapshot(Math.max(1, Math.floor(elapsedMs / 50))),
+        decode: makeWorkSnapshot(Math.max(1, Math.floor(elapsedMs / 50))),
       },
       cache: {
         entryCount: Math.min(20_000, Math.floor(elapsedMs / 1_000)),
@@ -356,6 +360,19 @@ function makeResourceReport({ commit, startedAt, completedAt }) {
       nodeVersion: process.version,
     },
   });
+}
+
+function makeWorkSnapshot(completed) {
+  return {
+    active: 0,
+    waiting: 0,
+    peakActive: 1,
+    peakWaiting: 0,
+    completed,
+    rejected: 0,
+    timedOut: 0,
+    cancelled: 0,
+  };
 }
 
 function makeSourceReport({ platform, commit, startedAt, completedAt }) {

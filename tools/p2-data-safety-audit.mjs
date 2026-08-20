@@ -558,10 +558,12 @@ function isSha256(value) {
 
 function isIsoInstant(value) {
   if (typeof value !== "string") return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(value))
+    return false;
   const timestamp = Date.parse(value);
-  return (
-    Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value
-  );
+  if (!Number.isFinite(timestamp)) return false;
+  const canonical = new Date(timestamp).toISOString();
+  return canonical === value || canonical === value.replace(/Z$/u, ".000Z");
 }
 
 function isBoundedString(value, maximum) {
