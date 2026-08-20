@@ -137,6 +137,7 @@ name = "asset-catalog"
 version = "0.1.0"
 dependencies = [
  "asset-core",
+ "asset-filesystem",
  "asset-index",
  "metadata",
  "serde",

@@ -1,6 +1,6 @@
 # 缩略图协议
 
-本文档定义 P1-06 与 P2-05 的桌面端缩略图请求、缓存、生命周期与错误协议。缩略图是可删除派生数据，任何调用都不得修改原始素材或相邻 Sidecar。
+本文档定义 P1-06、P2-05 与 P3-01 的桌面端缩略图请求、提供器、缓存、生命周期与错误协议。缩略图是可删除派生数据，任何调用都不得修改原始素材或相邻 Sidecar。
 
 ## 1. 调用顺序
 
@@ -29,7 +29,7 @@ Tauri 命令：`request_thumbnail`
 
 - `assetKey` 必须已存在于本次运行的内存目录中，前端不能直接要求解码任意路径；
 - `maxEdge` 为 16–2,048 的整数；
-- 素材必须是图片类型；格式以文件内容识别，仅支持 PNG、JPEG、WebP 和 GIF；
+- 素材必须是扫描器已注册的类型；当前内置 raster provider 解码 PNG、JPEG、WebP 和 GIF，其他格式可以稳定降级为类型卡片；
 - GIF 缩略图固定使用第一帧；输出 MIME 固定为 `image/png`。
 
 成功或缓存命中：
@@ -46,6 +46,8 @@ Tauri 命令：`request_thumbnail`
     "sourceSize": 18230,
     "sourceModifiedUnixMs": 1786710000000,
     "cacheHit": false,
+    "providerId": "builtin-raster",
+    "providerVersion": "image-0.25.9-triangle-png-v1",
     "decoderVersion": "image-0.25.9-triangle-png-v1"
   }
 }
@@ -57,7 +59,7 @@ Tauri 命令：`request_thumbnail`
 {
   "status": "placeholder",
   "assetKey": "/normalized/library/damaged.png",
-  "reason": "decode-failed",
+  "reason": "invalid-content",
   "message": "decoder error details"
 }
 ```
@@ -67,10 +69,17 @@ Tauri 命令：`request_thumbnail`
 | 原因 | 含义 |
 |---|---|
 | `missing-asset` | 请求前或排队后素材已消失 |
-| `unsupported-format` | 不是受支持的图片类型或内容格式 |
+| `codec-unavailable` | 格式已注册，但当前构建未安装可选 codec |
+| `preview-unavailable` | 格式已注册，但当前构建没有对应 preview provider |
+| `unsupported-format` | 素材格式未注册预览能力 |
 | `unreadable` | 文件存在但无法打开或读取 |
-| `decode-failed` | 内容损坏、超过资源限制或无法解码 |
+| `invalid-content` | 已注册格式的内容损坏或与声明不符 |
+| `decode-failed` | provider 已接受内容但解码失败 |
+| `resource-limited` | 输入或解码超过明确资源边界 |
+| `timed-out` | 隔离 provider 超过硬超时 |
 | `source-changed` | 解码期间源文件版本改变，本次结果未缓存 |
+
+`codec-unavailable`、`preview-unavailable` 和 `unsupported-format` 是中性能力降级；其余原因是需要用户注意的文件或执行故障。`decoderVersion` 暂作为旧前端兼容字段，值与 `providerVersion` 相同；新逻辑使用 provider ID/version。
 
 ## 3. 二进制读取
 
@@ -92,7 +101,8 @@ stable asset ID or none
 source size
 source mtime at the filesystem's available precision
 requested max edge
-decoder version
+provider ID
+provider version
 ```
 
 布局为：
@@ -106,19 +116,20 @@ decoder version
       ab...64hex.json
 ```
 
-JSON 描述文件只包含 Schema、缓存键、不可逆源令牌、解码器版本和请求长边：
+JSON 描述文件只包含 Schema、缓存键、不可逆源令牌、provider ID/version 和请求长边：
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "cacheKey": "64-lowercase-hex-characters",
   "sourceToken": "64-lowercase-hex-characters",
-  "decoderVersion": "image-0.25.9-triangle-png-v1",
+  "providerId": "builtin-raster",
+  "providerVersion": "image-0.25.9-triangle-png-v1",
   "maxEdge": 256
 }
 ```
 
-`sourceToken` 是路径键、稳定 ID、大小和完整 mtime 的不可逆 SHA-256，不保存原路径。键命中前同时验证描述与缓存图片，并更新 PNG mtime 作为最后使用时间。源文件大小或 mtime 改变、请求尺寸改变或解码器升级都会得到新键，不复用旧 PNG；IPC 中的 `sourceModifiedUnixMs` 只用于界面显示，缓存键使用文件系统可提供的完整时间精度。
+`sourceToken` 是路径键、稳定 ID、大小和完整 mtime 的不可逆 SHA-256，不保存原路径。键命中前同时验证描述与缓存图片，并更新 PNG mtime 作为最后使用时间。源文件大小或 mtime 改变、请求尺寸改变、provider 切换或 provider 升级都会得到新键，不复用旧 PNG；IPC 中的 `sourceModifiedUnixMs` 只用于界面显示，缓存键使用文件系统可提供的完整时间精度。
 
 PNG 与 JSON 均使用同分片临时文件、文件同步和原子持久化。只有文件对完整、描述匹配且 PNG 可解码时才命中；进程中断留下的临时文件或半项会在维护时回收。
 
@@ -146,7 +157,7 @@ Tauri 命令：`maintain_thumbnail_cache`，无参数；活动扫描期间返回
   "expiredEntries": 1,
   "capacityEntries": 0,
   "stats": {
-    "layoutVersion": 2,
+    "layoutVersion": 3,
     "fileCount": 4,
     "entryCount": 2,
     "byteCount": 4096,
@@ -158,7 +169,7 @@ Tauri 命令：`maintain_thumbnail_cache`，无参数；活动扫描期间返回
 }
 ```
 
-维护按以下优先级归类并删除：不完整/无法识别项、旧解码器项、孤立项、过期项、LRU 容量项。报告是派生计数，不成为第二份目录或数据库。
+维护按以下优先级归类并删除：不完整/无法识别项、未知或旧 provider 项、孤立项、过期项、LRU 容量项。报告是派生计数，不成为第二份目录或数据库。
 
 ## 6. 全量清理与中断恢复
 

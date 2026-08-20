@@ -31,8 +31,8 @@ pub(crate) fn decode_thumbnail(
         .with_guessed_format()
         .map_err(|error| failure(ThumbnailPlaceholderReason::Unreadable, error))?;
     let format = reader.format().ok_or_else(|| DecodeFailure {
-        reason: ThumbnailPlaceholderReason::UnsupportedFormat,
-        message: "image format could not be detected".into(),
+        reason: ThumbnailPlaceholderReason::InvalidContent,
+        message: "registered image content could not be decoded".into(),
     })?;
     if !matches!(
         format,

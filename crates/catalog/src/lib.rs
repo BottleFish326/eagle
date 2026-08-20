@@ -418,6 +418,7 @@ mod tests {
     use std::path::PathBuf;
 
     use asset_core::{AssetKind, AssetRecord};
+    use asset_filesystem::{ScanOptions, scan_root};
     use asset_index::{AssetQuery, QueryParseErrorKind};
     use metadata::{MetadataPatch, digest_file, sidecar_path_for};
     use tempfile::tempdir;
@@ -471,6 +472,54 @@ mod tests {
             .expect_err("unknown filters are visible");
         assert_eq!(error.kind, QueryParseErrorKind::UnknownFilter);
         assert_eq!(error.offset, 0);
+    }
+
+    #[test]
+    fn scanned_registered_formats_flow_through_backend_type_queries() {
+        let directory = tempdir().expect("tempdir");
+        let fixtures: [(&str, &[u8]); 4] = [
+            (
+                "vector.svg",
+                b"<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
+            ),
+            ("clip.mp4", b"\x00\x00\x00\x18ftypisom\x00\x00\x00\x00isom"),
+            ("sound.mp3", b"ID3\x04\x00"),
+            ("document.pdf", b"%PDF-1.7"),
+        ];
+        for (name, bytes) in fixtures {
+            fs::write(directory.path().join(name), bytes).expect("write query fixture");
+        }
+        fs::write(directory.path().join("ignored.txt"), b"not registered")
+            .expect("write ignored file");
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan formats");
+        assert_eq!(report.assets.len(), 4);
+        let mut catalog = AssetCatalog::default();
+        catalog.ingest(report.assets);
+
+        for (expression, expected) in [
+            ("type:image", vec!["vector.svg"]),
+            ("type:video", vec!["clip.mp4"]),
+            ("type:audio", vec!["sound.mp3"]),
+            ("type:pdf", vec!["document.pdf"]),
+            (
+                "type:image|video|audio|pdf",
+                vec!["clip.mp4", "document.pdf", "sound.mp3", "vector.svg"],
+            ),
+        ] {
+            let result = catalog
+                .query_assets(&QueryAssetsInput {
+                    expression: expression.into(),
+                })
+                .expect("type query");
+            let mut names = result
+                .keys
+                .iter()
+                .map(|key| catalog.get(key).expect("queried record").file_name.as_str())
+                .collect::<Vec<_>>();
+            names.sort_unstable();
+            assert_eq!(names, expected, "{expression}");
+        }
     }
 
     #[test]

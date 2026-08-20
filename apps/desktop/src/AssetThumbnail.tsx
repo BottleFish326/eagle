@@ -7,12 +7,17 @@ import {
   revokeTrackedObjectUrl,
 } from "./object-url-registry";
 import type { AssetRecord } from "./scanner";
+import type { ThumbnailPlaceholderReason } from "./thumbnail";
 
 type PreviewState =
   | { status: "waiting" }
   | { status: "loading" }
   | { status: "ready"; url: string }
-  | { status: "placeholder"; message: string };
+  | {
+      status: "placeholder";
+      reason: ThumbnailPlaceholderReason;
+      message: string;
+    };
 
 export function AssetThumbnail({
   api,
@@ -55,7 +60,11 @@ export function AssetThumbnail({
       .then(async (outcome) => {
         if (!active) return;
         if (outcome.status === "placeholder") {
-          setPreview({ status: "placeholder", message: outcome.message });
+          setPreview({
+            status: "placeholder",
+            reason: outcome.reason,
+            message: outcome.message,
+          });
           return;
         }
         const bytes = await api.readThumbnail(outcome.thumbnail.cacheKey);
@@ -69,6 +78,7 @@ export function AssetThumbnail({
         if (active) {
           setPreview({
             status: "placeholder",
+            reason: "unreadable",
             message: error instanceof Error ? error.message : "缩略图读取失败",
           });
         }
@@ -81,16 +91,21 @@ export function AssetThumbnail({
 
   return (
     <div
-      className={`asset-preview asset-preview--${preview.status}`}
+      className={`asset-preview asset-preview--${preview.status}${
+        preview.status === "placeholder"
+          ? ` asset-preview--placeholder-${placeholderTone(preview.reason)}`
+          : ""
+      }`}
       ref={container}
     >
       {preview.status === "ready" ? (
         <img alt="" draggable={false} src={preview.url} />
       ) : preview.status === "placeholder" ? (
-        <span className="preview-placeholder" title={preview.message}>
-          <Icon name="alert" size={22} />
-          <span>无法预览</span>
-        </span>
+        <AssetThumbnailFallback
+          asset={asset}
+          message={preview.message}
+          reason={preview.reason}
+        />
       ) : (
         <span className="preview-placeholder" aria-label="正在载入缩略图">
           <Icon name="image" size={22} />
@@ -98,4 +113,52 @@ export function AssetThumbnail({
       )}
     </div>
   );
+}
+
+export function AssetThumbnailFallback({
+  asset,
+  reason,
+  message,
+}: {
+  asset: AssetRecord;
+  reason: ThumbnailPlaceholderReason;
+  message: string;
+}) {
+  const tone = placeholderTone(reason);
+  const type = asset.extension?.toUpperCase() ?? kindLabel(asset.kind);
+  const label =
+    tone === "neutral" ? `${type} ${kindLabel(asset.kind)}` : "无法预览";
+  return (
+    <span
+      aria-label={label}
+      className={`preview-placeholder preview-placeholder--${tone}`}
+      title={message}
+    >
+      <Icon name={tone === "neutral" ? "image" : "alert"} size={22} />
+      <span>{label}</span>
+    </span>
+  );
+}
+
+function placeholderTone(reason: ThumbnailPlaceholderReason) {
+  return reason === "codec-unavailable" ||
+    reason === "preview-unavailable" ||
+    reason === "unsupported-format"
+    ? "neutral"
+    : "error";
+}
+
+function kindLabel(kind: AssetRecord["kind"]) {
+  switch (kind) {
+    case "image":
+      return "图片";
+    case "video":
+      return "视频";
+    case "audio":
+      return "音频";
+    case "pdf":
+      return "文档";
+    case "other":
+      return "文件";
+  }
 }

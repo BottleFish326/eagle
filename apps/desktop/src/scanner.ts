@@ -8,6 +8,7 @@ export type AssetIssue =
   | { type: "unreadable-file"; message: string }
   | { type: "invalid-image-metadata"; message: string }
   | { type: "invalid-native-metadata"; message: string }
+  | { type: "mime-mismatch"; message: string }
   | { type: "resource-limited"; message: string }
   | { type: "missing-asset" }
   | { type: "unsupported-format" };

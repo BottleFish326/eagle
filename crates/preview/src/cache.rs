@@ -14,17 +14,17 @@ use uuid::Uuid;
 
 use crate::{
     CacheClearReport, CacheMaintenanceReport, CachePolicy, CacheStartupDisposition,
-    CacheStartupReport, CacheStats, PreviewError, THUMBNAIL_CACHE_LAYOUT_VERSION,
-    THUMBNAIL_DECODER_VERSION,
+    CacheStartupReport, CacheStats, PreviewError, PreviewProviderIdentity,
+    THUMBNAIL_CACHE_LAYOUT_VERSION, THUMBNAIL_DECODER_VERSION, is_current_preview_provider,
 };
 
 const CACHE_DIRECTORY: &str = "thumbnails-v1";
 const CACHE_MARKER: &str = ".material-eagle-thumbnail-cache";
-const CACHE_MARKER_CONTENT: &str = "material-eagle-thumbnail-cache-v2\n";
+const CACHE_MARKER_CONTENT: &str = "material-eagle-thumbnail-cache-v3\n";
 const TOMBSTONE_PREFIX: &str = ".material-eagle-thumbnail-cache-gc-";
 const TOMBSTONE_MARKER: &str = ".material-eagle-thumbnail-cache-tombstone";
 const TOMBSTONE_MARKER_CONTENT: &str = "material-eagle-thumbnail-cache-tombstone-v1\n";
-const ENTRY_SCHEMA_VERSION: u32 = 1;
+const ENTRY_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug)]
 pub(crate) struct ThumbnailCache {
@@ -107,6 +107,7 @@ impl ThumbnailCache {
         key: &str,
         source_token: &str,
         max_edge: u32,
+        provider: PreviewProviderIdentity,
     ) -> Result<Option<CacheEntry>, PreviewError> {
         let path = self.path_for(key)?;
         let descriptor_path = metadata_path_for(&path);
@@ -118,7 +119,7 @@ impl ThumbnailCache {
         let descriptor = read_descriptor(&descriptor_path)?;
         if descriptor
             .as_ref()
-            .is_none_or(|descriptor| !descriptor.matches(key, source_token, max_edge))
+            .is_none_or(|descriptor| !descriptor.matches(key, source_token, max_edge, provider))
         {
             remove_regular_file_if_present(&path)?;
             remove_regular_file_if_present(&descriptor_path)?;
@@ -139,6 +140,7 @@ impl ThumbnailCache {
         key: &str,
         source_token: &str,
         max_edge: u32,
+        provider: PreviewProviderIdentity,
         bytes: &[u8],
     ) -> Result<PathBuf, PreviewError> {
         validate_key(key)?;
@@ -157,7 +159,8 @@ impl ThumbnailCache {
             schema: ENTRY_SCHEMA_VERSION,
             cache_key: key.to_owned(),
             source_token: source_token.to_owned(),
-            decoder_version: THUMBNAIL_DECODER_VERSION.to_owned(),
+            provider_id: provider.id.to_owned(),
+            provider_version: provider.version.to_owned(),
             max_edge,
         };
         let descriptor_path = metadata_path_for(&path);
@@ -189,7 +192,10 @@ impl ThumbnailCache {
         if descriptor.as_ref().is_none_or(|descriptor| {
             descriptor.schema != ENTRY_SCHEMA_VERSION
                 || descriptor.cache_key != key
-                || descriptor.decoder_version != THUMBNAIL_DECODER_VERSION
+                || !is_current_preview_provider(
+                    &descriptor.provider_id,
+                    &descriptor.provider_version,
+                )
         }) {
             return Err(PreviewError::MissingCacheEntry(key.to_owned()));
         }
@@ -246,7 +252,10 @@ impl ThumbnailCache {
         let now = SystemTime::now();
         let mut retained = Vec::new();
         for entry in scan.entries {
-            let reason = if entry.descriptor.decoder_version != THUMBNAIL_DECODER_VERSION {
+            let reason = if !is_current_preview_provider(
+                &entry.descriptor.provider_id,
+                &entry.descriptor.provider_version,
+            ) {
                 Some(RemovalReason::Incompatible)
             } else if active_sources
                 .is_some_and(|sources| !sources.contains(&entry.descriptor.source_token))
@@ -358,16 +367,24 @@ struct CacheEntryDescriptor {
     schema: u32,
     cache_key: String,
     source_token: String,
-    decoder_version: String,
+    provider_id: String,
+    provider_version: String,
     max_edge: u32,
 }
 
 impl CacheEntryDescriptor {
-    fn matches(&self, key: &str, source_token: &str, max_edge: u32) -> bool {
+    fn matches(
+        &self,
+        key: &str,
+        source_token: &str,
+        max_edge: u32,
+        provider: PreviewProviderIdentity,
+    ) -> bool {
         self.schema == ENTRY_SCHEMA_VERSION
             && self.cache_key == key
             && self.source_token == source_token
-            && self.decoder_version == THUMBNAIL_DECODER_VERSION
+            && self.provider_id == provider.id
+            && self.provider_version == provider.version
             && self.max_edge == max_edge
     }
 }

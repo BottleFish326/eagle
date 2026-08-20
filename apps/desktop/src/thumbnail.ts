@@ -14,14 +14,21 @@ export interface ThumbnailReady {
   sourceSize: number;
   sourceModifiedUnixMs: number;
   cacheHit: boolean;
+  providerId: string;
+  providerVersion: string;
   decoderVersion: string;
 }
 
 export type ThumbnailPlaceholderReason =
   | "missing-asset"
+  | "codec-unavailable"
+  | "preview-unavailable"
   | "unsupported-format"
   | "unreadable"
+  | "invalid-content"
   | "decode-failed"
+  | "resource-limited"
+  | "timed-out"
   | "source-changed";
 
 export type ThumbnailOutcome =

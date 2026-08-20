@@ -52,7 +52,7 @@ export function createDemoDesktopApi(
       removedBytes: 0,
     },
     cacheStats: {
-      layoutVersion: 2,
+      layoutVersion: 3,
       fileCount: 0,
       entryCount: 0,
       byteCount: 0,
@@ -460,7 +460,7 @@ export function createDemoDesktopApi(
           status: "placeholder",
           assetKey: asset.key,
           reason:
-            asset.kind === "image" ? "decode-failed" : "unsupported-format",
+            asset.kind === "image" ? "invalid-content" : "preview-unavailable",
           message:
             asset.kind === "image"
               ? "图片内容损坏，无法生成预览"
@@ -482,6 +482,8 @@ export function createDemoDesktopApi(
           sourceSize: asset.size ?? 0,
           sourceModifiedUnixMs: asset.modifiedUnixMs ?? 0,
           cacheHit,
+          providerId: "demo-raster",
+          providerVersion: "demo-preview-v1",
           decoderVersion: "demo-preview-v1",
         },
       } satisfies ThumbnailOutcome;

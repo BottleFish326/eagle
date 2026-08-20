@@ -9,7 +9,7 @@
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
 | 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
 | 阶段 2：可靠性与恢复 | Accepted | P2-A01 至 P2-A12、外部/本地/数据安全门禁和最终历史重放全部通过；最终收据 SHA-256 `76b135b…` |
-| 阶段 3：完整素材能力 | In progress | P3-01A 已完成静态格式注册表、内容优先扫描保留和真实夹具清单验证器；provider/cache、UI 与端到端查询仍待实现 |
+| 阶段 3：完整素材能力 | In progress | P3-01A 注册表与通用类型卡片已本地完成；下一动作是 P3-01B SVG 有界属性与静态预览 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出；P4-01 至 P4-08 的完整实施准备已收敛 |
 
 ## 阶段 0 工作项
@@ -61,7 +61,7 @@
 
 | 准备项 | 状态 | 证据 |
 |---|---|---|
-| P3-01 扩展格式能力管线 | In progress | P3-01A 前三项已实现：15 格式静态注册、64 KiB 内容优先识别、冲突告警、无 provider 时保留记录/Sidecar，以及拒绝越界/符号链接/伪摘要/平台缺口的真实夹具验证器；preview/provider、缓存键、UI 中性降级和端到端类型查询仍待完成，见 `reports/p3-01-readiness.md` |
+| P3-01 扩展格式能力管线 | In progress | P3-01A Completed locally：15 格式内容优先识别、基础记录/Sidecar、严格夹具验证、provider 缺失语义、provider 绑定缓存、中性 UI 类型卡片和四类后端查询已通过；P3-A01/A02 未判定，下一片 P3-01B，见 `reports/p3-01a-acceptance.md` |
 | P3-02 智能属性与高级过滤 | Design ready | 已固定定型谓词、整数单位、RFC 3339、精确宽高比、未知属性、混合索引和独立三方查询语料；阶段 2 退出前不计作 P3 开始，见 `reports/p3-02-readiness.md` |
 | P3-03 保存过滤器 | Design ready | 已固定用户级 YAML、条目隔离、未知字段保留、完整版本、精确 Tag AST 重写和跨文件协调恢复；阶段 2 退出前不计作 P3 开始，见 `reports/p3-03-readiness.md` |
 | P3-04 批量工作流 | Design ready | 已固定精确全选快照、catalog revision、只读预检、协作取消、事务续传与剪贴板单次提交；阶段 2 退出前不计作 P3 开始，见 `reports/p3-04-readiness.md` |
@@ -136,6 +136,7 @@
 - [阶段 2 验收报告](reports/phase-2-acceptance.md)
 - [阶段 2 数据安全缺陷审计](reports/p2-data-safety-audit.md)
 - [P3-01 扩展格式支持实施准备报告](reports/p3-01-readiness.md)
+- [P3-01A 注册表与通用卡片验收报告](reports/p3-01a-acceptance.md)
 - [P3-02 智能属性与高级过滤实施准备报告](reports/p3-02-readiness.md)
 - [P3-03 保存过滤器实施准备报告](reports/p3-03-readiness.md)
 - [P3-04 批量工作流实施准备报告](reports/p3-04-readiness.md)

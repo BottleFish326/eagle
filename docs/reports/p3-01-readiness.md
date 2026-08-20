@@ -1,6 +1,6 @@
 # P3-01 扩展格式支持实施准备报告
 
-- 状态：Implementation in progress；P3-01A 前三项已实现
+- 状态：Implementation in progress；P3-01A Completed locally
 - 日期：2026-08-19
 - 对应：P3-01、P3-A01、P3-A02
 - 决策：[ADR-026](../../specs/adr/026-capability-based-extended-format-pipeline.md)
@@ -12,9 +12,9 @@
 |---|---|---|
 | 素材模型 | 已有 image/video/audio/pdf/other 类型；只有图片宽高和 EXIF 结构 | 缺少可选媒体时长、页数、采样率、声道、codec、颜色空间 |
 | 扫描器 | 15 格式静态注册；64 KiB 内容签名优先、扩展候选；注册格式均保留记录和 Sidecar | preview/provider 能力与缓存描述仍待接入 |
-| 缩略图 | PNG/JPEG/GIF/WebP，65,535 单边、256 MiB 分配、共享 Decode 许可 | 非图片统一 unsupported；无 provider registry、worker 或 codec-unavailable 区分 |
-| 缓存 | provider 版本进入全局 decoder version，20,000 项/1 GiB/30 天 | 多 provider 需要把 provider ID/version 纳入每项 key 与 descriptor |
-| 查询/UI | 类型过滤已经支持五种 kind；扫描现已产出视频/音频/PDF 基础记录 | 仍需端到端查询断言和 codec 缺失的中性类型卡片 |
+| 缩略图 | PNG/JPEG/GIF/WebP 使用 `builtin-raster`；codec、provider、损坏、超限、超时和源变化具有独立稳定原因 | SVG 与后续原生/复杂 provider 尚未实现 |
+| 缓存 | provider ID/version 已进入每项 key 与 Schema 2 descriptor；layout 3 自动失效旧项 | 后续每个新增 provider 必须登记当前版本并增加失效测试 |
+| 查询/UI | `scan_root → AssetCatalog → type:` 四类测试已贯通；codec/provider 缺失显示中性类型卡片，文件故障显示错误卡片 | P3-01B 至 F 仍需逐格式扩展属性和真实预览 |
 | 夹具 | 已有真实 SVG 源文件与清单语义验证器，并继续保留大规模 PNG、损坏 PNG、Sidecar 异常和安全清理 marker | 仍需补齐其余格式及损坏/伪装/超限/恶意固定夹具与参考预览 |
 
 核心结论：P3-01 第一片必须先取消“只有可解码图片才是素材”的假设，而不是先给 UI 增加扩展名图标。
@@ -32,7 +32,7 @@
 
 ## 3. 门禁状态
 
-本报告不表示 P3-01 已完成。阶段 2 最终退出收据已接受，P3-01A 已开始实现；当前只有识别、扫描保留及清单验证器具备本地证据，preview/provider、缓存、UI 和查询门禁尚未关闭。
+本报告不表示 P3-01 已完成。阶段 2 最终退出收据已接受，P3-01A 六项本地门禁已经关闭；P3-01B 至 F、全格式期望矩阵和恶意夹具资源证据尚未完成。
 
 阶段门禁已结束，但设计文档、交叉编译或 codec 库能力说明仍不得计作 P3-A01/P3-A02 通过；必须由后续代码、夹具和机器证据验收。
 
@@ -47,13 +47,16 @@ P3-01A 必须以测试和清单验证器开场，不能先扩大扩展名白名�
 5. 在 `apps/desktop/src/thumbnail.ts` 与 `AssetThumbnail.tsx` 增加契约和组件测试：`codec-unavailable`、`preview-unavailable` 显示中性的文件类型卡片，只有损坏、不可读、超限或超时显示故障状态。当前把所有 placeholder 渲染成红色“无法预览”的行为不得带入 P3-01A。
 6. 复用现有后端 `type:image|video|audio|pdf` 查询语义增加端到端夹具断言，不在 React 中复制格式或查询判定。
 
-## 5. P3-01A 当前实施证据
+## 5. P3-01A 实施证据
 
-截至 2026-08-20，前三项已经形成可重复的本地证据：
+截至 2026-08-20，六项均已形成可重复的本地证据：
 
 - `crates/filesystem/src/formats.rs` 注册 PNG、JPEG、GIF、WebP、SVG、AVIF、HEIC、HEIF、MP4、MOV、WebM、MP3、WAV、FLAC 与 PDF；单元测试约束 ID、MIME、扩展名和 kind 唯一一致，并验证每种签名、扩展回退和内容冲突。
 - scanner 只读取最多 64 KiB 前缀，内容签名覆盖冲突扩展名并报告 `mime-mismatch`；所有已注册格式都建立基础 `AssetRecord` 并合并相邻 Sidecar，只有四种已有 raster provider 的格式尝试尺寸解析。
 - `fixtures/formats/manifest.json` 已包含一个仓库确定生成、真实大小及真实 SHA-256 的 SVG 夹具。独立验证器同时执行 JSON Schema、canonical root、逐段无符号链接、常规文件、大小/SHA-256、禁用占位摘要、provider/profile 三平台完整覆盖，以及可用参考 PNG 的摘要与 IHDR 尺寸检查。
+- preview 将 `codec-unavailable`、`preview-unavailable`、`invalid-content`、`resource-limited` 与 `timed-out` 分开；现有 raster provider 的 ID/version 同时进入缓存 key、descriptor 和 ready 回执，缓存 layout 升级到 3。
+- 桌面端组件测试证明 codec/provider 缺失显示中性格式卡片，而损坏、不可读、超限和超时显示明确故障；扫描新增的 `mime-mismatch` 也进入前端稳定问题联合类型。
+- catalog 集成测试从真实临时文件执行扫描、入库和 `type:image|video|audio|pdf` 查询，未在 React 中复制类型判定。
 
 局部验收命令：
 
@@ -61,7 +64,9 @@ P3-01A 必须以测试和清单验证器开场，不能先扩大扩展名白名�
 npm run verify:format-fixtures
 node --test tools/format-fixture-manifest.test.mjs
 cargo test -p asset-filesystem
-cargo clippy -p asset-filesystem -p asset-core --all-targets -- -D warnings
+cargo test -p asset-preview -p asset-catalog
+npm --prefix apps/desktop test
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-P3-01A 仍为 **In progress**。后续严格按第 4 节第 4 至第 6 项继续；在 provider/cache、UI 中性降级和端到端类型查询完成并通过全量门禁前，不得判定 P3-A01 或 P3-01 通过。
+P3-01A 判定为 **Completed locally**，下一实施片是 P3-01B。这里只关闭“注册表与通用卡片”范围；在 P3-01B 至 F、所有正式格式的真实期望清单和恶意/超限资源证据完成前，不得判定 P3-A01、P3-A02 或 P3-01 通过。

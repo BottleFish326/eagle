@@ -15,8 +15,9 @@ use decoder::decode_thumbnail;
 mod cache;
 mod decoder;
 
+pub const BUILTIN_RASTER_PROVIDER_ID: &str = "builtin-raster";
 pub const THUMBNAIL_DECODER_VERSION: &str = "image-0.25.9-triangle-png-v1";
-pub const THUMBNAIL_CACHE_LAYOUT_VERSION: u32 = 2;
+pub const THUMBNAIL_CACHE_LAYOUT_VERSION: u32 = 3;
 pub const MIN_THUMBNAIL_EDGE: u32 = 16;
 pub const MAX_THUMBNAIL_EDGE: u32 = 2_048;
 pub const DEFAULT_CACHE_MAX_BYTES: u64 = 1_073_741_824;
@@ -75,6 +76,8 @@ pub struct ThumbnailReady {
     pub source_size: u64,
     pub source_modified_unix_ms: i64,
     pub cache_hit: bool,
+    pub provider_id: String,
+    pub provider_version: String,
     pub decoder_version: String,
 }
 
@@ -82,11 +85,27 @@ pub struct ThumbnailReady {
 #[serde(rename_all = "kebab-case")]
 pub enum ThumbnailPlaceholderReason {
     MissingAsset,
+    CodecUnavailable,
+    PreviewUnavailable,
     UnsupportedFormat,
     Unreadable,
+    InvalidContent,
     DecodeFailed,
+    ResourceLimited,
+    TimedOut,
     SourceChanged,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PreviewProviderIdentity {
+    pub id: &'static str,
+    pub version: &'static str,
+}
+
+const BUILTIN_RASTER_PROVIDER: PreviewProviderIdentity = PreviewProviderIdentity {
+    id: BUILTIN_RASTER_PROVIDER_ID,
+    version: THUMBNAIL_DECODER_VERSION,
+};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -280,14 +299,6 @@ impl ThumbnailService {
         if !(MIN_THUMBNAIL_EDGE..=MAX_THUMBNAIL_EDGE).contains(&max_edge) {
             return Err(PreviewError::InvalidMaxEdge(max_edge));
         }
-        if record.kind != AssetKind::Image {
-            return Ok(placeholder(
-                record,
-                ThumbnailPlaceholderReason::UnsupportedFormat,
-                "asset type does not have an image thumbnail decoder".into(),
-            ));
-        }
-
         let cache_guard = self.cache.read_guard()?;
         let Some(mut version) = read_source_version(&record.path) else {
             return Ok(placeholder(
@@ -296,9 +307,16 @@ impl ThumbnailService {
                 "asset is missing or cannot be read".into(),
             ));
         };
-        let mut key = thumbnail_key(record, &version, max_edge);
+        let provider = match preview_provider(record) {
+            Ok(provider) => provider,
+            Err((reason, message)) => return Ok(placeholder(record, reason, message.into())),
+        };
+        let mut key = thumbnail_key(record, &version, max_edge, provider);
         let mut source_identity = source_token(record, &version);
-        if let Some(entry) = self.cache.lookup(&key, &source_identity, max_edge)? {
+        if let Some(entry) = self
+            .cache
+            .lookup(&key, &source_identity, max_edge, provider)?
+        {
             return Ok(ready(
                 record,
                 key,
@@ -306,6 +324,7 @@ impl ThumbnailService {
                 entry.height,
                 &version,
                 true,
+                provider,
             ));
         }
 
@@ -319,10 +338,13 @@ impl ThumbnailService {
         };
         if latest != version {
             version = latest;
-            key = thumbnail_key(record, &version, max_edge);
+            key = thumbnail_key(record, &version, max_edge, provider);
             source_identity = source_token(record, &version);
         }
-        if let Some(entry) = self.cache.lookup(&key, &source_identity, max_edge)? {
+        if let Some(entry) = self
+            .cache
+            .lookup(&key, &source_identity, max_edge, provider)?
+        {
             return Ok(ready(
                 record,
                 key,
@@ -330,6 +352,7 @@ impl ThumbnailService {
                 entry.height,
                 &version,
                 true,
+                provider,
             ));
         }
 
@@ -345,8 +368,16 @@ impl ThumbnailService {
             ));
         }
         self.cache
-            .store(&key, &source_identity, max_edge, &decoded.bytes)?;
-        let outcome = ready(record, key, decoded.width, decoded.height, &version, false);
+            .store(&key, &source_identity, max_edge, provider, &decoded.bytes)?;
+        let outcome = ready(
+            record,
+            key,
+            decoded.width,
+            decoded.height,
+            &version,
+            false,
+            provider,
+        );
         drop(cache_guard);
         self.cache.maintain_if_due()?;
         Ok(outcome)
@@ -437,7 +468,12 @@ fn unix_nanoseconds(time: SystemTime) -> i128 {
     }
 }
 
-fn thumbnail_key(record: &AssetRecord, version: &SourceVersion, max_edge: u32) -> String {
+fn thumbnail_key(
+    record: &AssetRecord,
+    version: &SourceVersion,
+    max_edge: u32,
+    provider: PreviewProviderIdentity,
+) -> String {
     let mut digest = Sha256::new();
     for part in [
         format!("path:{}", record.key),
@@ -447,7 +483,8 @@ fn thumbnail_key(record: &AssetRecord, version: &SourceVersion, max_edge: u32) -
         version.size.to_string(),
         version.modified_unix_ns.to_string(),
         max_edge.to_string(),
-        THUMBNAIL_DECODER_VERSION.into(),
+        format!("provider:{}", provider.id),
+        format!("provider-version:{}", provider.version),
     ] {
         digest.update(part.as_bytes());
         digest.update([0]);
@@ -478,6 +515,7 @@ fn ready(
     height: u32,
     version: &SourceVersion,
     cache_hit: bool,
+    provider: PreviewProviderIdentity,
 ) -> ThumbnailOutcome {
     ThumbnailOutcome::Ready {
         thumbnail: ThumbnailReady {
@@ -489,9 +527,40 @@ fn ready(
             source_size: version.size,
             source_modified_unix_ms: version.modified_unix_ms,
             cache_hit,
-            decoder_version: THUMBNAIL_DECODER_VERSION.into(),
+            provider_id: provider.id.into(),
+            provider_version: provider.version.into(),
+            decoder_version: provider.version.into(),
         },
     }
+}
+
+fn preview_provider(
+    record: &AssetRecord,
+) -> Result<PreviewProviderIdentity, (ThumbnailPlaceholderReason, &'static str)> {
+    match record.mime.as_str() {
+        "image/png" | "image/jpeg" | "image/gif" | "image/webp" => Ok(BUILTIN_RASTER_PROVIDER),
+        "image/avif" | "image/heic" | "image/heif" => Err((
+            ThumbnailPlaceholderReason::CodecUnavailable,
+            "the optional image codec is not installed in this build",
+        )),
+        "image/svg+xml" | "video/mp4" | "video/quicktime" | "video/webm" | "audio/mpeg"
+        | "audio/wav" | "audio/flac" | "application/pdf" => Err((
+            ThumbnailPlaceholderReason::PreviewUnavailable,
+            "this registered format does not yet have a preview provider",
+        )),
+        _ if record.kind != AssetKind::Other => Err((
+            ThumbnailPlaceholderReason::PreviewUnavailable,
+            "this asset type does not have a preview provider",
+        )),
+        _ => Err((
+            ThumbnailPlaceholderReason::UnsupportedFormat,
+            "asset format is not registered for previews",
+        )),
+    }
+}
+
+pub(crate) fn is_current_preview_provider(id: &str, version: &str) -> bool {
+    id == BUILTIN_RASTER_PROVIDER.id && version == BUILTIN_RASTER_PROVIDER.version
 }
 
 fn placeholder(
@@ -521,8 +590,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        CachePolicy, CacheStartupDisposition, ThumbnailOutcome, ThumbnailPlaceholderReason,
-        ThumbnailService,
+        CachePolicy, CacheStartupDisposition, THUMBNAIL_DECODER_VERSION, ThumbnailOutcome,
+        ThumbnailPlaceholderReason, ThumbnailService,
     };
 
     #[test]
@@ -607,7 +676,7 @@ mod tests {
         assert!(matches!(
             &outcome,
             ThumbnailOutcome::Placeholder {
-                reason: ThumbnailPlaceholderReason::UnsupportedFormat,
+                reason: ThumbnailPlaceholderReason::InvalidContent,
                 message,
                 ..
             } if !message.is_empty()
@@ -713,7 +782,7 @@ mod tests {
         let mut descriptor: serde_json::Value =
             serde_json::from_slice(&fs::read(&incompatible).expect("descriptor"))
                 .expect("descriptor json");
-        descriptor["decoderVersion"] = "retired-decoder".into();
+        descriptor["providerVersion"] = "retired-provider".into();
         fs::write(
             &incompatible,
             serde_json::to_vec(&descriptor).expect("descriptor bytes"),
@@ -951,9 +1020,15 @@ mod tests {
         assert_eq!(value["thumbnail"]["assetKey"], asset_key);
         assert_eq!(value["thumbnail"]["mime"], "image/png");
         assert_eq!(value["thumbnail"]["cacheHit"], false);
+        assert_eq!(value["thumbnail"]["providerId"], "builtin-raster");
+        assert_eq!(
+            value["thumbnail"]["providerVersion"],
+            THUMBNAIL_DECODER_VERSION
+        );
 
         let mut unsupported = record(&asset);
         unsupported.kind = AssetKind::Other;
+        unsupported.mime = "application/octet-stream".into();
         let value = serde_json::to_value(
             service
                 .request(&unsupported, 32)
@@ -963,6 +1038,72 @@ mod tests {
         assert_eq!(value["status"], "placeholder");
         assert_eq!(value["assetKey"], asset_key);
         assert_eq!(value["reason"], "unsupported-format");
+    }
+
+    #[test]
+    fn unavailable_optional_providers_are_distinct_from_invalid_content() {
+        let directory = tempdir().expect("tempdir");
+        let service = ThumbnailService::open(&directory.path().join("cache"), 1).expect("service");
+        let cases = [
+            (
+                "asset.avif",
+                "image/avif",
+                ThumbnailPlaceholderReason::CodecUnavailable,
+            ),
+            (
+                "asset.svg",
+                "image/svg+xml",
+                ThumbnailPlaceholderReason::PreviewUnavailable,
+            ),
+            (
+                "asset.mp4",
+                "video/mp4",
+                ThumbnailPlaceholderReason::PreviewUnavailable,
+            ),
+            (
+                "asset.pdf",
+                "application/pdf",
+                ThumbnailPlaceholderReason::PreviewUnavailable,
+            ),
+        ];
+        for (name, mime, expected) in cases {
+            let path = directory.path().join(name);
+            fs::write(&path, b"registered content").expect("write provider fixture");
+            let metadata = fs::metadata(&path).expect("metadata");
+            let record = AssetRecord::untagged(
+                path.to_string_lossy().into_owned(),
+                path,
+                mime.into(),
+                metadata.len(),
+                0,
+            );
+            assert!(matches!(
+                service.request(&record, 32).expect("provider outcome"),
+                ThumbnailOutcome::Placeholder { reason, .. } if reason == expected
+            ));
+        }
+        assert_eq!(png_files(service.cache.root()), 0);
+    }
+
+    #[test]
+    fn cache_descriptor_binds_provider_identity_and_version() {
+        let directory = tempdir().expect("tempdir");
+        let asset = directory.path().join("asset.png");
+        write_image(&asset, ImageFormat::Png);
+        let service = ThumbnailService::open(&directory.path().join("cache"), 1).expect("service");
+
+        let thumbnail = expect_ready(service.request(&record(&asset), 32).expect("thumbnail"));
+        let descriptor: serde_json::Value = serde_json::from_slice(
+            &fs::read(cache_entry_path(&service, &thumbnail.cache_key, "json"))
+                .expect("descriptor bytes"),
+        )
+        .expect("descriptor JSON");
+
+        assert_eq!(thumbnail.provider_id, "builtin-raster");
+        assert_eq!(thumbnail.provider_version, THUMBNAIL_DECODER_VERSION);
+        assert_eq!(descriptor["providerId"], thumbnail.provider_id);
+        assert_eq!(descriptor["providerVersion"], thumbnail.provider_version);
+        assert!(descriptor.get("decoderVersion").is_none());
     }
 
     fn record(path: &Path) -> AssetRecord {

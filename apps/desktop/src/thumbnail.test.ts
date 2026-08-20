@@ -21,6 +21,8 @@ describe("thumbnail commands", () => {
         sourceSize: 1024,
         sourceModifiedUnixMs: 1234,
         cacheHit: false,
+        providerId: "builtin-raster",
+        providerVersion: "test-v1",
         decoderVersion: "test-v1",
       },
     };
@@ -63,7 +65,7 @@ describe("thumbnail commands", () => {
       expiredEntries: 1,
       capacityEntries: 0,
       stats: {
-        layoutVersion: 2,
+        layoutVersion: 3,
         fileCount: 4,
         entryCount: 2,
         byteCount: 4096,
