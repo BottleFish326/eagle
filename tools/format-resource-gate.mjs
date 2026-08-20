@@ -84,10 +84,12 @@ export function analyzeFormatResourceRuns({
     cancellationAcceptedEveryRun: reports.every(
       (report) => report.cancellation?.accepted === true,
     ),
+    runs: reports,
     processTree: {
       sampleCount: samples.length,
       maxRssKiB: observedMaxRssKiB,
       limitRssKiB: maxRssKiB,
+      samples,
     },
     failures,
   };

@@ -48,6 +48,8 @@ test("accepts repeated bounded adversarial reports", () => {
   });
   assert.equal(report.accepted, true, report.failures.join("; "));
   assert.equal(report.processTree.maxRssKiB, 120);
+  assert.equal(report.runs.length, 2);
+  assert.equal(report.processTree.samples.length, 2);
 });
 
 test("rejects drift, cancellation loss, sparse samples, and excess RSS", () => {

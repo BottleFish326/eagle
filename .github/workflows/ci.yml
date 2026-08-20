@@ -428,6 +428,44 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  p3-format-evidence:
+    name: Consolidate P3-A01 and P3-A02 evidence
+    needs: [platform-paths, libheif-worker, libheif-worker-windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Download P3 format and resource evidence
+        uses: actions/download-artifact@v8
+        with:
+          pattern: p3-a0?-*-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p3-format-input
+
+      - name: Replay and consolidate P3 format evidence
+        run: >-
+          node tools/p3-format-evidence.mjs
+          --input-directory "${{ runner.temp }}/p3-format-input"
+          --output "${{ runner.temp }}/p3-format-evidence.json"
+
+      - name: Archive consolidated P3 format verdict
+        uses: actions/upload-artifact@v7
+        with:
+          name: p3-format-evidence-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p3-format-evidence.json
+          if-no-files-found: error
+          retention-days: 90
+
   packaged-desktop-worker:
     name: Packaged desktop worker (${{ matrix.os }})
     needs: [libheif-worker, libheif-worker-windows]
