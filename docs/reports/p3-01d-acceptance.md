@@ -64,9 +64,10 @@ npm run ci
 ## 5. 未关闭范围
 
 - 受控视频帧 worker、固定 PNG 参考与取消/内存/崩溃隔离（按独立决策暂缓）；
-- P3-01E 的 MP3/WAV/FLAC 属性与封面；
+- P3-01E 的 MP3/WAV/FLAC 属性与封面（后续已完成，见 `p3-01e-acceptance.md`）；
 - P3-01F 的 PDF 属性与首页预览；
 - 全格式 P3-A01 一致性和 P3-A02 超大/损坏/恶意集合正式门禁。
 
 视频帧 worker 的打包/许可决策已完成：当前保持 `unsupported-feature`，不得从 `PATH`
-调用任意 FFmpeg。下一动作是 P3-01E 音频；P3-A01、P3-A02 与 P3-01 保持未通过。
+调用任意 FFmpeg。P3-01E 后续已完成，下一动作是 P3-01F PDF；P3-A01、P3-A02 与
+P3-01 保持未通过。

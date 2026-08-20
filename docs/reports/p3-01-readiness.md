@@ -1,6 +1,6 @@
 # P3-01 扩展格式支持实施准备报告
 
-- 状态：Implementation in progress；P3-01A/B Completed locally，P3-01C Completed，P3-01D container metadata Completed locally
+- 状态：Implementation in progress；P3-01A/B/D/E Completed locally，P3-01C Completed
 - 日期：2026-08-19
 - 对应：P3-01、P3-A01、P3-A02
 - 决策：[ADR-026](../../specs/adr/026-capability-based-extended-format-pipeline.md)
@@ -10,12 +10,12 @@
 
 | 层 | 当前能力 | P3-01 缺口 |
 |---|---|---|
-| 素材模型 | 已有 image/video/audio/pdf/other 类型与可重建 `media`；视频时长、轨道数和 codec 已接线 | 音频、PDF 的专用字段仍待提供器接入 |
-| 扫描器 | 15 格式静态注册；64 KiB 内容签名优先；SVG、AVIF/HEIC 与 MP4/MOV/WebM 属性均使用有界提供器并只写派生记录 | 音频/PDF 属性仍待接入 |
-| 缩略图 | PNG/JPEG/GIF/WebP 使用 `builtin-raster`；SVG 使用 `safe-static-svg`；固定 libheif 1.23.1 backend 已从三平台成品真实输出受限 PNG；worker 缺失仍稳定降级 | 后续视频、音频与 PDF provider 尚未关闭 |
+| 素材模型 | 已有 image/video/audio/pdf/other 类型与可重建 `media`；视频和音频专用字段已接线 | PDF 专用字段仍待提供器接入 |
+| 扫描器 | 15 格式静态注册；64 KiB 内容签名优先；SVG、AVIF/HEIC、视频与音频属性均使用有界提供器并只写派生记录 | PDF 属性仍待接入 |
+| 缩略图 | raster、SVG、固定 libheif 及 MP3/FLAC 有界封面 provider 已接入；provider 缺失/无封面稳定降级 | 视频帧已暂缓，PDF provider 尚未关闭 |
 | 缓存 | provider ID/version 已进入每项 key 与 Schema 2 descriptor；layout 3 自动失效旧项 | 后续每个新增 provider 必须登记当前版本并增加失效测试 |
-| 查询/UI | `scan_root → AssetCatalog → type:` 四类测试已贯通；codec/provider 缺失显示中性类型卡片，文件故障显示错误卡片 | 视频帧、音频与 PDF 真实预览仍待接入 |
-| 夹具 | SVG、AVIF/HEIC 和 9 个正常/对抗视频容器夹具均具真实 SHA-256 与三平台期望 | 仍需补齐 SVG 超大正式资源证据、视频帧参考及音频/PDF 夹具 |
+| 查询/UI | `scan_root → AssetCatalog → type:` 四类测试已贯通；codec/provider 缺失显示中性类型卡片，音频封面可进入既有缩略图 UI，文件故障显示错误卡片 | 视频帧与 PDF 真实预览仍待接入 |
+| 夹具 | SVG、AVIF/HEIC、9 个视频和 10 个音频正常/对抗夹具均具真实 SHA-256 与三平台期望 | 仍需补齐 SVG 超大正式资源证据及 PDF 夹具；视频帧按决策暂缓 |
 
 核心结论：P3-01 第一片必须先取消“只有可解码图片才是素材”的假设，而不是先给 UI 增加扩展名图标。
 
@@ -33,7 +33,7 @@
 ## 3. 门禁状态
 
 本报告不表示 P3-01 已完成。阶段 2 最终退出收据已接受，P3-01A/P3-01B 本地门禁和
-P3-01C 托管门禁和 P3-01D 容器属性本地门禁已经关闭；可选视频帧 worker、P3-01E/F、
+P3-01C 托管门禁和 P3-01D/E 本地门禁已经关闭；可选视频帧 worker、P3-01F、
 全格式期望矩阵和完整恶意夹具资源证据尚未完成。
 
 阶段门禁已结束，但设计文档、交叉编译或 codec 库能力说明仍不得计作 P3-A01/P3-A02 通过；必须由后续代码、夹具和机器证据验收。
@@ -91,5 +91,13 @@ MP4/MOV/WebM 已使用只启用 `isomp4`/`mkv` demuxer 的 Symphonia 0.6.1 提�
 256 轨道、365 天时长、65,535 单边和扫描 deadline 均已接线；9 个确定性正常/截断/
 伪装/未知 codec/超限夹具进入清单。详情见 `p3-01d-acceptance.md`。
 
-视频帧 worker 仍作为独立可选切片等待打包/许可决策；本报告不判定 P3-A01、P3-A02
-或 P3-01 通过。
+视频帧 worker 已按独立发行边界决策暂缓；本报告不判定 P3-A01、P3-A02 或 P3-01 通过。
+
+## 8. P3-01E 音频实施结果
+
+MP3/WAV 使用精确锁定且关闭默认 feature 的 Symphonia 0.6.1 读取容器/ID3 属性，FLAC
+使用只读有界 metadata-block walker；三者均不解码或播放音频 sample。32 MiB I/O、
+4,096 元素/seek、16 MiB tag/封面、365 天、768 kHz、64 声道、64 bit 和扫描 deadline
+均已接线。`embedded-mp3-cover` / `embedded-flac-cover` 只向派生缓存输出验证后的 PNG，
+无封面保持音频卡片。10 个正常/截断/伪装/未知 codec/超限夹具进入清单，详情见
+`p3-01e-acceptance.md`。下一动作是 P3-01F；完整 P3-A01/P3-A02 仍未通过。

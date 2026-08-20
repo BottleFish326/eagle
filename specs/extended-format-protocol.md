@@ -168,6 +168,14 @@ deadline 已接线。9 个正常/截断/伪装/未知 codec/超限夹具进入�
 - MP3/WAV/FLAC 时长、采样率、声道和有界封面；
 - 无封面、损坏标签、未知编码都保留音频卡片。
 
+实施状态（2026-08-21）：**Completed locally**。MP3/WAV 使用精确锁定、关闭默认 feature
+的 Symphonia 0.6.1；FLAC 使用只读 metadata-block walker，三者均不解码或播放音频
+sample。ID3/RIFF/FLAC 结构预检、32 MiB I/O、4,096 元素/seek、16 MiB tag/封面、
+365 天、768 kHz、64 声道、64 bit 和扫描 deadline 已接线。MP3/FLAC 封面由版本化
+provider 验证后只写派生缓存；无封面、未知 WAV codec、损坏/超限输入分别稳定降级。
+10 个确定性夹具已进入三平台 `core-only` 清单并证明扫描/预览不修改素材或 Sidecar。
+详情见 `docs/reports/p3-01e-acceptance.md`；完整 P3-A01/P3-A02 仍未通过。
+
 ### P3-01F：PDF
 
 - 页数与首页面尺寸；Pdfium worker/缺失两条路径；
