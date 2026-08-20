@@ -1,0 +1,595 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "gitCommit": "8a0fc304f12fb65931d15aac1831e96d60643dac",
+  "rootId": "019b76c0-0000-7000-8000-000000000001",
+  "sourceDigestBefore": "97353d6a1f4d17e2ad43722b368a13fd7df56bacf7173a07d3e40bacac314782",
+  "sourceDigestAfter": "97353d6a1f4d17e2ad43722b368a13fd7df56bacf7173a07d3e40bacac314782",
+  "copiedAssetDigestBefore": "97353d6a1f4d17e2ad43722b368a13fd7df56bacf7173a07d3e40bacac314782",
+  "copiedAssetDigestAfter": "97353d6a1f4d17e2ad43722b368a13fd7df56bacf7173a07d3e40bacac314782",
+  "sourceFiles": [
+    {
+      "relativePath": "svg/minimal.svg",
+      "sha256Before": "2dd0cf9a77785da7f51a7f17f2a851d3ff942f7ef0335dcc245eb092b06123e2",
+      "sha256After": "2dd0cf9a77785da7f51a7f17f2a851d3ff942f7ef0335dcc245eb092b06123e2"
+    },
+    {
+      "relativePath": "video/minimal.mp4",
+      "sha256Before": "cd0afa56bd2bc1de676a74cafe26982f0b1aa35865c7b8f743b3f64fcd4a6868",
+      "sha256After": "cd0afa56bd2bc1de676a74cafe26982f0b1aa35865c7b8f743b3f64fcd4a6868"
+    },
+    {
+      "relativePath": "video/minimal.mov",
+      "sha256Before": "54db7d19537c730754aadba7aea75c20f57b0b45a33227cb275b2c433b71f3aa",
+      "sha256After": "54db7d19537c730754aadba7aea75c20f57b0b45a33227cb275b2c433b71f3aa"
+    },
+    {
+      "relativePath": "video/minimal.webm",
+      "sha256Before": "23a8beee9feed2ea0e22e3273a87a59bde706e0ffa58aacb78aec8f62cb430b8",
+      "sha256After": "23a8beee9feed2ea0e22e3273a87a59bde706e0ffa58aacb78aec8f62cb430b8"
+    },
+    {
+      "relativePath": "audio/minimal.mp3",
+      "sha256Before": "7ce0d9e7c07e9237625ef45289858da8881dfcd859aff54f9df889002c8dca92",
+      "sha256After": "7ce0d9e7c07e9237625ef45289858da8881dfcd859aff54f9df889002c8dca92"
+    },
+    {
+      "relativePath": "audio/minimal.wav",
+      "sha256Before": "56d4af65701c26df20bd4021eda95b6e830348ce3a746086079fe89285548dc9",
+      "sha256After": "56d4af65701c26df20bd4021eda95b6e830348ce3a746086079fe89285548dc9"
+    },
+    {
+      "relativePath": "audio/minimal.flac",
+      "sha256Before": "30ac785f90af8916d295217ab0107c4db491c31a121c47b3b74d2d46e49ada3b",
+      "sha256After": "30ac785f90af8916d295217ab0107c4db491c31a121c47b3b74d2d46e49ada3b"
+    },
+    {
+      "relativePath": "pdf/minimal.pdf",
+      "sha256Before": "c196c38ef7375019a3f80649c53a1733356b009b6c1a4445f064d53f0b688210",
+      "sha256After": "c196c38ef7375019a3f80649c53a1733356b009b6c1a4445f064d53f0b688210"
+    }
+  ],
+  "sidecarCount": 8,
+  "scannedRecordCount": 8,
+  "scanProblemCount": 0,
+  "records": [
+    {
+      "relativePath": "audio/minimal.flac",
+      "stableId": "019b76c0-1000-7000-8000-000000000007",
+      "kind": "audio",
+      "size": 42,
+      "width": null,
+      "height": null,
+      "durationMs": 1000,
+      "pageCount": null,
+      "rating": 0,
+      "favorite": false,
+      "hasNote": false,
+      "tags": [
+        "media/audio",
+        "project/eagle"
+      ]
+    },
+    {
+      "relativePath": "audio/minimal.mp3",
+      "stableId": "019b76c0-1000-7000-8000-000000000005",
+      "kind": "audio",
+      "size": 8350,
+      "width": null,
+      "height": null,
+      "durationMs": 521,
+      "pageCount": null,
+      "rating": 1,
+      "favorite": false,
+      "hasNote": false,
+      "tags": [
+        "media/audio",
+        "project/eagle"
+      ]
+    },
+    {
+      "relativePath": "audio/minimal.wav",
+      "stableId": "019b76c0-1000-7000-8000-000000000006",
+      "kind": "audio",
+      "size": 16044,
+      "width": null,
+      "height": null,
+      "durationMs": 1000,
+      "pageCount": null,
+      "rating": 4,
+      "favorite": true,
+      "hasNote": true,
+      "tags": [
+        "media/audio",
+        "project/eagle"
+      ]
+    },
+    {
+      "relativePath": "pdf/minimal.pdf",
+      "stableId": "019b76c0-1000-7000-8000-000000000008",
+      "kind": "pdf",
+      "size": 511,
+      "width": 612,
+      "height": 792,
+      "durationMs": null,
+      "pageCount": 2,
+      "rating": 5,
+      "favorite": true,
+      "hasNote": true,
+      "tags": [
+        "media/document",
+        "project/eagle"
+      ]
+    },
+    {
+      "relativePath": "svg/minimal.svg",
+      "stableId": "019b76c0-1000-7000-8000-000000000001",
+      "kind": "image",
+      "size": 116,
+      "width": 16,
+      "height": 16,
+      "durationMs": null,
+      "pageCount": null,
+      "rating": 5,
+      "favorite": true,
+      "hasNote": true,
+      "tags": [
+        "project/eagle",
+        "usage/hero"
+      ]
+    },
+    {
+      "relativePath": "video/minimal.mov",
+      "stableId": "019b76c0-1000-7000-8000-000000000003",
+      "kind": "video",
+      "size": 972,
+      "width": 320,
+      "height": 180,
+      "durationMs": 2000,
+      "pageCount": null,
+      "rating": 3,
+      "favorite": false,
+      "hasNote": false,
+      "tags": [
+        "media/video",
+        "project/eagle"
+      ]
+    },
+    {
+      "relativePath": "video/minimal.mp4",
+      "stableId": "019b76c0-1000-7000-8000-000000000002",
+      "kind": "video",
+      "size": 976,
+      "width": 320,
+      "height": 180,
+      "durationMs": 2000,
+      "pageCount": null,
+      "rating": 4,
+      "favorite": true,
+      "hasNote": true,
+      "tags": [
+        "media/video",
+        "project/eagle"
+      ]
+    },
+    {
+      "relativePath": "video/minimal.webm",
+      "stableId": "019b76c0-1000-7000-8000-000000000004",
+      "kind": "video",
+      "size": 179,
+      "width": 320,
+      "height": 180,
+      "durationMs": 2000,
+      "pageCount": null,
+      "rating": 2,
+      "favorite": false,
+      "hasNote": false,
+      "tags": [
+        "media/video",
+        "project/eagle"
+      ]
+    }
+  ],
+  "queryCases": [
+    {
+      "id": "all",
+      "expression": "",
+      "expectedRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "tag",
+      "expression": "project/eagle",
+      "expectedRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "rating",
+      "expression": "rating:>=4",
+      "expectedRelativePaths": [
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mp4"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mp4"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "favorite",
+      "expression": "favorite:true",
+      "expectedRelativePaths": [
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mp4"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mp4"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "note",
+      "expression": "has-note:true",
+      "expectedRelativePaths": [
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mp4"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mp4"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "image",
+      "expression": "type:image",
+      "expectedRelativePaths": [
+        "svg/minimal.svg"
+      ],
+      "actualRelativePaths": [
+        "svg/minimal.svg"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "video",
+      "expression": "type:video",
+      "expectedRelativePaths": [
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "audio",
+      "expression": "type:audio",
+      "expectedRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "pdf",
+      "expression": "type:pdf",
+      "expectedRelativePaths": [
+        "pdf/minimal.pdf"
+      ],
+      "actualRelativePaths": [
+        "pdf/minimal.pdf"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "width",
+      "expression": "width:>=300",
+      "expectedRelativePaths": [
+        "pdf/minimal.pdf",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "pdf/minimal.pdf",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "landscape",
+      "expression": "orientation:landscape",
+      "expectedRelativePaths": [
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "aspect",
+      "expression": "aspect:16/9",
+      "expectedRelativePaths": [
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "duration",
+      "expression": "duration:>=1s",
+      "expectedRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.wav",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.wav",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "pages",
+      "expression": "pages:>=2",
+      "expectedRelativePaths": [
+        "pdf/minimal.pdf"
+      ],
+      "actualRelativePaths": [
+        "pdf/minimal.pdf"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "root",
+      "expression": "root:019b76c0-0000-7000-8000-000000000001",
+      "expectedRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "path",
+      "expression": "path:\"video/\"",
+      "expectedRelativePaths": [
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "size",
+      "expression": "size:>0",
+      "expectedRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "modified",
+      "expression": "modified:<2100-01-01T00:00:00Z",
+      "expectedRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "color-unknown",
+      "expression": "color-space:unknown",
+      "expectedRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    },
+    {
+      "id": "alpha-unknown",
+      "expression": "has-alpha:unknown",
+      "expectedRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "actualRelativePaths": [
+        "audio/minimal.flac",
+        "audio/minimal.mp3",
+        "audio/minimal.wav",
+        "pdf/minimal.pdf",
+        "svg/minimal.svg",
+        "video/minimal.mov",
+        "video/minimal.mp4",
+        "video/minimal.webm"
+      ],
+      "accepted": true
+    }
+  ],
+  "invalidCases": [
+    {
+      "id": "unit",
+      "expression": "size:10MB",
+      "expectedKind": "invalid-unit",
+      "expectedOffset": 0,
+      "actualKind": "invalid-unit",
+      "actualOffset": 0,
+      "accepted": true
+    },
+    {
+      "id": "path",
+      "expression": "path:\"../escape\"",
+      "expectedKind": "invalid-path",
+      "expectedOffset": 0,
+      "actualKind": "invalid-path",
+      "actualOffset": 0,
+      "accepted": true
+    },
+    {
+      "id": "conflict",
+      "expression": "width:unknown width:>=1",
+      "expectedKind": "conflicting-value",
+      "expectedOffset": 14,
+      "actualKind": "conflicting-value",
+      "actualOffset": 14,
+      "accepted": true
+    }
+  ],
+  "failures": []
+}
