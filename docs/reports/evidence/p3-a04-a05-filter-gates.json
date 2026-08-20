@@ -1,0 +1,212 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "failures": [],
+  "gitCommit": "06736488acfe06ecbddabc27a2c595396fbf6d3a",
+  "executedAt": "2026-08-20T23:15:27.741Z",
+  "repositoryClean": true,
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "nodeVersion": "v24.19.0",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)"
+  },
+  "build": {
+    "command": "cargo build --locked --release -p p3-filter-gate",
+    "binarySha256": "f3860287633c95766e74c25a669cb46b8460dcc9cc6d9f2d7aeaf1495405735d"
+  },
+  "p3A04": {
+    "seed": {
+      "schema": 1,
+      "activeRootId": "019b76d0-0000-7000-8000-000000000001",
+      "offlineRootId": "019b76d0-0000-7000-8000-000000000002",
+      "assetCount": 4,
+      "savedFilterCount": 2,
+      "cacheCreated": true
+    },
+    "mutation": {
+      "assetCount": 5,
+      "schema": 1
+    },
+    "cacheRemoved": true,
+    "verify": {
+      "schema": 1,
+      "accepted": true,
+      "scannedAssetCount": 5,
+      "scanProblemCount": 0,
+      "allEnabledMatchCount": 4,
+      "selectedRootsMatchCount": 5,
+      "selectedMissingRootCount": 1,
+      "cacheAbsent": true,
+      "resultSnapshotAbsent": true,
+      "sourceSha256Unchanged": true
+    },
+    "adversarial": {
+      "schema": 1,
+      "accepted": true,
+      "validCount": 1,
+      "unavailableCount": 1,
+      "invalidCount": 6,
+      "unknownFieldsPreserved": true,
+      "externalChangeBlocked": true,
+      "externalBytesPreserved": true
+    }
+  },
+  "p3A05": {
+    "assetCount": 64,
+    "sidecarAbortAfterApplied": 17,
+    "faultCases": [
+      {
+        "point": "coordinator-written",
+        "action": "restore",
+        "abort": {
+          "status": null,
+          "signal": "SIGABRT",
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "recovery": {
+          "schema": 1,
+          "operationId": "01a02175-1aed-7b93-ae19-13ee248bff4a",
+          "state": "restored",
+          "filterOutcome": "restored",
+          "action": "restore",
+          "assetCount": 64,
+          "sourceSha256Unchanged": true,
+          "externalFilterPreserved": true,
+          "externalSidecarPreserved": true
+        }
+      },
+      {
+        "point": "sidecars-mid",
+        "action": "continue",
+        "abort": {
+          "status": null,
+          "signal": "SIGABRT",
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "recovery": {
+          "schema": 1,
+          "operationId": "01a02175-1df7-7fe0-a7d7-b8560b76d691",
+          "state": "completed",
+          "filterOutcome": "updated",
+          "action": "continue",
+          "assetCount": 64,
+          "sourceSha256Unchanged": true,
+          "externalFilterPreserved": true,
+          "externalSidecarPreserved": true
+        }
+      },
+      {
+        "point": "sidecars-completed",
+        "action": "restore",
+        "abort": {
+          "status": null,
+          "signal": "SIGABRT",
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "recovery": {
+          "schema": 1,
+          "operationId": "01a02175-2322-74d1-a7c5-383d9f895dab",
+          "state": "restored",
+          "filterOutcome": "restored",
+          "action": "restore",
+          "assetCount": 64,
+          "sourceSha256Unchanged": true,
+          "externalFilterPreserved": true,
+          "externalSidecarPreserved": true
+        }
+      },
+      {
+        "point": "filter-before-replace",
+        "action": "retain",
+        "abort": {
+          "status": null,
+          "signal": "SIGABRT",
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "recovery": {
+          "schema": 1,
+          "operationId": "01a02175-2a8a-7160-a6aa-8549faa7043d",
+          "state": "completed",
+          "filterOutcome": "retained",
+          "action": "retain",
+          "assetCount": 64,
+          "sourceSha256Unchanged": true,
+          "externalFilterPreserved": true,
+          "externalSidecarPreserved": true
+        }
+      },
+      {
+        "point": "filter-after-replace",
+        "action": "restore",
+        "abort": {
+          "status": null,
+          "signal": "SIGABRT",
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "recovery": {
+          "schema": 1,
+          "operationId": "01a02175-2fac-7682-83f2-6cdd3cc48ad3",
+          "state": "restored",
+          "filterOutcome": "restored",
+          "action": "restore",
+          "assetCount": 64,
+          "sourceSha256Unchanged": true,
+          "externalFilterPreserved": true,
+          "externalSidecarPreserved": true
+        }
+      }
+    ],
+    "externalCases": [
+      {
+        "target": "filter",
+        "faultPoint": "filter-before-replace",
+        "abort": {
+          "status": null,
+          "signal": "SIGABRT",
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "recovery": {
+          "schema": 1,
+          "operationId": "01a02175-3728-7a13-a2a9-d204fc3eb905",
+          "state": "conflict",
+          "filterOutcome": "pending",
+          "action": "restore",
+          "assetCount": 64,
+          "sourceSha256Unchanged": true,
+          "externalFilterPreserved": true,
+          "externalSidecarPreserved": true
+        }
+      },
+      {
+        "target": "sidecar",
+        "faultPoint": "filter-after-replace",
+        "abort": {
+          "status": null,
+          "signal": "SIGABRT",
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "recovery": {
+          "schema": 1,
+          "operationId": "01a02175-3c2c-7b52-acce-e79a8463690f",
+          "state": "conflict",
+          "filterOutcome": "updated",
+          "action": "restore",
+          "assetCount": 64,
+          "sourceSha256Unchanged": true,
+          "externalFilterPreserved": true,
+          "externalSidecarPreserved": true
+        }
+      }
+    ]
+  },
+  "temporaryWorkspacesRemoved": true
+}
