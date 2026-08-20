@@ -9,6 +9,7 @@ import { writeJsonAtomic } from "./resource-stability-checkpoint.mjs";
 const repository = path.resolve(import.meta.dirname, "..");
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 const DEFAULT_MAX_RSS_KIB = 512 * 1024;
+const OBSERVER_HOLD_MS = 100;
 const runFile = promisify(execFile);
 
 export function analyzeFormatResourceRuns({
@@ -56,8 +57,23 @@ export function analyzeFormatResourceRuns({
       Number.isFinite(sample.elapsedMs) &&
       sample.elapsedMs >= 0,
   );
-  if (samples.length < reports.length) {
-    failures.push("process-tree RSS sampling was too sparse");
+  const sampledIterations = new Set(
+    samples
+      .map((sample) => sample.iteration)
+      .filter(
+        (iteration) =>
+          Number.isSafeInteger(iteration) &&
+          iteration >= 1 &&
+          iteration <= reports.length,
+      ),
+  );
+  const missingIterations = reports
+    .map((_, index) => index + 1)
+    .filter((iteration) => !sampledIterations.has(iteration));
+  if (missingIterations.length > 0) {
+    failures.push(
+      `process-tree RSS sampling missed iteration(s): ${missingIterations.join(", ")}`,
+    );
   }
   const observedMaxRssKiB = samples.reduce(
     (maximum, sample) => Math.max(maximum, sample.rssKiB),
@@ -225,6 +241,8 @@ async function runFormatGate({ executable, options }) {
     path.join(repository, "fixtures", "formats", "manifest.json"),
     "--provider-profile",
     options.providerProfile,
+    "--observer-hold-ms",
+    String(OBSERVER_HOLD_MS),
   ];
   if (options.workerBundle !== undefined) {
     arguments_.push("--worker-bundle", path.resolve(options.workerBundle));

@@ -58,8 +58,8 @@ test("accepts repeated bounded adversarial reports", () => {
   const report = analyzeFormatResourceRuns({
     reports: [acceptedReport(), acceptedReport()],
     rssSamples: [
-      { elapsedMs: 0, rssKiB: 100 },
-      { elapsedMs: 20, rssKiB: 120 },
+      { elapsedMs: 0, rssKiB: 100, iteration: 1 },
+      { elapsedMs: 20, rssKiB: 120, iteration: 2 },
     ],
     maxRssKiB: 200,
     repositoryState: { gitCommit: "b".repeat(40), dirty: false },
@@ -72,13 +72,13 @@ test("accepts repeated bounded adversarial reports", () => {
   assert.equal(report.processTree.samples.length, 2);
 });
 
-test("rejects drift, cancellation loss, sparse samples, and excess RSS", () => {
+test("rejects drift, cancellation loss, missing iteration samples, and excess RSS", () => {
   const changed = acceptedReport();
   changed.sourceDigestUnchanged = false;
   changed.cancellation.accepted = false;
   const report = analyzeFormatResourceRuns({
     reports: [acceptedReport(), changed],
-    rssSamples: [{ elapsedMs: 0, rssKiB: 300 }],
+    rssSamples: [{ elapsedMs: 0, rssKiB: 300, iteration: 1 }],
     maxRssKiB: 200,
     repositoryState: { gitCommit: "b".repeat(40), dirty: true },
     providerProfile: "core-only",
@@ -90,6 +90,8 @@ test("rejects drift, cancellation loss, sparse samples, and excess RSS", () => {
   assert.ok(
     report.failures.some((failure) => failure.includes("cancellation")),
   );
-  assert.ok(report.failures.some((failure) => failure.includes("sparse")));
+  assert.ok(
+    report.failures.some((failure) => failure.includes("iteration(s): 2")),
+  );
   assert.ok(report.failures.some((failure) => failure.includes("RSS")));
 });

@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
-use std::time::Instant;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use asset_core::{AssetIssue, AssetKind, AssetRecord};
@@ -20,6 +21,7 @@ use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
 const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
+const MAX_OBSERVER_HOLD_MS: u64 = 1_000;
 
 #[derive(Debug, Parser)]
 #[command(about = "Replay the extended-format manifest against scanner and preview runtime")]
@@ -30,6 +32,8 @@ struct Cli {
     provider_profile: String,
     #[arg(long)]
     worker_bundle: Option<PathBuf>,
+    #[arg(long, default_value_t = 0)]
+    observer_hold_ms: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -135,12 +139,26 @@ struct ActualCapability {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    if cli.observer_hold_ms > MAX_OBSERVER_HOLD_MS {
+        eprintln!(
+            "format gate could not run: --observer-hold-ms must not exceed {MAX_OBSERVER_HOLD_MS}"
+        );
+        return ExitCode::FAILURE;
+    }
+    let started = Instant::now();
     match run_gate(
         &cli.manifest,
         &cli.provider_profile,
         cli.worker_bundle.as_deref(),
     ) {
         Ok(report) => {
+            let hold = Duration::from_millis(cli.observer_hold_ms);
+            if let Some(remaining) = hold.checked_sub(started.elapsed()) {
+                // The resource gate samples this test-only process tree externally. Very fast
+                // core-only runs must remain observable long enough for every iteration to
+                // produce an OS RSS sample; product scan and preview behavior is already done.
+                thread::sleep(remaining);
+            }
             println!(
                 "{}",
                 serde_json::to_string_pretty(&report).expect("gate report serialization")

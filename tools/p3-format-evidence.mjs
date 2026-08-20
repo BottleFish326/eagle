@@ -202,6 +202,10 @@ function validateResourceReport(
   context,
 ) {
   const report = source.report;
+  if (report.schema !== 1) failures.push(`${label} has an unsupported schema`);
+  if (report.accepted !== true || report.failures?.length !== 0) {
+    failures.push(`${label} resource gate was not accepted without failures`);
+  }
   if (report.gitCommit !== context.gitCommit) {
     failures.push(`${label} reports the wrong Git commit`);
   }

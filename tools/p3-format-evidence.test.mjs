@@ -67,9 +67,9 @@ function sources() {
       const resource = analyzeFormatResourceRuns({
         reports: runs,
         rssSamples: [
-          { elapsedMs: 0, rssKiB: 100 },
-          { elapsedMs: 10, rssKiB: 120 },
-          { elapsedMs: 20, rssKiB: 110 },
+          { elapsedMs: 0, rssKiB: 100, iteration: 1 },
+          { elapsedMs: 10, rssKiB: 120, iteration: 2 },
+          { elapsedMs: 20, rssKiB: 110, iteration: 3 },
         ],
         repositoryState: { gitCommit: commit, dirty: false },
         providerProfile: profile,
@@ -125,5 +125,31 @@ test("rejects missing, cross-commit, and summary-tampered evidence", () => {
   );
   assert.ok(
     report.failures.some((failure) => failure.includes("raw-sample replay")),
+  );
+});
+
+test("rejects a self-consistent resource report whose gate failed", () => {
+  const evidence = sources();
+  const resource = evidence.find((source) =>
+    source.artifactName.startsWith("p3-a02-"),
+  );
+  resource.report = analyzeFormatResourceRuns({
+    reports: resource.report.runs,
+    rssSamples: resource.report.processTree.samples.filter(
+      (sample) => sample.iteration !== 3,
+    ),
+    repositoryState: { gitCommit: commit, dirty: false },
+    providerProfile: "core-only",
+    environment: resource.report.environment,
+  });
+  const report = analyzeP3FormatEvidence({
+    sources: evidence,
+    context: context(),
+  });
+  assert.equal(report.accepted, false);
+  assert.ok(
+    report.failures.some((failure) =>
+      failure.includes("resource gate was not accepted"),
+    ),
   );
 });
