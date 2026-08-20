@@ -13,7 +13,11 @@ pub use advanced::{
     InstantField, IntegerField, NullableBoolean, Orientation, RangeBound, RangeConstraint, Ratio,
     RatioField, UnknownField,
 };
-pub use query::{AssetQuery, QueryParseError, QueryParseErrorKind, parse_query};
+pub use query::{
+    AssetQuery, QueryByteSpan, QueryParseError, QueryParseErrorKind, QueryTagNode,
+    QueryTagNodeKind, QueryTagRewrite, QueryTagRewriteError, TagRenameMode, parse_query,
+    parse_query_with_tag_nodes, rewrite_query_tag,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

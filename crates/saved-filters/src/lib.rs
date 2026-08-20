@@ -5,8 +5,10 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use asset_core::AssetRecord;
+pub use asset_index::TagRenameMode;
 use asset_index::{
-    AssetIndex, AssetSort, AssetSortDirection, AssetSortField, QueryParseErrorKind, parse_query,
+    AssetIndex, AssetSort, AssetSortDirection, AssetSortField, QueryParseErrorKind,
+    QueryTagRewriteError, parse_query, rewrite_query_tag,
 };
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -210,6 +212,74 @@ pub struct SavedFilterExecutionError {
     pub offset: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SavedFilterTagImpactStatus {
+    UpdateAvailable,
+    RetainOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SavedFilterTagImpactDiagnostic {
+    InvalidEntry,
+    InvalidQuery,
+    RewriteFailed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedFilterTagImpact {
+    pub index: usize,
+    pub filter_id: Option<Uuid>,
+    pub name: Option<String>,
+    pub before_query: String,
+    pub after_query: Option<String>,
+    pub node_count: usize,
+    pub status: SavedFilterTagImpactStatus,
+    pub diagnostic: Option<SavedFilterTagImpactDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedFilterTagRenamePreview {
+    pub file_version: SavedFilterFileVersion,
+    pub old_tag: String,
+    pub new_tag: String,
+    pub mode: TagRenameMode,
+    pub impacts: Vec<SavedFilterTagImpact>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SavedFilterTagChoiceAction {
+    Update,
+    Retain,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedFilterTagChoice {
+    pub filter_id: Uuid,
+    pub action: SavedFilterTagChoiceAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedFilterTagRewriteInput {
+    pub old_tag: String,
+    pub new_tag: String,
+    pub mode: TagRenameMode,
+    pub choices: Vec<SavedFilterTagChoice>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedFilterTagRewriteMutation {
+    pub file_version: SavedFilterFileVersion,
+    pub updated_filters: Vec<SavedFilter>,
+}
+
 /// Re-parses and executes a saved expression against current runtime records.
 ///
 /// The returned keys are an ephemeral view. Neither records nor result keys are
@@ -306,6 +376,8 @@ pub enum SavedFilterStoreError {
     AmbiguousId,
     #[error("saved filter mutation is invalid")]
     InvalidMutation(Vec<SavedFilterEntryIssueKind>),
+    #[error("saved filter Tag rewrite failed: {0}")]
+    TagRewrite(#[source] QueryTagRewriteError),
     #[error("saved filter catalog already contains {MAX_SAVED_FILTERS} entries")]
     TooManyFilters,
     #[error("cannot serialize saved filters: {0}")]
@@ -429,6 +501,132 @@ impl SavedFilterStore {
         let index = unique_filter_index(&document, id)?;
         filters_mut(&mut document)?.remove(index);
         self.write_document(document, &current, None)
+    }
+
+    /// Computes exact AST-based filter impacts without changing the YAML file.
+    ///
+    /// Invalid queries are returned as retain-only diagnostics. Fields, paths,
+    /// free text, same-prefix Tags, and exact-renames of namespace wildcards are
+    /// never listed as affected nodes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for I/O/top-level YAML failures or invalid Tag rename
+    /// inputs. Individual invalid entries remain isolated in the preview.
+    pub fn preview_tag_rename(
+        &self,
+        old_tag: &str,
+        new_tag: &str,
+        mode: TagRenameMode,
+    ) -> Result<SavedFilterTagRenamePreview, SavedFilterStoreError> {
+        rewrite_query_tag("", old_tag, new_tag, mode).map_err(SavedFilterStoreError::TagRewrite)?;
+        let (document, version) = self.read_document()?;
+        Ok(analyze_tag_impacts(
+            &document, version, old_tag, new_tag, mode,
+        ))
+    }
+
+    /// Applies explicit update/retain choices as one version-checked YAML write.
+    ///
+    /// This low-level operation only changes `saved-filters.yml`; the Tag rename
+    /// coordinator calls it after Sidecar transaction state has been recorded.
+    /// Callers must provide one choice for every updateable impacted filter.
+    /// Retain-only invalid entries are never writable.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale versions, incomplete/duplicate choices, rewrite drift, and
+    /// any candidate that makes an updated filter invalid.
+    pub fn apply_tag_rewrite(
+        &self,
+        expected: &SavedFilterFileVersion,
+        input: SavedFilterTagRewriteInput,
+    ) -> Result<SavedFilterTagRewriteMutation, SavedFilterStoreError> {
+        rewrite_query_tag("", &input.old_tag, &input.new_tag, input.mode)
+            .map_err(SavedFilterStoreError::TagRewrite)?;
+        let (mut document, current) = self.mutable_document(expected)?;
+        let preview = analyze_tag_impacts(
+            &document,
+            current.clone(),
+            &input.old_tag,
+            &input.new_tag,
+            input.mode,
+        );
+        let updateable = preview
+            .impacts
+            .iter()
+            .filter(|impact| impact.status == SavedFilterTagImpactStatus::UpdateAvailable)
+            .filter_map(|impact| impact.filter_id.map(|id| (id, impact)))
+            .collect::<BTreeMap<_, _>>();
+        let mut choices = BTreeMap::new();
+        for choice in input.choices {
+            if choices.insert(choice.filter_id, choice.action).is_some()
+                || !updateable.contains_key(&choice.filter_id)
+            {
+                return Err(invalid_tag_choice());
+            }
+        }
+        if choices.len() != updateable.len()
+            || updateable.keys().any(|id| !choices.contains_key(id))
+        {
+            return Err(invalid_tag_choice());
+        }
+        let update_ids = choices
+            .iter()
+            .filter_map(|(id, action)| {
+                (*action == SavedFilterTagChoiceAction::Update).then_some(*id)
+            })
+            .collect::<BTreeSet<_>>();
+        if update_ids.is_empty() {
+            return Ok(SavedFilterTagRewriteMutation {
+                file_version: current,
+                updated_filters: Vec::new(),
+            });
+        }
+
+        let updated_at = timestamp(Utc::now());
+        for id in &update_ids {
+            let Some(impact) = updateable.get(id) else {
+                return Err(invalid_tag_choice());
+            };
+            let Some(after_query) = impact.after_query.clone() else {
+                return Err(invalid_tag_choice());
+            };
+            let index = unique_filter_index(&document, *id)?;
+            let mapping = filter_mapping_mut(&mut document, index)?;
+            mapping.insert(Value::String("query".into()), Value::String(after_query));
+            mapping.insert(
+                Value::String("updatedAt".into()),
+                Value::String(updated_at.clone()),
+            );
+        }
+        let analysis = analyze_document(&document, current.clone(), &BTreeSet::new());
+        if update_ids.iter().any(|id| {
+            analysis
+                .invalid_entries
+                .iter()
+                .any(|entry| entry.id == Some(*id))
+        }) {
+            return Err(SavedFilterStoreError::InvalidMutation(vec![
+                SavedFilterEntryIssueKind::InvalidQuery,
+            ]));
+        }
+        let updated_filters = analysis
+            .valid_filters
+            .into_iter()
+            .chain(
+                analysis
+                    .unavailable_filters
+                    .into_iter()
+                    .map(|entry| entry.filter),
+            )
+            .filter(|filter| update_ids.contains(&filter.id))
+            .collect::<Vec<_>>();
+        let written = self.write_document(document, &current, None)?;
+        Ok(SavedFilterTagRewriteMutation {
+            file_version: written.file_version,
+            updated_filters,
+        })
     }
 
     fn create_at(
@@ -622,6 +820,22 @@ impl SavedFilterStore {
         }
     }
 
+    fn read_document(&self) -> Result<(Value, SavedFilterFileVersion), SavedFilterStoreError> {
+        match self.read_file()? {
+            ReadSavedFilterFile::Missing => Ok((
+                default_document(),
+                SavedFilterFileVersion::expected_absent(),
+            )),
+            ReadSavedFilterFile::TooLarge(_) => Err(SavedFilterStoreError::InvalidFile(
+                SavedFilterFileIssueKind::FileTooLarge,
+            )),
+            ReadSavedFilterFile::Present { version, bytes } => Ok((
+                parse_document(&bytes).map_err(SavedFilterStoreError::InvalidFile)?,
+                version,
+            )),
+        }
+    }
+
     fn read_file(&self) -> Result<ReadSavedFilterFile, SavedFilterStoreError> {
         let metadata = match fs::symlink_metadata(&self.path) {
             Ok(metadata) => metadata,
@@ -718,6 +932,98 @@ impl SavedFilterStore {
             bytes,
         })
     }
+}
+
+fn analyze_tag_impacts(
+    document: &Value,
+    file_version: SavedFilterFileVersion,
+    old_tag: &str,
+    new_tag: &str,
+    mode: TagRenameMode,
+) -> SavedFilterTagRenamePreview {
+    let analysis = analyze_document(document, file_version.clone(), &BTreeSet::new());
+    let invalid_indexes = analysis
+        .invalid_entries
+        .iter()
+        .map(|entry| entry.index)
+        .collect::<BTreeSet<_>>();
+    let mut impacts = Vec::new();
+    if let Ok(entries) = filters(document) {
+        for (index, entry) in entries.iter().enumerate() {
+            let Some(mapping) = entry.as_mapping() else {
+                continue;
+            };
+            let Some(query) = mapping.get("query").and_then(Value::as_str) else {
+                continue;
+            };
+            let id = raw_v7_id(entry);
+            let name = mapping
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            match rewrite_query_tag(query, old_tag, new_tag, mode) {
+                Ok(rewrite) if rewrite.node_count > 0 => {
+                    let invalid = invalid_indexes.contains(&index) || id.is_none();
+                    impacts.push(SavedFilterTagImpact {
+                        index,
+                        filter_id: id,
+                        name,
+                        before_query: query.to_owned(),
+                        after_query: Some(rewrite.expression),
+                        node_count: rewrite.node_count,
+                        status: if invalid {
+                            SavedFilterTagImpactStatus::RetainOnly
+                        } else {
+                            SavedFilterTagImpactStatus::UpdateAvailable
+                        },
+                        diagnostic: invalid.then_some(SavedFilterTagImpactDiagnostic::InvalidEntry),
+                    });
+                }
+                Err(QueryTagRewriteError::InvalidQuery(_)) if query.contains(old_tag) => {
+                    impacts.push(SavedFilterTagImpact {
+                        index,
+                        filter_id: id,
+                        name,
+                        before_query: query.to_owned(),
+                        after_query: None,
+                        node_count: 0,
+                        status: SavedFilterTagImpactStatus::RetainOnly,
+                        diagnostic: Some(SavedFilterTagImpactDiagnostic::InvalidQuery),
+                    });
+                }
+                Err(
+                    QueryTagRewriteError::RewriteInvalid(_)
+                    | QueryTagRewriteError::EquivalenceFailed,
+                ) => {
+                    impacts.push(SavedFilterTagImpact {
+                        index,
+                        filter_id: id,
+                        name,
+                        before_query: query.to_owned(),
+                        after_query: None,
+                        node_count: 0,
+                        status: SavedFilterTagImpactStatus::RetainOnly,
+                        diagnostic: Some(SavedFilterTagImpactDiagnostic::RewriteFailed),
+                    });
+                }
+                Err(QueryTagRewriteError::InvalidTag) => {
+                    unreachable!("Tag inputs are validated before document analysis");
+                }
+                Ok(_) | Err(QueryTagRewriteError::InvalidQuery(_)) => {}
+            }
+        }
+    }
+    SavedFilterTagRenamePreview {
+        file_version,
+        old_tag: old_tag.to_owned(),
+        new_tag: new_tag.to_owned(),
+        mode,
+        impacts,
+    }
+}
+
+fn invalid_tag_choice() -> SavedFilterStoreError {
+    SavedFilterStoreError::InvalidMutation(vec![SavedFilterEntryIssueKind::InvalidEntry])
 }
 
 enum ReadSavedFilterFile {
@@ -1660,6 +1966,129 @@ mod tests {
         let catalog = store.load(&BTreeSet::new()).expect("empty reload");
         assert!(catalog.valid_filters.is_empty());
         assert!(catalog.file_version.exists);
+    }
+
+    #[test]
+    fn tag_preview_lists_only_exact_ast_nodes_and_keeps_invalid_queries_retain_only() {
+        let directory = tempdir().expect("temp directory");
+        let path = directory.path().join("saved-filters.yml");
+        let invalid_id = "0198a7c2-8343-7a31-b842-f15d39f33c1a";
+        fs::write(
+            &path,
+            format!(
+                "schema: 1\nfilters:\n  - id: {FIRST_ID}\n    name: Affected\n    query: 'old tag:old -old any:(old|other) path:old'\n    scope: {{kind: all-enabled-roots}}\n    sort: {{field: file-name, direction: ascending}}\n    createdAt: '2026-08-20T00:00:00.000Z'\n    updatedAt: '2026-08-20T00:00:00.000Z'\n    future: keep\n  - id: {SECOND_ID}\n    name: Prefix only\n    query: 'older path:old color-space:old'\n    scope: {{kind: all-enabled-roots}}\n    sort: {{field: rating, direction: descending}}\n    createdAt: '2026-08-20T00:00:00.000Z'\n    updatedAt: '2026-08-20T00:00:00.000Z'\n  - id: {invalid_id}\n    name: Invalid query\n    query: '\"old'\n    scope: {{kind: all-enabled-roots}}\n    sort: {{field: file-name, direction: ascending}}\n    createdAt: '2026-08-20T00:00:00.000Z'\n    updatedAt: '2026-08-20T00:00:00.000Z'\n"
+            ),
+        )
+        .expect("write catalog");
+        let before = fs::read(&path).expect("source bytes");
+        let store = SavedFilterStore::new(path.clone());
+
+        let preview = store
+            .preview_tag_rename("old", "new:value", TagRenameMode::Exact)
+            .expect("preview exact rename");
+
+        assert_eq!(preview.impacts.len(), 2);
+        assert_eq!(preview.impacts[0].node_count, 4);
+        assert_eq!(
+            preview.impacts[0].status,
+            SavedFilterTagImpactStatus::UpdateAvailable
+        );
+        assert_eq!(
+            preview.impacts[0].after_query.as_deref(),
+            Some("tag:new:value tag:new:value -tag:new:value any:(new:value|other) path:old")
+        );
+        assert_eq!(
+            preview.impacts[1].diagnostic,
+            Some(SavedFilterTagImpactDiagnostic::InvalidQuery)
+        );
+        assert_eq!(
+            preview.impacts[1].status,
+            SavedFilterTagImpactStatus::RetainOnly
+        );
+        assert_eq!(fs::read(&path).expect("unchanged preview"), before);
+    }
+
+    #[test]
+    fn tag_rewrite_applies_explicit_update_and_retain_choices_atomically() {
+        let directory = tempdir().expect("temp directory");
+        let path = directory.path().join("saved-filters.yml");
+        fs::write(
+            &path,
+            format!(
+                "schema: 1\nfilters:\n  - id: {FIRST_ID}\n    name: Update\n    query: 'old type:image'\n    scope: {{kind: all-enabled-roots}}\n    sort: {{field: file-name, direction: ascending}}\n    createdAt: '2026-08-20T00:00:00.000Z'\n    updatedAt: '2026-08-20T00:00:00.000Z'\n    future: keep\n  - id: {SECOND_ID}\n    name: Retain\n    query: '-old favorite:true'\n    scope: {{kind: all-enabled-roots}}\n    sort: {{field: rating, direction: descending}}\n    createdAt: '2026-08-20T00:00:00.000Z'\n    updatedAt: '2026-08-20T00:00:00.000Z'\n"
+            ),
+        )
+        .expect("write catalog");
+        let store = SavedFilterStore::new(path.clone());
+        let preview = store
+            .preview_tag_rename("old", "new", TagRenameMode::Exact)
+            .expect("preview");
+        let first = Uuid::parse_str(FIRST_ID).expect("first ID");
+        let second = Uuid::parse_str(SECOND_ID).expect("second ID");
+
+        let mutation = store
+            .apply_tag_rewrite(
+                &preview.file_version,
+                SavedFilterTagRewriteInput {
+                    old_tag: "old".into(),
+                    new_tag: "new".into(),
+                    mode: TagRenameMode::Exact,
+                    choices: vec![
+                        SavedFilterTagChoice {
+                            filter_id: first,
+                            action: SavedFilterTagChoiceAction::Update,
+                        },
+                        SavedFilterTagChoice {
+                            filter_id: second,
+                            action: SavedFilterTagChoiceAction::Retain,
+                        },
+                    ],
+                },
+            )
+            .expect("apply choices");
+
+        assert_eq!(mutation.updated_filters.len(), 1);
+        assert_eq!(mutation.updated_filters[0].id, first);
+        assert_eq!(mutation.updated_filters[0].query, "new type:image");
+        let output = fs::read_to_string(path).expect("output");
+        assert!(output.contains("query: new type:image"));
+        assert!(output.contains("query: -old favorite:true"));
+        assert!(output.contains("future: keep"));
+    }
+
+    #[test]
+    fn retain_only_tag_choices_do_not_rewrite_or_bump_the_file_version() {
+        let directory = tempdir().expect("temp directory");
+        let path = directory.path().join("saved-filters.yml");
+        let store = SavedFilterStore::new(path.clone());
+        let created = store
+            .create_at(
+                &SavedFilterFileVersion::expected_absent(),
+                all_enabled_input("Retain", "old"),
+                Uuid::parse_str(FIRST_ID).expect("ID"),
+                fixed_time(),
+            )
+            .expect("create");
+        let before = fs::read(&path).expect("before");
+
+        let mutation = store
+            .apply_tag_rewrite(
+                &created.file_version,
+                SavedFilterTagRewriteInput {
+                    old_tag: "old".into(),
+                    new_tag: "new".into(),
+                    mode: TagRenameMode::Exact,
+                    choices: vec![SavedFilterTagChoice {
+                        filter_id: Uuid::parse_str(FIRST_ID).expect("ID"),
+                        action: SavedFilterTagChoiceAction::Retain,
+                    }],
+                },
+            )
+            .expect("retain");
+
+        assert_eq!(mutation.file_version, created.file_version);
+        assert!(mutation.updated_filters.is_empty());
+        assert_eq!(fs::read(path).expect("after"), before);
     }
 
     #[test]

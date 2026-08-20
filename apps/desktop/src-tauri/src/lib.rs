@@ -218,6 +218,7 @@ enum SavedFilterCommandErrorKind {
     DuplicateName,
     InvalidQuery,
     UnknownSort,
+    RewriteFailed,
     ExternalChange,
     NotFound,
     Internal,
@@ -363,6 +364,21 @@ impl From<SavedFilterStoreError> for SavedFilterCommandError {
                     "saved filter input is invalid or conflicts with another entry",
                 )
             }
+            SavedFilterStoreError::TagRewrite(error) => match error {
+                asset_index::QueryTagRewriteError::InvalidQuery(_)
+                | asset_index::QueryTagRewriteError::RewriteInvalid(_) => Self::simple(
+                    SavedFilterCommandErrorKind::InvalidQuery,
+                    "saved filter query cannot be rewritten",
+                ),
+                asset_index::QueryTagRewriteError::InvalidTag => Self::simple(
+                    SavedFilterCommandErrorKind::InvalidEntry,
+                    "Tag rename input is invalid",
+                ),
+                asset_index::QueryTagRewriteError::EquivalenceFailed => Self::simple(
+                    SavedFilterCommandErrorKind::RewriteFailed,
+                    "saved filter rewrite did not preserve query semantics",
+                ),
+            },
             SavedFilterStoreError::TooManyFilters => Self::simple(
                 SavedFilterCommandErrorKind::InvalidEntry,
                 "saved filter limit of 512 entries was reached",
