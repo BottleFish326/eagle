@@ -977,7 +977,17 @@ mod tests {
 
         let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan long path");
         assert_eq!(report.assets.len(), 1);
-        assert_eq!(report.assets[0].path, image);
+        assert_eq!(
+            report.assets[0].path,
+            image.canonicalize().expect("canonical long-path image")
+        );
+        assert_eq!(
+            report.assets[0].relative_path,
+            nested
+                .strip_prefix(directory.path())
+                .expect("nested path remains inside fixture")
+                .join("Caf\u{e9}-\u{7d20}\u{6750}.png")
+        );
         assert_eq!(
             report.assets[0].tags,
             [
