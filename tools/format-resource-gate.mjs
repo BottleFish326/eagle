@@ -117,6 +117,19 @@ export function aggregateProcessTreeRss(rows, rootPid) {
   return { rssKiB, processCount };
 }
 
+export function parseWindowsProcessRows(parsed) {
+  return (Array.isArray(parsed) ? parsed : [parsed])
+    .filter((row) => row !== null && typeof row === "object")
+    .map((row) => ({
+      pid: Number(row.ProcessId),
+      parentPid: Number(row.ParentProcessId),
+      rssKiB: Math.ceil(Number(row.WorkingSetSize) / 1024),
+    }))
+    .filter((row) =>
+      [row.pid, row.parentPid, row.rssKiB].every(Number.isFinite),
+    );
+}
+
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   const repositoryState = await readRepositoryState();
@@ -216,6 +229,10 @@ async function runFormatGate({ executable, options }) {
   if (options.workerBundle !== undefined) {
     arguments_.push("--worker-bundle", path.resolve(options.workerBundle));
   }
+  const windowsSampler =
+    process.platform === "win32"
+      ? await startWindowsProcessSampler()
+      : undefined;
   const child = spawn(executable, arguments_, {
     cwd: repository,
     stdio: ["ignore", "pipe", "pipe"],
@@ -251,11 +268,21 @@ async function runFormatGate({ executable, options }) {
     pendingSamples.add(pending);
     void pending.finally(() => pendingSamples.delete(pending));
   };
-  sample();
-  const timer = setInterval(sample, process.platform === "win32" ? 250 : 20);
-  const exit = await waitForExit(child);
-  clearInterval(timer);
-  await Promise.allSettled([...pendingSamples]);
+  let timer;
+  if (windowsSampler === undefined) {
+    sample();
+    timer = setInterval(sample, 20);
+  } else {
+    windowsSampler.observe(child.pid, started, rssSamples);
+  }
+  let exit;
+  try {
+    exit = await waitForExit(child);
+  } finally {
+    if (timer !== undefined) clearInterval(timer);
+    await Promise.allSettled([...pendingSamples]);
+    if (windowsSampler !== undefined) await windowsSampler.finish();
+  }
   if (outputBytes > MAX_OUTPUT_BYTES) {
     throw new Error("format gate output exceeded 1 MiB");
   }
@@ -277,10 +304,7 @@ async function runFormatGate({ executable, options }) {
 }
 
 async function sampleProcessTree(rootPid) {
-  const rows =
-    process.platform === "win32"
-      ? await windowsProcessRows()
-      : await unixProcessRows();
+  const rows = await unixProcessRows();
   return aggregateProcessTreeRss(rows, rootPid);
 }
 
@@ -294,24 +318,149 @@ async function unixProcessRows() {
     .map(([pid, parentPid, rssKiB]) => ({ pid, parentPid, rssKiB }));
 }
 
-async function windowsProcessRows() {
+async function startWindowsProcessSampler() {
   const command = [
-    "Get-CimInstance Win32_Process |",
-    "Select-Object ProcessId,ParentProcessId,WorkingSetSize |",
-    "ConvertTo-Json -Compress",
-  ].join(" ");
-  const { stdout } = await runFile("powershell.exe", [
-    "-NoProfile",
-    "-NonInteractive",
-    "-Command",
-    command,
-  ]);
-  const parsed = JSON.parse(stdout);
-  return (Array.isArray(parsed) ? parsed : [parsed]).map((row) => ({
-    pid: Number(row.ProcessId),
-    parentPid: Number(row.ParentProcessId),
-    rssKiB: Math.ceil(Number(row.WorkingSetSize) / 1024),
-  }));
+    "$ErrorActionPreference = 'Stop'",
+    "$null = @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize)",
+    "[Console]::Out.WriteLine('READY')",
+    "[Console]::Out.Flush()",
+    "$rootProcessId = [int][Console]::In.ReadLine()",
+    "$seenRoot = $false",
+    "while ($true) {",
+    "$rows = @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize)",
+    "$rootPresent = @($rows | Where-Object { $_.ProcessId -eq $rootProcessId }).Count -gt 0",
+    "if ($rootPresent) { $seenRoot = $true }",
+    "[Console]::Out.WriteLine(($rows | ConvertTo-Json -Compress -Depth 2))",
+    "[Console]::Out.Flush()",
+    "if ($seenRoot -and -not $rootPresent) { break }",
+    "Start-Sleep -Milliseconds 10",
+    "}",
+    "[Console]::Out.WriteLine('DONE')",
+    "[Console]::Out.Flush()",
+  ].join("\n");
+  const sampler = spawn(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", command],
+    { stdio: ["pipe", "pipe", "pipe"] },
+  );
+  let buffer = "";
+  let diagnostic = "";
+  let rootPid;
+  let started;
+  let targetSamples;
+  let readyResolve;
+  let readyReject;
+  let doneResolve;
+  const ready = new Promise((resolve, reject) => {
+    readyResolve = resolve;
+    readyReject = reject;
+  });
+  const done = new Promise((resolve) => {
+    doneResolve = resolve;
+  });
+  sampler.stderr.on("data", (chunk) => {
+    diagnostic = `${diagnostic}${chunk.toString("utf8")}`.slice(-2000);
+  });
+  sampler.stdout.on("data", (chunk) => {
+    buffer += chunk.toString("utf8");
+    if (buffer.length > MAX_OUTPUT_BYTES) {
+      diagnostic = "Windows process sampler output line exceeded 1 MiB";
+      sampler.kill();
+      readyReject(new Error(diagnostic));
+      return;
+    }
+    let newline;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (line === "READY") {
+        readyResolve();
+      } else if (line === "DONE") {
+        doneResolve();
+      } else if (line !== "" && rootPid !== undefined) {
+        try {
+          const tree = aggregateProcessTreeRss(
+            parseWindowsProcessRows(JSON.parse(line)),
+            rootPid,
+          );
+          if (tree.processCount > 0) {
+            targetSamples.push({
+              elapsedMs: Math.round(performance.now() - started),
+              rssKiB: tree.rssKiB,
+              processCount: tree.processCount,
+            });
+          }
+        } catch (error) {
+          diagnostic = `invalid sampler JSON: ${String(error)}`;
+        }
+      }
+    }
+  });
+  sampler.once("error", (error) => {
+    readyReject(error);
+    doneResolve();
+  });
+  sampler.once("exit", (code, signal) => {
+    if (rootPid === undefined) {
+      readyReject(
+        new Error(
+          `Windows process sampler exited before READY: code=${String(code)} signal=${String(signal)} ${diagnostic}`,
+        ),
+      );
+    }
+    doneResolve();
+  });
+  await withTimeout(
+    ready,
+    5_000,
+    "Windows process sampler did not become ready",
+  );
+  return {
+    observe(processId, observedStarted, samples) {
+      rootPid = processId;
+      started = observedStarted;
+      targetSamples = samples;
+      sampler.stdin.end(`${String(processId)}\n`);
+    },
+    async finish() {
+      const completed = await settlesWithin(done, 2_000);
+      if (!completed) {
+        sampler.kill();
+        await settlesWithin(done, 2_000);
+      }
+      if (diagnostic !== "") {
+        throw new Error(`Windows process sampler failed: ${diagnostic}`);
+      }
+    },
+  };
+}
+
+async function withTimeout(promise, milliseconds, message) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), milliseconds);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function settlesWithin(promise, milliseconds) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise.then(() => true),
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(false), milliseconds);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function waitForExit(child) {

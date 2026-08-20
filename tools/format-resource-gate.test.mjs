@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   aggregateProcessTreeRss,
   analyzeFormatResourceRuns,
+  parseWindowsProcessRows,
 } from "./format-resource-gate.mjs";
 
 function acceptedReport() {
@@ -31,6 +32,25 @@ test("aggregates only the selected process tree", () => {
       10,
     ),
     { rssKiB: 175, processCount: 3 },
+  );
+});
+
+test("normalizes single and multiple Windows CIM process rows", () => {
+  assert.deepEqual(
+    parseWindowsProcessRows({
+      ProcessId: "10",
+      ParentProcessId: "1",
+      WorkingSetSize: "1537",
+    }),
+    [{ pid: 10, parentPid: 1, rssKiB: 2 }],
+  );
+  assert.equal(
+    parseWindowsProcessRows([
+      { ProcessId: 10, ParentProcessId: 1, WorkingSetSize: 1024 },
+      null,
+      { ProcessId: "invalid", ParentProcessId: 1, WorkingSetSize: 1024 },
+    ]).length,
+    1,
   );
 });
 
