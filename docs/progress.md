@@ -9,7 +9,7 @@
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
 | 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
 | 阶段 2：可靠性与恢复 | Accepted | P2-A01 至 P2-A12、外部/本地/数据安全门禁和最终历史重放全部通过；最终收据 SHA-256 `76b135b…` |
-| 阶段 3：完整素材能力 | Not started | 阶段 2 已退出；P3-01 至 P3-07 的完整实施准备均已收敛，下一动作是 P3-01A |
+| 阶段 3：完整素材能力 | In progress | P3-01A 已完成静态格式注册表、内容优先扫描保留和真实夹具清单验证器；provider/cache、UI 与端到端查询仍待实现 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出；P4-01 至 P4-08 的完整实施准备已收敛 |
 
 ## 阶段 0 工作项
@@ -57,11 +57,11 @@
 | P2-08 平台与文件系统兼容 | Accepted | 正式运行 32332405466 在同一 commit/run/attempt 上通过 macOS 10、Linux 12、Windows 9 项原生测试、矩阵汇总与完整质量门禁；四个 artifact 和托管回执已归档；见 `reports/p2-08-acceptance.md` |
 | 阶段 2 退出验收 | Accepted | 数据安全收据绑定 `11db4c1`，最终退出收据绑定 `d4d78be`；提交顺序、历史字节、零漂移和 open P0/P1=0 均通过；见 `reports/phase-2-acceptance.md` |
 
-## 阶段 3 实施准备
+## 阶段 3 工作项
 
 | 准备项 | 状态 | 证据 |
 |---|---|---|
-| P3-01 扩展格式能力管线 | Design ready | 已固定识别/属性/预览三层能力、codec 缺失降级、worker 隔离、格式矩阵、资源限额、恶意夹具要求、严格夹具 Schema 和六个实施切片；阶段 2 退出前不计作 P3 开始，见 `reports/p3-01-readiness.md` |
+| P3-01 扩展格式能力管线 | In progress | P3-01A 前三项已实现：15 格式静态注册、64 KiB 内容优先识别、冲突告警、无 provider 时保留记录/Sidecar，以及拒绝越界/符号链接/伪摘要/平台缺口的真实夹具验证器；preview/provider、缓存键、UI 中性降级和端到端类型查询仍待完成，见 `reports/p3-01-readiness.md` |
 | P3-02 智能属性与高级过滤 | Design ready | 已固定定型谓词、整数单位、RFC 3339、精确宽高比、未知属性、混合索引和独立三方查询语料；阶段 2 退出前不计作 P3 开始，见 `reports/p3-02-readiness.md` |
 | P3-03 保存过滤器 | Design ready | 已固定用户级 YAML、条目隔离、未知字段保留、完整版本、精确 Tag AST 重写和跨文件协调恢复；阶段 2 退出前不计作 P3 开始，见 `reports/p3-03-readiness.md` |
 | P3-04 批量工作流 | Design ready | 已固定精确全选快照、catalog revision、只读预检、协作取消、事务续传与剪贴板单次提交；阶段 2 退出前不计作 P3 开始，见 `reports/p3-04-readiness.md` |

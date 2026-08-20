@@ -30,7 +30,6 @@ version = "0.1.0"
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
-infer = "0.19"
 globset = { version = "=0.4.19", default-features = false }
 imagesize = { version = "0.15.0", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 image = { version = "=0.25.9", default-features = false, features = ["gif", "jpeg", "png", "webp"] }

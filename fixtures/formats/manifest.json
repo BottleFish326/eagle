@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "suite": {
+    "id": "material-eagle-extended-formats",
+    "version": 1
+  },
+  "fixtures": [
+    {
+      "id": "svg-minimal-core",
+      "path": "sources/svg/minimal.svg",
+      "format": "svg",
+      "case": "normal",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "2dd0cf9a77785da7f51a7f17f2a851d3ff942f7ef0335dcc245eb092b06123e2",
+      "size": 116,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "image/svg+xml",
+            "kind": "image",
+            "issueCodes": [],
+            "metadata": {
+              "status": "unsupported-feature",
+              "reasonCode": "metadata-provider-unavailable",
+              "properties": {}
+            },
+            "preview": {
+              "status": "codec-unavailable",
+              "reasonCode": "preview-provider-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    }
+  ]
+}

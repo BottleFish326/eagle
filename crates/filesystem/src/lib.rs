@@ -1,4 +1,5 @@
 mod events;
+mod formats;
 mod library;
 mod platform;
 mod reconciliation;
@@ -7,6 +8,10 @@ mod scanner;
 pub use events::{
     FsChange, FsChangeBatch, FsChangeKind, FsRescanReason, WatchOptions, WatchSession,
     coalesce_changes, normalize_event,
+};
+pub use formats::{
+    FORMAT_REGISTRY, FormatDescriptor, FormatRecognition, MAX_SIGNATURE_BYTES, RecognitionSource,
+    descriptor_for_extension, recognize_format,
 };
 pub use library::{
     AddLibraryRoot, LibraryConfig, LibraryRoot, LibraryRootError, LibraryRootManager,

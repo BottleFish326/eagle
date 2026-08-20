@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::BufReader;
+use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,6 +16,7 @@ use uuid::Uuid;
 use walkdir::WalkDir;
 
 use crate::library::{RootAccessStatus, inspect_root_access};
+use crate::{MAX_SIGNATURE_BYTES, descriptor_for_extension, recognize_format};
 
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
@@ -370,19 +371,20 @@ fn parse_asset(
     cancellation: &ScanCancellation,
 ) -> Option<AssetRecord> {
     let started = Instant::now();
-    let mime = detect_mime(path);
-    if !is_supported_mvp_image(&mime) {
-        return None;
-    }
+    let extension = path
+        .extension()
+        .map(|extension| extension.to_string_lossy().to_ascii_lowercase());
+    let extension_candidate = descriptor_for_extension(extension.as_deref());
 
     let canonical = match path.canonicalize() {
         Ok(canonical) => canonical,
         Err(error) => {
+            let descriptor = extension_candidate?;
             return Some(unavailable_asset(
                 root_id,
                 root,
                 path,
-                mime,
+                descriptor.mime.to_owned(),
                 error.to_string(),
             ));
         }
@@ -390,6 +392,21 @@ fn parse_asset(
     if cancellation.is_cancelled() {
         return None;
     }
+    let mut prefix = Vec::new();
+    if let Err(error) = File::open(&canonical)
+        .and_then(|file| file.take(MAX_SIGNATURE_BYTES).read_to_end(&mut prefix))
+    {
+        let descriptor = extension_candidate?;
+        return Some(unavailable_asset(
+            root_id,
+            root,
+            &canonical,
+            descriptor.mime.to_owned(),
+            error.to_string(),
+        ));
+    }
+    let recognition = recognize_format(extension.as_deref(), &prefix)?;
+    let mime = recognition.descriptor.mime.to_owned();
     let file_metadata = match fs::metadata(&canonical) {
         Ok(metadata) => metadata,
         Err(error) => {
@@ -426,6 +443,14 @@ fn parse_asset(
         .ok()
         .and_then(system_time_to_unix_ms);
     asset.file_read_only = Some(file_metadata.permissions().readonly());
+    if recognition.extension_mismatch {
+        asset.issues.push(AssetIssue::MimeMismatch(format!(
+            "content identifies {} but the .{} extension identifies {}",
+            recognition.descriptor.id,
+            extension.as_deref().unwrap_or(""),
+            extension_candidate.map_or("an unknown format", |descriptor| descriptor.id)
+        )));
+    }
 
     if parse_deadline_exceeded(&mut asset, started, options.file_parse_timeout) {
         return Some(asset);
@@ -434,18 +459,20 @@ fn parse_asset(
         return None;
     }
 
-    match imagesize::size(&canonical) {
-        Ok(size) => match (u32::try_from(size.width), u32::try_from(size.height)) {
-            (Ok(width), Ok(height)) => {
-                asset.dimensions = Some(AssetDimensions { width, height });
-            }
-            _ => asset.issues.push(AssetIssue::InvalidImageMetadata(
-                "image dimensions exceed the supported range".into(),
-            )),
-        },
-        Err(error) => asset
-            .issues
-            .push(AssetIssue::InvalidImageMetadata(error.to_string())),
+    if is_raster_dimension_format(&asset.mime) {
+        match imagesize::size(&canonical) {
+            Ok(size) => match (u32::try_from(size.width), u32::try_from(size.height)) {
+                (Ok(width), Ok(height)) => {
+                    asset.dimensions = Some(AssetDimensions { width, height });
+                }
+                _ => asset.issues.push(AssetIssue::InvalidImageMetadata(
+                    "image dimensions exceed the supported range".into(),
+                )),
+            },
+            Err(error) => asset
+                .issues
+                .push(AssetIssue::InvalidImageMetadata(error.to_string())),
+        }
     }
 
     if parse_deadline_exceeded(&mut asset, started, options.file_parse_timeout) {
@@ -619,24 +646,7 @@ fn exif_text(exif: &exif::Exif, tag: Tag) -> Option<String> {
     (!value.is_empty()).then_some(value)
 }
 
-fn detect_mime(path: &Path) -> String {
-    if let Ok(Some(kind)) = infer::get_from_path(path) {
-        return kind.mime_type().to_owned();
-    }
-    let extension = path
-        .extension()
-        .map(|extension| extension.to_string_lossy().to_ascii_lowercase());
-    match extension.as_deref() {
-        Some("png") => "image/png",
-        Some("jpg" | "jpeg") => "image/jpeg",
-        Some("gif") => "image/gif",
-        Some("webp") => "image/webp",
-        _ => "application/octet-stream",
-    }
-    .to_owned()
-}
-
-fn is_supported_mvp_image(mime: &str) -> bool {
+fn is_raster_dimension_format(mime: &str) -> bool {
     matches!(
         mime,
         "image/png" | "image/jpeg" | "image/gif" | "image/webp"
@@ -708,7 +718,7 @@ mod tests {
     use std::io::Cursor;
     use std::time::Duration;
 
-    use asset_core::AssetIssue;
+    use asset_core::{AssetIssue, AssetKind};
     use exif::{Field, In, Tag, Value as ExifValue};
     use metadata::{AssetSidecar, ExpectedVersion, sidecar_path_for, write_sidecar_atomic};
     use resource_control::{ResourceController, ResourceLimits};
@@ -798,6 +808,79 @@ mod tests {
                 .unwrap_or_else(|| panic!("missing dimensions for {name}: {:?}", asset.issues));
             assert_eq!((actual.width, actual.height), dimensions);
         }
+    }
+
+    #[test]
+    fn retains_registered_assets_and_sidecars_without_metadata_or_preview_providers() {
+        let directory = tempdir().expect("tempdir");
+        let fixtures: [(&str, &[u8], &str, AssetKind); 4] = [
+            (
+                "vector.svg",
+                b"<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
+                "image/svg+xml",
+                AssetKind::Image,
+            ),
+            (
+                "clip.mp4",
+                b"\x00\x00\x00\x18ftypisom\x00\x00\x00\x00isom",
+                "video/mp4",
+                AssetKind::Video,
+            ),
+            ("sound.mp3", b"ID3\x04\x00", "audio/mpeg", AssetKind::Audio),
+            (
+                "document.pdf",
+                b"%PDF-1.7",
+                "application/pdf",
+                AssetKind::Pdf,
+            ),
+        ];
+        for (name, bytes, _, _) in fixtures {
+            let path = directory.path().join(name);
+            fs::write(&path, bytes).expect("write registered fixture");
+            let mut sidecar = AssetSidecar::new();
+            sidecar.tags.insert("registered/without-provider".into());
+            write_sidecar_atomic(
+                &sidecar_path_for(&path),
+                &sidecar,
+                &ExpectedVersion::Missing,
+            )
+            .expect("write registered fixture sidecar");
+        }
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan formats");
+        assert_eq!(report.assets.len(), fixtures.len());
+        for (name, _, mime, kind) in fixtures {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .expect("registered asset");
+            assert_eq!(asset.mime, mime);
+            assert_eq!(asset.kind, kind);
+            assert!(asset.tags.contains("registered/without-provider"));
+            assert!(asset.sidecar_state.is_some());
+            assert!(asset.dimensions.is_none());
+            assert!(asset.issues.is_empty());
+        }
+    }
+
+    #[test]
+    fn content_signature_wins_over_a_conflicting_registered_extension() {
+        let directory = tempdir().expect("tempdir");
+        fs::write(directory.path().join("renamed.jpg"), b"%PDF-1.7")
+            .expect("write mismatched fixture");
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan mismatch");
+        let asset = report.assets.first().expect("mismatched asset retained");
+        assert_eq!(asset.mime, "application/pdf");
+        assert_eq!(asset.kind, AssetKind::Pdf);
+        assert!(asset.dimensions.is_none());
+        assert!(
+            asset
+                .issues
+                .iter()
+                .any(|issue| matches!(issue, AssetIssue::MimeMismatch(_)))
+        );
     }
 
     #[test]

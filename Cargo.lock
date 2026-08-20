@@ -160,7 +160,6 @@ dependencies = [
  "asset-core",
  "globset",
  "imagesize",
- "infer",
  "kamadak-exif",
  "metadata",
  "notify",

@@ -10,7 +10,6 @@ asset-core = { path = "../asset-core" }
 metadata = { path = "../metadata" }
 globset.workspace = true
 imagesize.workspace = true
-infer.workspace = true
 kamadak-exif.workspace = true
 notify.workspace = true
 resource-control = { path = "../resource-control" }

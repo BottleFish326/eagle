@@ -445,6 +445,11 @@ fn issue_finding(issue: &AssetIssue) -> (SupportSeverity, &'static str, &'static
             "invalid-native-metadata",
             "optional native metadata could not be parsed",
         ),
+        AssetIssue::MimeMismatch(_) => (
+            SupportSeverity::Warning,
+            "mime-mismatch",
+            "content signature overrides the file extension",
+        ),
         AssetIssue::ResourceLimited(_) => (
             SupportSeverity::Warning,
             "resource-limited",
