@@ -5,6 +5,7 @@ members = [
   "crates/app-config",
   "crates/catalog",
   "crates/filesystem",
+  "crates/format-worker",
   "crates/index",
   "crates/link-resolver",
   "crates/metadata",

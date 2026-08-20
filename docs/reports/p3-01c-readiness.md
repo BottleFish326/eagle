@@ -29,12 +29,32 @@ brand。AVIF 优先识别 `avif/avis`，HEIC/HEIF 覆盖静态与 sequence brand
 
 这条降级不是文件损坏，也不会把素材从目录、Tag 或 `type:image` 查询中删除。
 
-## 3. 本地证据
+## 3. worker 隔离边界
+
+`format-worker` 使用一请求一进程，而不是把 C/C++ codec 装入桌面进程。父进程只执行
+绝对路径、非符号链接且 SHA-256 与构建清单相符的 worker；启动前后均重新核验摘要。
+源文件在构造请求和执行前都重新 canonicalize 并证明位于授权根内，非 UTF-8 Unix 路径
+和 Windows UTF-16 路径以原生字节编码传输。子进程清空继承环境并在固定目录运行，
+不搜索 `PATH`。
+
+stdin 请求与 stdout JSON header 均使用四字节长度前缀，PNG payload 具有独立长度、
+SHA-256 和 IHDR 尺寸约束。父进程并行、持续排空 stdout/stderr，但只保留受限字节；
+stdout 洪泛返回 `output-too-large`，stderr 最多 4 KiB 且素材绝对路径替换为 `<source>`。
+10 秒为生产硬上限，超时直接终止子进程。每次请求都会得到全新进程，前一次崩溃不会
+污染下一次调用。
+
+当前仓库中的正式 worker binary 只返回 `codec-unavailable`；测试 worker 不进入应用
+bundle，仅用于证明成功帧、二进制替换、授权根逃逸、崩溃、超时、输出洪泛、源变化、
+路径脱敏和 PNG 完整性。详细 wire contract 见
+[格式 worker 协议](../../specs/format-worker-protocol.md)。
+
+## 4. 本地证据
 
 ```bash
 npm run import:libheif-fixtures
 npm run verify:format-fixtures
 cargo test -p asset-filesystem -p asset-preview
+cargo test -p format-worker --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
@@ -42,12 +62,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 - filesystem：51 项通过，其中真实 AVIF/HEIC 从内容识别且无 codec 也能扫描；
 - preview：21 项通过，其中真实 AVIF/HEIC 均稳定降级且缓存保持为空；
 - ISO BMFF：4 项专门边界测试覆盖 compatible brand、box 越界、异常长度与序列 brand。
+- format-worker：3 项协议单元测试与 4 项真实子进程集成测试通过。
 
-## 4. 未关闭范围与下一动作
+## 5. 未关闭范围与下一动作
 
-P3-01C 仍缺少固定版本、decoder-only、三平台随应用打包的 libheif worker。该 worker
-必须实现有界请求协议、主图宽高/方向/Alpha 等属性、受限 PNG 输出、10 秒硬超时、
-256 MiB 分配上限、崩溃重启及脱敏 stderr，并为损坏、截断、伪装、超大声明、未知
+P3-01C 仍缺少固定版本、decoder-only、三平台随应用打包的 libheif backend。现有
+worker 边界接下来必须接入主图宽高/方向/Alpha 等属性和受限 PNG 输出，实际启用
+libheif security limits 与 256 MiB 分配上限，并为损坏、截断、伪装、超大声明、未知
 codec 和资源超限补齐固定夹具与三平台证据。
 
 在这些项目完成前，P3-01C 保持 **In progress**，P3-A01/P3-A02 不判定通过。

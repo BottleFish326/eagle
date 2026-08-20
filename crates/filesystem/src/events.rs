@@ -608,11 +608,14 @@ mod tests {
             .expect("filesystem event");
 
         assert_eq!(batch.root, directory.path().canonicalize().expect("root"));
-        assert_eq!(batch.raw_event_count, 1);
-        assert!(matches!(
-            batch.changes[0].reason,
-            Some(FsRescanReason::BatchOverflow | FsRescanReason::QueueOverflow)
-        ));
+        match batch.changes[0].reason {
+            Some(FsRescanReason::BatchOverflow) => assert_eq!(batch.raw_event_count, 1),
+            // The bounded callback queue can overflow before the receiver consumes its first
+            // event. In that case no raw event was observed, but the overflow flag still safely
+            // requests a full rescan of only this canonical root.
+            Some(FsRescanReason::QueueOverflow) => assert!(batch.raw_event_count <= 1),
+            reason => panic!("expected overflow rescan, got {reason:?}"),
+        }
         assert_eq!(
             batch.changes[0].paths.as_slice(),
             std::slice::from_ref(&batch.root)

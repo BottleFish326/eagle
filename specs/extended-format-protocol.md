@@ -89,7 +89,7 @@ MediaProperties {
 | 原生/复杂 worker | 单请求硬超时 10 秒 | 终止 worker，返回 `timed-out` |
 | 并发 worker | 受共享 Decode 许可和全局上限约束 | 有界等待或明确拒绝 |
 
-worker 请求只包含请求 ID、provider ID/version、已授权 canonical path、目标尺寸和限制。响应只包含结构化属性、受限 PNG 字节或稳定错误；stderr 进入有界脱敏诊断。worker 崩溃不得带崩桌面进程，下一请求重新启动干净 worker。
+worker 请求只包含请求 ID、provider ID/version、已授权 canonical path、源版本、目标尺寸和限制。响应只包含结构化属性、受限 PNG 字节或稳定错误；stderr 进入有界脱敏诊断。worker 崩溃不得带崩桌面进程，下一请求重新启动干净 worker。字节级 framing、原生路径编码与父进程执行约束见[格式 worker 协议](format-worker-protocol.md)。
 
 ## 6. 提供器决策
 
@@ -138,8 +138,9 @@ worker 请求只包含请求 ID、provider ID/version、已授权 canonical path
 
 实施状态（2026-08-20）：In progress。首个 `ftyp` box 的边界、major/compatible
 brand、标准/扩展/开放长度和 HEIF sequence brand 已由无分配分类器覆盖；固定的官方
-libheif AVIF/HEIC 样本验证扫描可见与 `codec-unavailable` 无缓存降级。三平台
-decoder-only libheif worker、属性/PNG 响应和恶意/超限 worker 夹具尚未完成。
+libheif AVIF/HEIC 样本验证扫描可见与 `codec-unavailable` 无缓存降级；一请求一进程
+worker 的摘要绑定、授权根、超时、崩溃、输出洪泛、源变化和诊断脱敏已通过。三平台
+decoder-only libheif backend、属性/PNG 响应和恶意/超限 codec 夹具尚未完成。
 
 ### P3-01D：视频
 

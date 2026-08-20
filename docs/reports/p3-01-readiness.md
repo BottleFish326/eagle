@@ -12,7 +12,7 @@
 |---|---|---|
 | 素材模型 | 已有 image/video/audio/pdf/other 类型；只有图片宽高和 EXIF 结构 | 缺少可选媒体时长、页数、采样率、声道、codec、颜色空间 |
 | 扫描器 | 15 格式静态注册；64 KiB 内容签名优先、扩展候选；注册格式均保留记录和 Sidecar；SVG 有界提取宽高；AVIF/HEIC 严格限制在首个 `ftyp` box 的 major/compatible brands | AVIF/HEIC worker 属性及媒体/PDF 属性仍待接入 |
-| 缩略图 | PNG/JPEG/GIF/WebP 使用 `builtin-raster`；SVG 使用 `safe-static-svg`；真实 AVIF/HEIC 在 worker 缺失时返回 `codec-unavailable` 且不写缓存；其他稳定失败原因独立 | AVIF/HEIC 与后续原生/复杂 provider 尚未实现 |
+| 缩略图 | PNG/JPEG/GIF/WebP 使用 `builtin-raster`；SVG 使用 `safe-static-svg`；真实 AVIF/HEIC 在 worker 缺失时返回 `codec-unavailable` 且不写缓存；原生 worker 已有固定摘要、授权根、超时/崩溃/洪泛隔离协议 | AVIF/HEIC libheif backend 与后续原生/复杂 provider 尚未实现 |
 | 缓存 | provider ID/version 已进入每项 key 与 Schema 2 descriptor；layout 3 自动失效旧项 | 后续每个新增 provider 必须登记当前版本并增加失效测试 |
 | 查询/UI | `scan_root → AssetCatalog → type:` 四类测试已贯通；codec/provider 缺失显示中性类型卡片，文件故障显示错误卡片 | P3-01C 至 F 仍需逐格式扩展属性和真实预览 |
 | 夹具 | 已有正常、脚本、外部引用、截断 SVG 与确定性 PNG 参考；清单语义验证器继续约束完整性 | 仍需补齐 SVG 超大正式资源证据及其余格式的损坏/伪装/超限/恶意夹具与参考预览 |
@@ -77,4 +77,4 @@ P3-01B 已按独立验收报告判为 **Completed locally**：精确锁定 `resv
 
 正常 SVG 的宽高写入可重建 `dimensions`，静态输出由 `safe-static-svg` provider 生成透明 PNG；provider 版本进入既有缓存身份。仓库真实清单现含正常、脚本、外部引用和截断四个 SVG，以及与 provider 字节完全一致的 16 × 16 PNG 参考。
 
-P3-01C 的 core-only 边界已经开始实施，详见 `p3-01c-readiness.md`；下一动作固定为三平台 libheif worker。本报告仍不判定 P3-A01、P3-A02 或 P3-01 通过。
+P3-01C 的 core-only 与 worker 隔离边界已经开始实施，详见 `p3-01c-readiness.md`；下一动作固定为 libheif backend 和三平台打包。本报告仍不判定 P3-A01、P3-A02 或 P3-01 通过。
