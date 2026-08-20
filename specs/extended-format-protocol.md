@@ -140,8 +140,9 @@ worker 请求只包含请求 ID、provider ID/version、已授权 canonical path
 brand、标准/扩展/开放长度和 HEIF sequence brand 已由无分配分类器覆盖；固定的官方
 libheif AVIF/HEIC 样本验证扫描可见与 `codec-unavailable` 无缓存降级；一请求一进程
 worker 的摘要绑定、授权根、超时、崩溃、输出洪泛、源变化和诊断脱敏已通过。固定
-libheif 1.23.1 backend 已在 Linux 托管门禁返回精确属性与受限 PNG；桌面接线、
-macOS/Windows 随包和恶意/超限 codec 夹具尚未完成。
+libheif 1.23.1 backend 已在 Linux/macOS 托管 jobs 返回精确属性与受限 PNG，并由构建期
+摘要清单和 runtime loader 重放 bundle；桌面 preview 授权与扫描派生属性已本地接线。
+Windows、三平台应用 bundle 和恶意/超限 codec 夹具尚未完成。
 
 ### P3-01D：视频
 

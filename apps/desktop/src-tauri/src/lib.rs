@@ -1130,7 +1130,21 @@ fn run_library_scan_thread(
         let mut delivery_error = None;
         while let Ok(message) = receiver.recv() {
             match message {
-                ScanPipelineMessage::Batch(batch) => {
+                ScanPipelineMessage::Batch(mut batch) => {
+                    for record in &mut batch.assets {
+                        if cancellation.is_cancelled() {
+                            break;
+                        }
+                        if previews
+                            .enrich_media_properties(record, &root.path)
+                            .is_err()
+                        {
+                            record.issues.push(asset_core::AssetIssue::ResourceLimited(
+                                "optional image metadata could not enter the shared resource scheduler"
+                                    .into(),
+                            ));
+                        }
+                    }
                     scanned_records.extend(batch.assets.iter().cloned());
                     if let Ok(mut catalog) = catalog.lock() {
                         catalog.ingest(batch.assets.iter().cloned());

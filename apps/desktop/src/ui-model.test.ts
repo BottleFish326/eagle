@@ -96,6 +96,7 @@ function record(key: string, tags: string[]): AssetRecord {
     fileReadOnly: false,
     dimensions: { width: 100, height: 100 },
     nativeMetadata: null,
+    media: null,
     tags,
     rating: 0,
     favorite: false,

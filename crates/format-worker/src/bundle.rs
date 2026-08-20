@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -11,6 +12,7 @@ use crate::{
 pub const WORKER_BUNDLE_SCHEMA: u32 = 1;
 pub const WORKER_BUNDLE_MANIFEST: &str = "manifest.json";
 const MAX_MANIFEST_BYTES: u64 = 16 * 1024;
+const BUNDLED_WORKER_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -67,13 +69,15 @@ pub fn open_libheif_worker_bundle(directory: &Path) -> Result<WorkerClient, Work
         .map_err(WorkerBundleError::InvalidJson)?;
     validate_manifest(&manifest)?;
     let executable = directory.join(&manifest.executable);
-    let client = WorkerClient::open(WorkerSpec::new(
+    let mut spec = WorkerSpec::new(
         executable,
         directory,
         manifest.sha256,
         manifest.provider_id,
         manifest.provider_version,
-    ))?;
+    );
+    spec.timeout = BUNDLED_WORKER_TIMEOUT;
+    let client = WorkerClient::open(spec)?;
     Ok(client)
 }
 

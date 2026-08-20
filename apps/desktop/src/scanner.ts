@@ -38,6 +38,18 @@ export interface SidecarState {
   updatedAt: string;
 }
 
+export interface MediaProperties {
+  durationMs: number | null;
+  pageCount: number | null;
+  frameCount: number | null;
+  sampleRateHz: number | null;
+  channelCount: number | null;
+  bitDepth: number | null;
+  colorSpace: string | null;
+  codec: string | null;
+  hasAlpha: boolean | null;
+}
+
 export interface AssetRecord {
   key: string;
   id: string | null;
@@ -56,6 +68,7 @@ export interface AssetRecord {
   fileReadOnly: boolean | null;
   dimensions: AssetDimensions | null;
   nativeMetadata: NativeImageMetadata | null;
+  media: MediaProperties | null;
   tags: string[];
   rating: number;
   favorite: boolean;

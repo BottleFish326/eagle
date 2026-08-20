@@ -53,6 +53,20 @@ pub struct AssetDimensions {
     pub height: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaProperties {
+    pub duration_ms: Option<u64>,
+    pub page_count: Option<u32>,
+    pub frame_count: Option<u32>,
+    pub sample_rate_hz: Option<u32>,
+    pub channel_count: Option<u32>,
+    pub bit_depth: Option<u32>,
+    pub color_space: Option<String>,
+    pub codec: Option<String>,
+    pub has_alpha: Option<bool>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SidecarState {
@@ -110,6 +124,7 @@ pub struct AssetRecord {
     pub file_read_only: Option<bool>,
     pub dimensions: Option<AssetDimensions>,
     pub native_metadata: Option<NativeImageMetadata>,
+    pub media: Option<MediaProperties>,
     pub tags: BTreeSet<String>,
     pub rating: u8,
     pub favorite: bool,
@@ -153,6 +168,7 @@ impl AssetRecord {
             file_read_only: None,
             dimensions: None,
             native_metadata: None,
+            media: None,
             tags: BTreeSet::new(),
             rating: 0,
             favorite: false,
@@ -165,7 +181,9 @@ impl AssetRecord {
 
 #[cfg(test)]
 mod tests {
-    use super::AssetKind;
+    use std::path::PathBuf;
+
+    use super::{AssetDimensions, AssetKind, AssetRecord, MediaProperties};
 
     #[test]
     fn classifies_supported_mime_families() {
@@ -174,5 +192,33 @@ mod tests {
         assert_eq!(AssetKind::from_mime("audio/mpeg"), AssetKind::Audio);
         assert_eq!(AssetKind::from_mime("application/pdf"), AssetKind::Pdf);
         assert_eq!(AssetKind::from_mime("text/plain"), AssetKind::Other);
+    }
+
+    #[test]
+    fn serializes_optional_media_as_file_derived_record_data() {
+        let mut record = AssetRecord::untagged(
+            "asset.avif".into(),
+            PathBuf::from("asset.avif"),
+            "image/avif".into(),
+            128,
+            0,
+        );
+        assert!(serde_json::to_value(&record).expect("record JSON")["media"].is_null());
+
+        record.dimensions = Some(AssetDimensions {
+            width: 800,
+            height: 533,
+        });
+        record.media = Some(MediaProperties {
+            frame_count: Some(1),
+            color_space: Some("srgb".into()),
+            has_alpha: Some(false),
+            ..MediaProperties::default()
+        });
+        let value = serde_json::to_value(&record).expect("record JSON");
+        assert_eq!(value["dimensions"]["width"], 800);
+        assert_eq!(value["media"]["frameCount"], 1);
+        assert_eq!(value["media"]["colorSpace"], "srgb");
+        assert_eq!(value["media"]["hasAlpha"], false);
     }
 }

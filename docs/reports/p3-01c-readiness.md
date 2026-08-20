@@ -1,6 +1,6 @@
 # P3-01C AVIF/HEIC 就绪报告
 
-- 状态：In progress；core-only boundary accepted locally，Linux libheif backend verified，desktop preview/bundle gate implemented locally
+- 状态：In progress；core-only boundary accepted locally，Linux/macOS libheif jobs verified，desktop preview/scan wiring implemented locally
 - 日期：2026-08-20
 - 范围：P3-01C 的格式识别、真实正常夹具、worker 隔离与固定 backend
 - 非结论：不代表 P3-01C、P3-01、P3-A01 或 P3-A02 通过
@@ -27,7 +27,9 @@ brand。AVIF 优先识别 `avif/avis`，HEIC/HEIF 覆盖静态与 sequence brand
 | core-only 预览 | `codec-unavailable`，不写 PNG 缓存 | `codec-unavailable`，不写 PNG 缓存 |
 | Linux backend 属性 | 800 × 533、1 图 | 1280 × 854、2 图 |
 | Linux backend 预览 | 64px 内 PNG | 64px 内 PNG |
+| macOS backend 属性/预览 | 800 × 533、1 图；64px 内 PNG | 1280 × 854、2 图；64px 内 PNG |
 | 桌面预览入口 | 仅在固定 bundle 清单和库根授权同时成立时调用 worker | 同左 |
+| 桌面扫描属性 | `dimensions` + `media` 派生字段，不写 Sidecar | 同左，含图像数 |
 | 原素材 | 只读且摘要不变 | 只读且摘要不变 |
 
 这条降级不是文件损坏，也不会把素材从目录、Tag 或 `type:image` 查询中删除。
@@ -80,20 +82,25 @@ cargo test -p format-worker --all-targets --features embedded-libheif
 
 - 格式清单：6 个源文件、832,225 字节源内容、95 字节参考 PNG；
 - filesystem：51 项通过，其中真实 AVIF/HEIC 从内容识别且无 codec 也能扫描；
-- preview：21 项通过，其中真实 AVIF/HEIC 均稳定降级且缓存保持为空；
+- preview：22 项通过，其中真实 AVIF/HEIC 均稳定降级且缓存保持为空，派生属性映射不改
+  Tag/Sidecar 状态；
 - ISO BMFF：4 项专门边界测试覆盖 compatible brand、box 越界、异常长度与序列 brand。
 - format-worker：3 项协议单元测试与 4 项真实子进程集成测试通过。
-- bundle/desktop 接线：2 项清单边界测试、21 项 preview 测试和 23 项桌面 Rust 测试通过；
+- bundle/desktop 接线：2 项清单边界测试、22 项 preview 测试和 23 项桌面 Rust 测试通过；
   严格 Clippy 通过。完整仓库门禁必须在提交后以干净工作树重放。
 - 构建期 bundle：2 项 Node 边界测试通过；本机 release worker 经清单生成后由 Rust
-  runtime loader 成功重放。Linux/macOS 托管矩阵及 artifact 归档已进入 CI，结果待收敛。
+  runtime loader 成功重放。
+- GitHub run `32384941995` 的 Linux/macOS `Fixed libheif worker backend` jobs 均成功：
+  两端完成真实属性/PNG 解码、release bundle 生成、runtime loader 重放和 artifact 归档；
+  该 run 的全仓质量 job 在记录本条时仍运行，因此这里只接受这两个独立 job 的结论。
 - GitHub run `32380847491` 全部成功；其 `Fixed libheif worker backend` job：6 项 feature 单元测试
   与 1 项真实 backend 集成测试通过；固定 AVIF/HEIC 均完成属性与受限 PNG 解码。
 
 ## 5. 未关闭范围与下一动作
 
-P3-01C 仍缺少 macOS/Windows backend 的已接受托管证据、三平台随应用打包和扫描属性
-接线。构建期摘要清单生成与 runtime 重放门禁已经实现，但尚未用随包三平台产物
+P3-01C 仍缺少 Windows backend 托管证据和三平台随应用打包。扫描属性接线已本地实现，
+但还要用真实应用 bundle 关闭端到端扫描门禁。构建期摘要清单生成与 runtime 重放门禁
+已经实现，但尚未用随包三平台产物
 关闭端到端门禁。正常 backend 还没有进入 `bundled-codecs` 夹具期望，损坏、截断、
 伪装、超大声明、未知 codec 和资源超限固定夹具及三平台证据也未补齐。
 

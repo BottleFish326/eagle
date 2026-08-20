@@ -779,6 +779,7 @@ function demoAssets(count = DEFAULT_DEMO_ASSET_COUNT): AssetRecord[] {
         ? { width: row.dimensions[0], height: row.dimensions[1] }
         : null,
       nativeMetadata: null,
+      media: null,
       tags: row.tags,
       rating: row.rating ?? 0,
       favorite: row.favorite ?? false,

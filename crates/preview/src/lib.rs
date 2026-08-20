@@ -3,13 +3,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use asset_core::{AssetKind, AssetRecord};
+use asset_core::{
+    AssetDimensions, AssetIssue, AssetKind, AssetRecord, MediaProperties, NativeImageMetadata,
+};
 use asset_svg::{SVG_PROVIDER_ID, SVG_PROVIDER_VERSION};
-use format_worker::{LIBHEIF_PROVIDER_ID, LIBHEIF_PROVIDER_VERSION, WorkerClient};
+use format_worker::{
+    HeifProperties, LIBHEIF_PROVIDER_ID, LIBHEIF_PROVIDER_VERSION, WorkerClient, WorkerErrorCode,
+    WorkerRunError,
+};
 use resource_control::{ResourceController, ResourceError, ResourceLimits, WorkKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
+use uuid::Uuid;
 
 use cache::ThumbnailCache;
 use decoder::decode_thumbnail;
@@ -341,6 +347,46 @@ impl ThumbnailService {
         self.request_internal(record, max_edge, Some(authorized_root))
     }
 
+    /// Adds file-derived AVIF/HEIC properties to one in-memory scan record.
+    ///
+    /// No property is written to a Sidecar or any other authoritative store. Missing codecs are a
+    /// neutral capability downgrade; malformed or resource-limited sources receive a stable issue.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PreviewError`] only when the shared resource scheduler cannot admit the request.
+    pub fn enrich_media_properties(
+        &self,
+        record: &mut AssetRecord,
+        authorized_root: &Path,
+    ) -> Result<bool, PreviewError> {
+        if !matches!(
+            record.mime.as_str(),
+            "image/avif" | "image/heic" | "image/heif"
+        ) {
+            return Ok(false);
+        }
+        let Some(worker) = self.libheif_worker.as_ref() else {
+            return Ok(false);
+        };
+        let _permit = self.resources.acquire(WorkKind::Decode)?;
+        let result = worker
+            .metadata_request(Uuid::now_v7(), &record.path, authorized_root)
+            .and_then(|request| worker.execute(&request, authorized_root));
+        match result {
+            Ok(success) => {
+                apply_heif_properties(record, success.properties);
+                Ok(true)
+            }
+            Err(error) => {
+                if let Some(issue) = worker_asset_issue(&error) {
+                    record.issues.push(issue);
+                }
+                Ok(false)
+            }
+        }
+    }
+
     fn request_internal(
         &self,
         record: &AssetRecord,
@@ -484,6 +530,25 @@ impl ThumbnailService {
             .collect::<BTreeSet<_>>();
         self.cache.maintain(Some(&active_sources))
     }
+}
+
+fn apply_heif_properties(record: &mut AssetRecord, properties: HeifProperties) {
+    record.dimensions = Some(AssetDimensions {
+        width: properties.width,
+        height: properties.height,
+    });
+    if let Some(orientation) = properties.orientation {
+        let metadata = record
+            .native_metadata
+            .get_or_insert_with(NativeImageMetadata::default);
+        metadata.orientation = Some(u32::from(orientation));
+    }
+    record.media = Some(MediaProperties {
+        frame_count: Some(properties.image_count),
+        color_space: properties.color_space,
+        has_alpha: properties.has_alpha,
+        ..MediaProperties::default()
+    });
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -637,6 +702,56 @@ fn placeholder(
     }
 }
 
+fn worker_asset_issue(error: &WorkerRunError) -> Option<AssetIssue> {
+    match error {
+        WorkerRunError::Worker {
+            code: WorkerErrorCode::CodecUnavailable | WorkerErrorCode::UnsupportedFeature,
+            ..
+        } => None,
+        WorkerRunError::Worker {
+            code: WorkerErrorCode::ResourceLimited | WorkerErrorCode::TimedOut,
+            ..
+        }
+        | WorkerRunError::TimedOut { .. }
+        | WorkerRunError::OutputTooLarge
+        | WorkerRunError::ResourceLimitViolation => Some(AssetIssue::ResourceLimited(
+            "optional image metadata exceeded its fixed worker limits".into(),
+        )),
+        WorkerRunError::Worker {
+            code: WorkerErrorCode::Unreadable,
+            ..
+        }
+        | WorkerRunError::InvalidSource
+        | WorkerRunError::SourceOutsideRoot => Some(AssetIssue::UnreadableFile(
+            "optional image metadata source is unavailable".into(),
+        )),
+        WorkerRunError::Worker {
+            code: WorkerErrorCode::SourceChanged,
+            ..
+        }
+        | WorkerRunError::SourceChanged => Some(AssetIssue::InvalidNativeMetadata(
+            "source changed during optional image metadata extraction".into(),
+        )),
+        WorkerRunError::Worker {
+            code:
+                WorkerErrorCode::InvalidContent
+                | WorkerErrorCode::DecodeFailed
+                | WorkerErrorCode::Internal,
+            ..
+        }
+        | WorkerRunError::InvalidConfiguration(_)
+        | WorkerRunError::ExecutableChanged
+        | WorkerRunError::Io(_)
+        | WorkerRunError::Protocol(_)
+        | WorkerRunError::Crashed { .. }
+        | WorkerRunError::IdentityMismatch
+        | WorkerRunError::InvalidPng
+        | WorkerRunError::ThreadPanicked => Some(AssetIssue::InvalidNativeMetadata(
+            "optional image metadata could not be decoded by the fixed worker".into(),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs::{self, File, FileTimes, OpenOptions};
@@ -646,6 +761,7 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     use asset_core::{AssetKind, AssetRecord};
+    use format_worker::HeifProperties;
     use image::codecs::gif::{GifEncoder, Repeat};
     use image::{DynamicImage, Frame, ImageBuffer, ImageFormat, Rgba};
     use metadata::{digest_file, sidecar_path_for};
@@ -653,7 +769,7 @@ mod tests {
 
     use super::{
         CachePolicy, CacheStartupDisposition, THUMBNAIL_DECODER_VERSION, ThumbnailOutcome,
-        ThumbnailPlaceholderReason, ThumbnailService,
+        ThumbnailPlaceholderReason, ThumbnailService, apply_heif_properties,
     };
 
     #[test]
@@ -1155,13 +1271,20 @@ mod tests {
             let path = root.join(relative);
             let metadata = fs::metadata(&path).expect("pinned libheif metadata");
             let source_digest = digest_file(&path).expect("source digest");
-            let record = AssetRecord::untagged(
+            let mut record = AssetRecord::untagged(
                 path.to_string_lossy().into_owned(),
                 path,
                 mime.into(),
                 metadata.len(),
                 0,
             );
+            assert!(
+                !service
+                    .enrich_media_properties(&mut record, &root)
+                    .expect("core-only property downgrade")
+            );
+            assert!(record.dimensions.is_none());
+            assert!(record.media.is_none());
             assert!(matches!(
                 service.request(&record, 32).expect("provider outcome"),
                 ThumbnailOutcome::Placeholder {
@@ -1175,6 +1298,47 @@ mod tests {
             );
         }
         assert_eq!(png_files(service.cache.root()), 0);
+    }
+
+    #[test]
+    fn heif_properties_update_only_file_derived_record_fields() {
+        let directory = tempdir().expect("tempdir");
+        let asset = directory.path().join("asset.heic");
+        fs::write(&asset, b"derived property fixture").expect("fixture");
+        let mut record =
+            AssetRecord::untagged("asset.heic".into(), asset, "image/heic".into(), 24, 0);
+        record.tags.insert("user/tag".into());
+
+        apply_heif_properties(
+            &mut record,
+            HeifProperties {
+                width: 1280,
+                height: 854,
+                orientation: Some(6),
+                color_space: Some("srgb".into()),
+                has_alpha: Some(false),
+                image_count: 2,
+            },
+        );
+
+        assert_eq!(
+            record.dimensions.map(|value| (value.width, value.height)),
+            Some((1280, 854))
+        );
+        assert_eq!(
+            record
+                .native_metadata
+                .as_ref()
+                .and_then(|value| value.orientation),
+            Some(6)
+        );
+        assert_eq!(
+            record.media.as_ref().and_then(|value| value.frame_count),
+            Some(2)
+        );
+        assert_eq!(record.tags, ["user/tag".into()].into_iter().collect());
+        assert!(record.sidecar_path.is_none());
+        assert!(record.sidecar_state.is_none());
     }
 
     #[test]
