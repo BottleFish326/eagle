@@ -281,6 +281,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "asset-selection"
+version = "0.1.0"
+dependencies = [
+ "asset-catalog",
+ "asset-core",
+ "asset-index",
+ "chrono",
+ "serde",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "asset-svg"
 version = "0.1.0"
 dependencies = [
@@ -2521,6 +2534,7 @@ dependencies = [
  "asset-link-resolver",
  "asset-preview",
  "asset-saved-filters",
+ "asset-selection",
  "asset-transactions",
  "format-worker",
  "metadata",

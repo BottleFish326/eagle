@@ -66,6 +66,7 @@ export interface QueryAssetsResult {
   query: AssetQuery;
   keys: string[];
   totalAssets: number;
+  catalogRevision: number;
 }
 
 export type QueryParseErrorKind =

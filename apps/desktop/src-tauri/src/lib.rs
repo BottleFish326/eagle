@@ -35,7 +35,11 @@ use asset_saved_filters::{
     CreateSavedFilter, SavedFilterCatalog, SavedFilterEntryIssueKind, SavedFilterExecution,
     SavedFilterExecutionError, SavedFilterFileIssueKind, SavedFilterFileVersion,
     SavedFilterMutation, SavedFilterStore, SavedFilterStoreError, UpdateSavedFilter,
-    execute_saved_filter as execute_saved_filter_view,
+    execute_saved_filter_at_revision as execute_saved_filter_view,
+};
+use asset_selection::{
+    ExplicitSelectionInput, QuerySelectionInput, RangeSelectionInput, SelectionError,
+    SelectionSessionStats, SelectionSessionStore, SelectionSnapshotSummary,
 };
 use asset_transactions::{
     MetadataTransactionStore, TransactionFailureKind, TransactionRecoveryResult,
@@ -205,6 +209,112 @@ enum LibraryWatchEvent {
 enum QueryAssetsError {
     Parse { error: QueryParseError },
     Internal { message: String },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum SelectionCommandErrorKind {
+    SnapshotNotFound,
+    SnapshotExpired,
+    CatalogChanged,
+    AssetMissing,
+    RootDisabled,
+    RootOffline,
+    AuthorizationLost,
+    InvalidOperation,
+    OutputTooLarge,
+    Internal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectionCommandError {
+    kind: SelectionCommandErrorKind,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    actual_revision: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    query_kind: Option<asset_index::QueryParseErrorKind>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    query_offset: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    root_id: Option<Uuid>,
+}
+
+impl SelectionCommandError {
+    fn simple(kind: SelectionCommandErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+            actual_revision: None,
+            query_kind: None,
+            query_offset: None,
+            root_id: None,
+        }
+    }
+
+    fn root(kind: SelectionCommandErrorKind, root_id: Uuid) -> Self {
+        Self {
+            kind,
+            message: "selection root is not currently authorized and available".into(),
+            actual_revision: None,
+            query_kind: None,
+            query_offset: None,
+            root_id: Some(root_id),
+        }
+    }
+}
+
+impl From<SelectionError> for SelectionCommandError {
+    fn from(error: SelectionError) -> Self {
+        match error {
+            SelectionError::SnapshotNotFound => Self::simple(
+                SelectionCommandErrorKind::SnapshotNotFound,
+                "selection snapshot was not found",
+            ),
+            SelectionError::SnapshotExpired => Self::simple(
+                SelectionCommandErrorKind::SnapshotExpired,
+                "selection snapshot expired",
+            ),
+            SelectionError::CatalogChanged { actual_revision } => Self {
+                kind: SelectionCommandErrorKind::CatalogChanged,
+                message: "asset catalog changed; refresh the view before selecting".into(),
+                actual_revision: Some(actual_revision),
+                query_kind: None,
+                query_offset: None,
+                root_id: None,
+            },
+            SelectionError::InvalidQuery { kind, offset } => Self {
+                kind: SelectionCommandErrorKind::InvalidOperation,
+                message: "selection query is invalid".into(),
+                actual_revision: None,
+                query_kind: Some(kind),
+                query_offset: Some(offset),
+                root_id: None,
+            },
+            SelectionError::AssetMissing => Self::simple(
+                SelectionCommandErrorKind::AssetMissing,
+                "selection contains an asset that is no longer in the catalog",
+            ),
+            SelectionError::TooManyItems
+            | SelectionError::TooManyExplicitItems
+            | SelectionError::SessionBudgetExceeded => Self::simple(
+                SelectionCommandErrorKind::OutputTooLarge,
+                "selection exceeds the bounded runtime session budget",
+            ),
+            SelectionError::EmptyRootScope
+            | SelectionError::EmptySelection
+            | SelectionError::AnchorMissing
+            | SelectionError::TargetMissing => Self::simple(
+                SelectionCommandErrorKind::InvalidOperation,
+                error.to_string(),
+            ),
+            SelectionError::StateUnavailable => Self::simple(
+                SelectionCommandErrorKind::Internal,
+                "selection session state is unavailable",
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -972,16 +1082,17 @@ fn execute_saved_filter(
                 "saved filter is missing or stale",
             )
         })?;
-    let records = catalog
-        .lock()
-        .map_err(|_| {
-            SavedFilterCommandError::simple(
-                SavedFilterCommandErrorKind::Internal,
-                "asset catalog is unavailable",
-            )
-        })?
-        .records();
-    let execution = execute_saved_filter_view(&filter, &records, &enabled, &available)?;
+    let catalog = catalog.lock().map_err(|_| {
+        SavedFilterCommandError::simple(
+            SavedFilterCommandErrorKind::Internal,
+            "asset catalog is unavailable",
+        )
+    })?;
+    let records = catalog.records();
+    let catalog_revision = catalog.revision();
+    drop(catalog);
+    let execution =
+        execute_saved_filter_view(&filter, &records, &enabled, &available, catalog_revision)?;
     record_diagnostic(
         diagnostics.inner(),
         DiagnosticLevel::Info,
@@ -2421,6 +2532,143 @@ fn query_assets(
         .map_err(|error| QueryAssetsError::Parse { error })
 }
 
+fn validate_selection_roots(
+    statuses: &[LibraryRootStatus],
+    requested: &BTreeSet<Uuid>,
+) -> Result<(), SelectionCommandError> {
+    for root_id in requested {
+        let Some(status) = statuses.iter().find(|status| status.root.id == *root_id) else {
+            return Err(SelectionCommandError::root(
+                SelectionCommandErrorKind::AuthorizationLost,
+                *root_id,
+            ));
+        };
+        if !status.root.enabled {
+            return Err(SelectionCommandError::root(
+                SelectionCommandErrorKind::RootDisabled,
+                *root_id,
+            ));
+        }
+        if status.access_status != RootAccessStatus::Available {
+            return Err(SelectionCommandError::root(
+                SelectionCommandErrorKind::RootOffline,
+                *root_id,
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn selection_root_statuses(
+    roots: &Mutex<LibraryRootManager>,
+) -> Result<Vec<LibraryRootStatus>, SelectionCommandError> {
+    roots
+        .lock()
+        .map_err(|_| {
+            SelectionCommandError::simple(
+                SelectionCommandErrorKind::Internal,
+                "library root state is unavailable",
+            )
+        })
+        .map(|manager| manager.roots())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn create_query_selection_snapshot(
+    input: QuerySelectionInput,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    selections: State<'_, Arc<SelectionSessionStore>>,
+) -> Result<SelectionSnapshotSummary, SelectionCommandError> {
+    let statuses = selection_root_statuses(roots.inner())?;
+    validate_selection_roots(&statuses, &input.scope_root_ids)?;
+    let catalog = catalog.lock().map_err(|_| {
+        SelectionCommandError::simple(
+            SelectionCommandErrorKind::Internal,
+            "asset catalog state is unavailable",
+        )
+    })?;
+    selections
+        .create_query_snapshot(&catalog, &input)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn create_range_selection_snapshot(
+    input: RangeSelectionInput,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    selections: State<'_, Arc<SelectionSessionStore>>,
+) -> Result<SelectionSnapshotSummary, SelectionCommandError> {
+    let statuses = selection_root_statuses(roots.inner())?;
+    validate_selection_roots(&statuses, &input.query.scope_root_ids)?;
+    let catalog = catalog.lock().map_err(|_| {
+        SelectionCommandError::simple(
+            SelectionCommandErrorKind::Internal,
+            "asset catalog state is unavailable",
+        )
+    })?;
+    selections
+        .create_range_snapshot(&catalog, &input)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn create_explicit_selection_snapshot(
+    input: ExplicitSelectionInput,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    selections: State<'_, Arc<SelectionSessionStore>>,
+) -> Result<SelectionSnapshotSummary, SelectionCommandError> {
+    let statuses = selection_root_statuses(roots.inner())?;
+    let catalog = catalog.lock().map_err(|_| {
+        SelectionCommandError::simple(
+            SelectionCommandErrorKind::Internal,
+            "asset catalog state is unavailable",
+        )
+    })?;
+    let mut requested = BTreeSet::new();
+    for key in &input.keys {
+        let record = catalog.get(key).ok_or_else(|| {
+            SelectionCommandError::simple(
+                SelectionCommandErrorKind::AssetMissing,
+                "selection contains an asset that is no longer in the catalog",
+            )
+        })?;
+        let root_id = record.root_id.ok_or_else(|| {
+            SelectionCommandError::simple(
+                SelectionCommandErrorKind::AuthorizationLost,
+                "selection asset is not associated with an authorized library root",
+            )
+        })?;
+        requested.insert(root_id);
+    }
+    validate_selection_roots(&statuses, &requested)?;
+    selections
+        .create_explicit_snapshot(&catalog, &input)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn release_selection_snapshot(
+    snapshot_id: Uuid,
+    selections: State<'_, Arc<SelectionSessionStore>>,
+) -> Result<bool, SelectionCommandError> {
+    selections.release(snapshot_id).map_err(Into::into)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn selection_session_stats(
+    selections: State<'_, Arc<SelectionSessionStore>>,
+) -> Result<SelectionSessionStats, SelectionCommandError> {
+    selections.stats().map_err(Into::into)
+}
+
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 async fn request_thumbnail(
@@ -2804,6 +3052,7 @@ pub fn run() {
             app.manage(Arc::new(WatchCoordinator::default()));
             app.manage(Arc::new(ReconciliationCoordinator::default()));
             app.manage(Arc::new(Mutex::new(AssetCatalog::default())));
+            app.manage(Arc::new(SelectionSessionStore::default()));
             app.manage(Arc::new(MetadataTransactionStore::open(
                 config_directory.join("metadata-transactions-v1"),
             )?));
@@ -2915,6 +3164,11 @@ pub fn run() {
             restore_metadata_transaction,
             dismiss_metadata_transaction,
             query_assets,
+            create_query_selection_snapshot,
+            create_range_selection_snapshot,
+            create_explicit_selection_snapshot,
+            release_selection_snapshot,
+            selection_session_stats,
             request_thumbnail,
             read_thumbnail,
             clear_thumbnail_cache,
@@ -2954,10 +3208,10 @@ mod tests {
         LibraryScanEvent, LibraryWatchEvent, MAX_ACTIVE_SCANS, MAX_ACTIVE_WATCHES,
         QueryAssetsError, SCAN_BATCH_QUEUE_CAPACITY, SavedFilterCommandError,
         SavedFilterCommandErrorKind, SavedFilterFileVersion, ScanCancellation, ScanCoordinator,
-        ScanDeliveryWindow, ScanPipelineMessage, ThumbnailCommandError, VaultReferenceFailureKind,
-        WatchCoordinator, build_info, ensure_transaction_item_inside_root,
-        failed_batch_transaction_preflight, path_fingerprint, saved_filter_root_sets,
-        scan_pipeline_channel, transaction_targets, vault_failure_kind,
+        ScanDeliveryWindow, ScanPipelineMessage, SelectionCommandError, SelectionCommandErrorKind,
+        ThumbnailCommandError, VaultReferenceFailureKind, WatchCoordinator, build_info,
+        ensure_transaction_item_inside_root, failed_batch_transaction_preflight, path_fingerprint,
+        saved_filter_root_sets, scan_pipeline_channel, transaction_targets, vault_failure_kind,
     };
 
     #[test]
@@ -3180,6 +3434,26 @@ mod tests {
         assert_eq!(value["error"]["kind"], "unknown-filter");
         assert_eq!(value["error"]["offset"], 4);
         assert_eq!(value["error"]["token"], "kind:image");
+    }
+
+    #[test]
+    fn selection_errors_use_stable_redacted_wire_shapes() {
+        let changed =
+            SelectionCommandError::from(asset_selection::SelectionError::CatalogChanged {
+                actual_revision: 41,
+            });
+        let value = serde_json::to_value(changed).expect("serialize selection error");
+        assert_eq!(value["kind"], "catalog-changed");
+        assert_eq!(value["actualRevision"], 41);
+        assert!(value.get("rootId").is_none());
+
+        let root_id = Uuid::now_v7();
+        let unavailable =
+            SelectionCommandError::root(SelectionCommandErrorKind::RootOffline, root_id);
+        let value = serde_json::to_value(unavailable).expect("serialize root error");
+        assert_eq!(value["kind"], "root-offline");
+        assert_eq!(value["rootId"], root_id.to_string());
+        assert!(!value.to_string().contains('/'));
     }
 
     #[test]

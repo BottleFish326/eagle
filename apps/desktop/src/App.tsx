@@ -47,6 +47,10 @@ import type {
   SavedFilterCommandError,
   SavedFilterInput,
 } from "./saved-filters";
+import type {
+  QuerySelectionInput,
+  SelectionSnapshotSummary,
+} from "./selection-snapshots";
 import type { ReconciliationReport, RelinkCandidate } from "./reconciliation";
 import { SettingsManager } from "./SettingsManager";
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
@@ -131,6 +135,13 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const [gridWindowKeys, setGridWindowKeys] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [selectionAnchor, setSelectionAnchor] = useState<string>();
+  const selectionSnapshotRef = useRef<SelectionSnapshotSummary | undefined>(
+    undefined,
+  );
+  const [selectionSnapshot, setSelectionSnapshot] =
+    useState<SelectionSnapshotSummary>();
+  const [selectionContext, setSelectionContext] =
+    useState<QuerySelectionInput>();
   const [expression, setExpression] = useState("");
   const [tagFilters, setTagFilters] = useState<TagFilterMap>({});
   const [queryPending, setQueryPending] = useState(false);
@@ -559,6 +570,23 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
           if (!active) return;
           const keys =
             "orderedKeys" in result ? result.orderedKeys : result.keys;
+          setSelectionContext({
+            expectedCatalogRevision: result.catalogRevision,
+            expression: effectiveQuery,
+            scopeRootIds:
+              "effectiveRootIds" in result
+                ? result.effectiveRootIds
+                : roots
+                    .filter(
+                      (root) =>
+                        root.enabled && root.accessStatus === "available",
+                    )
+                    .map((root) => root.id),
+            sort:
+              "sort" in result
+                ? result.sort
+                : { field: "asset-key", direction: "ascending" },
+          });
           setQueryView(
             settleSuccessfulQuery(keys.filter((key) => assets.has(key))),
           );
@@ -575,7 +603,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [activeSavedFilter, api, assets, effectiveQuery]);
+  }, [activeSavedFilter, api, assets, effectiveQuery, roots]);
 
   const allAssets = useMemo(() => [...assets.values()], [assets]);
   const visibleAssets = useMemo(
@@ -699,6 +727,29 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   }, [visibleKeys]);
 
   useEffect(() => {
+    selectionSnapshotRef.current = selectionSnapshot;
+  }, [selectionSnapshot]);
+
+  useEffect(
+    () => () => {
+      const snapshot = selectionSnapshotRef.current;
+      if (snapshot !== undefined) void api.releaseSelectionSnapshot(snapshot.id);
+    },
+    [api],
+  );
+
+  const replaceSelectionSnapshot = async (
+    next: SelectionSnapshotSummary | undefined,
+  ) => {
+    const previous = selectionSnapshotRef.current;
+    selectionSnapshotRef.current = next;
+    setSelectionSnapshot(next);
+    if (previous !== undefined && previous.id !== next?.id) {
+      await api.releaseSelectionSnapshot(previous.id).catch(() => false);
+    }
+  };
+
+  useEffect(() => {
     const handleGlobalKey = (event: globalThis.KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const editing =
@@ -711,7 +762,10 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         else if (vaultManagerOpen) setVaultManagerOpen(false);
         else if (rootManagerOpen) setRootManagerOpen(false);
         else if (savedFilterManagerOpen) setSavedFilterManagerOpen(false);
-        else if (!editing) setSelected(new Set());
+        else if (!editing) {
+          setSelected(new Set());
+          void replaceSelectionSnapshot(undefined);
+        }
       }
     };
     window.addEventListener("keydown", handleGlobalKey);
@@ -719,17 +773,35 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   }, [rootManagerOpen, savedFilterManagerOpen, settingsOpen, vaultManagerOpen]);
 
   const selectAsset = (key: string, intent: AssetSelectionIntent) => {
-    setSelected((current) => {
-      if (intent.range && selectionAnchor) {
-        const keys = visibleAssets.map((asset) => asset.key);
-        const start = keys.indexOf(selectionAnchor);
-        const end = keys.indexOf(key);
-        if (start >= 0 && end >= 0) {
-          return new Set(
-            keys.slice(Math.min(start, end), Math.max(start, end) + 1),
-          );
-        }
+    if (intent.range && selectionAnchor && selectionContext !== undefined) {
+      const keys = visibleAssets.map((asset) => asset.key);
+      const start = keys.indexOf(selectionAnchor);
+      const end = keys.indexOf(key);
+      if (start >= 0 && end >= 0) {
+        void api
+          .createRangeSelectionSnapshot({
+            ...selectionContext,
+            anchorKey: selectionAnchor,
+            targetKey: key,
+          })
+          .then(async (snapshot) => {
+            await replaceSelectionSnapshot(snapshot);
+            setSelected(
+              new Set(keys.slice(Math.min(start, end), Math.max(start, end) + 1)),
+            );
+            setSelectionAnchor(key);
+          })
+          .catch((error: unknown) => {
+            setNotice({
+              tone: "error",
+              message: `范围选择失败：${errorMessage(error)}`,
+            });
+          });
+        return;
       }
+    }
+    void replaceSelectionSnapshot(undefined);
+    setSelected((current) => {
       if (intent.toggle) {
         const next = new Set(current);
         if (next.has(key)) next.delete(key);
@@ -745,6 +817,14 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     if (selectedAssets.length === 0) return;
     setEditBusy(true);
     try {
+      if (selectionContext === undefined) {
+        throw new Error("目录 revision 尚未就绪，请等待当前视图刷新");
+      }
+      const snapshot = await api.createExplicitSelectionSnapshot({
+        expectedCatalogRevision: selectionContext.expectedCatalogRevision,
+        keys: selectedAssets.map((asset) => asset.key),
+      });
+      await replaceSelectionSnapshot(snapshot);
       const result = await api.editAssetMetadata({
         targets: selectedAssets.map((asset) => ({
           key: asset.key,
@@ -1586,10 +1666,24 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
               ) : null}
               <button
                 className="text-button"
-                disabled={visibleAssets.length === 0}
-                onClick={() =>
-                  setSelected(new Set(visibleAssets.map((asset) => asset.key)))
-                }
+                disabled={visibleAssets.length === 0 || selectionContext === undefined}
+                onClick={() => {
+                  if (selectionContext === undefined) return;
+                  void api
+                    .createQuerySelectionSnapshot(selectionContext)
+                    .then(async (snapshot) => {
+                      await replaceSelectionSnapshot(snapshot);
+                      setSelected(
+                        new Set(visibleAssets.map((asset) => asset.key)),
+                      );
+                    })
+                    .catch((error: unknown) => {
+                      setNotice({
+                        tone: "error",
+                        message: `全选失败：${errorMessage(error)}`,
+                      });
+                    });
+                }}
                 type="button"
               >
                 全选当前结果
@@ -1598,7 +1692,10 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
                 <button
                   className="icon-button"
                   aria-label="清除选择"
-                  onClick={() => setSelected(new Set())}
+                  onClick={() => {
+                    setSelected(new Set());
+                    void replaceSelectionSnapshot(undefined);
+                  }}
                   type="button"
                 >
                   <Icon name="close" size={15} />

@@ -96,6 +96,20 @@ import type {
   SavedFilterInput,
   SavedFilterMutation,
 } from "./saved-filters";
+import type {
+  ExplicitSelectionInput,
+  QuerySelectionInput,
+  RangeSelectionInput,
+  SelectionSessionStats,
+  SelectionSnapshotSummary,
+} from "./selection-snapshots";
+import {
+  createExplicitSelectionSnapshot,
+  createQuerySelectionSnapshot,
+  createRangeSelectionSnapshot,
+  getSelectionSessionStats,
+  releaseSelectionSnapshot,
+} from "./selection-snapshots";
 import {
   createSavedFilter,
   deleteSavedFilter,
@@ -131,6 +145,17 @@ export interface DesktopApi {
   ): Promise<string>;
   stopLibraryWatch(watchId: string): Promise<boolean>;
   queryAssets(input: QueryAssetsInput): Promise<QueryAssetsResult>;
+  createQuerySelectionSnapshot(
+    input: QuerySelectionInput,
+  ): Promise<SelectionSnapshotSummary>;
+  createRangeSelectionSnapshot(
+    input: RangeSelectionInput,
+  ): Promise<SelectionSnapshotSummary>;
+  createExplicitSelectionSnapshot(
+    input: ExplicitSelectionInput,
+  ): Promise<SelectionSnapshotSummary>;
+  releaseSelectionSnapshot(snapshotId: string): Promise<boolean>;
+  getSelectionSessionStats(): Promise<SelectionSessionStats>;
   listSavedFilters(): Promise<SavedFilterCatalog>;
   createSavedFilter(
     expectedVersion: SavedFilterFileVersion,
@@ -200,6 +225,11 @@ export const tauriDesktopApi: DesktopApi = {
   startLibraryWatch,
   stopLibraryWatch,
   queryAssets,
+  createQuerySelectionSnapshot,
+  createRangeSelectionSnapshot,
+  createExplicitSelectionSnapshot,
+  releaseSelectionSnapshot,
+  getSelectionSessionStats,
   listSavedFilters,
   createSavedFilter,
   updateSavedFilter,

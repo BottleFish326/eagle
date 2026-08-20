@@ -14,6 +14,7 @@ members = [
   "crates/preview",
   "crates/resource-control",
   "crates/saved-filters",
+  "crates/selection",
   "crates/svg",
   "crates/tag-renames",
   "crates/transactions",

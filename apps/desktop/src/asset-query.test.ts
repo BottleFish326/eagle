@@ -26,6 +26,7 @@ describe("asset query command", () => {
       },
       keys: ["/assets/logo.png"],
       totalAssets: 2,
+      catalogRevision: 7,
     };
     const call = vi.fn().mockResolvedValue(result);
 

@@ -22,6 +22,7 @@ pub use query::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AssetSortField {
+    AssetKey,
     FileName,
     ModifiedAt,
     CreatedAt,
@@ -356,6 +357,7 @@ enum SortValue {
 impl SortValue {
     fn from_record(record: &AssetRecord, field: AssetSortField) -> Self {
         match field {
+            AssetSortField::AssetKey => Self::Text(record.key.nfc().collect()),
             AssetSortField::FileName => Self::Text(record.file_name.nfc().collect()),
             AssetSortField::ModifiedAt => Self::Signed(record.modified_unix_ms),
             AssetSortField::CreatedAt => Self::Signed(record.created_unix_ms),

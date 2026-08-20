@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use asset_core::{AssetIssue, AssetRecord, SidecarState};
-use asset_index::{AssetIndex, AssetQuery, QueryParseError, parse_query};
+use asset_index::{AssetIndex, AssetQuery, AssetSort, QueryParseError, parse_query};
 use metadata::{
     AssetSidecar, MetadataPatch, SidecarError, SidecarFileVersion, edit_asset_metadata_versioned,
 };
@@ -64,6 +64,7 @@ pub struct QueryAssetsResult {
     pub query: AssetQuery,
     pub keys: Vec<String>,
     pub total_assets: usize,
+    pub catalog_revision: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -91,13 +92,24 @@ pub enum CatalogError {
 #[derive(Debug, Default)]
 pub struct AssetCatalog {
     index: AssetIndex,
+    revision: u64,
 }
 
 impl AssetCatalog {
     pub fn ingest(&mut self, records: impl IntoIterator<Item = AssetRecord>) {
+        let mut changed = false;
         for record in records {
+            changed |= self.index.get(&record.key) != Some(&record);
             self.index.upsert(record);
         }
+        if changed {
+            self.bump_revision();
+        }
+    }
+
+    #[must_use]
+    pub const fn revision(&self) -> u64 {
+        self.revision
     }
 
     #[must_use]
@@ -111,7 +123,11 @@ impl AssetCatalog {
     }
 
     pub fn clear(&mut self) {
+        if self.index.is_empty() {
+            return;
+        }
         self.index.clear();
+        self.bump_revision();
     }
 
     /// Removes every derived record associated with one configured library root.
@@ -130,6 +146,9 @@ impl AssetCatalog {
         let count = keys.len();
         for key in keys {
             self.index.remove(&key);
+        }
+        if count > 0 {
+            self.bump_revision();
         }
         count
     }
@@ -226,6 +245,16 @@ impl AssetCatalog {
         self.index.query(query)
     }
 
+    #[must_use]
+    pub fn query_ordered(
+        &self,
+        query: &AssetQuery,
+        scope_root_ids: &BTreeSet<Uuid>,
+        sort: AssetSort,
+    ) -> Vec<String> {
+        self.index.query_ordered(query, scope_root_ids, sort)
+    }
+
     /// Applies a Sidecar already committed by the durable transaction service.
     #[must_use]
     pub fn apply_committed_sidecar(
@@ -238,6 +267,7 @@ impl AssetCatalog {
         let mut record = self.index.get(key)?.clone();
         merge_sidecar_into_record(&mut record, sidecar_path, sidecar, version);
         self.index.upsert(record.clone());
+        self.bump_revision();
         Some(record)
     }
 
@@ -258,6 +288,7 @@ impl AssetCatalog {
             query,
             keys,
             total_assets: self.index.len(),
+            catalog_revision: self.revision,
         })
     }
 
@@ -314,7 +345,12 @@ impl AssetCatalog {
             },
         );
         self.index.upsert(record.clone());
+        self.bump_revision();
         Ok(record)
+    }
+
+    fn bump_revision(&mut self) {
+        self.revision = self.revision.saturating_add(1);
     }
 }
 
@@ -427,6 +463,25 @@ mod tests {
     use super::{
         AssetCatalog, AssetEditTarget, BatchMetadataEdit, EditFailureKind, QueryAssetsInput,
     };
+
+    #[test]
+    fn catalog_revision_changes_only_with_derived_record_state() {
+        let mut catalog = AssetCatalog::default();
+        let first = record("first", PathBuf::from("/assets/first.png"));
+        assert_eq!(catalog.revision(), 0);
+        catalog.ingest([first.clone()]);
+        assert_eq!(catalog.revision(), 1);
+        catalog.ingest([first.clone()]);
+        assert_eq!(catalog.revision(), 1);
+        let mut changed = first;
+        changed.rating = 4;
+        catalog.ingest([changed]);
+        assert_eq!(catalog.revision(), 2);
+        catalog.clear();
+        assert_eq!(catalog.revision(), 3);
+        catalog.clear();
+        assert_eq!(catalog.revision(), 3);
+    }
 
     #[test]
     fn parsed_query_returns_deterministic_keys_and_visible_errors() {

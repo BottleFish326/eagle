@@ -21,6 +21,7 @@ asset-index = { path = "../../../crates/index" }
 asset-link-resolver = { path = "../../../crates/link-resolver" }
 asset-preview = { path = "../../../crates/preview" }
 asset-saved-filters = { path = "../../../crates/saved-filters" }
+asset-selection = { path = "../../../crates/selection" }
 asset-transactions = { path = "../../../crates/transactions" }
 format-worker = { path = "../../../crates/format-worker" }
 metadata = { path = "../../../crates/metadata" }

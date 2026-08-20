@@ -202,6 +202,7 @@ pub struct SavedFilterExecution {
     pub effective_root_ids: Vec<Uuid>,
     pub missing_root_ids: Vec<Uuid>,
     pub sort: SavedFilterSort,
+    pub catalog_revision: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Error)]
@@ -315,6 +316,21 @@ pub fn execute_saved_filter(
     enabled_root_ids: &BTreeSet<Uuid>,
     available_root_ids: &BTreeSet<Uuid>,
 ) -> Result<SavedFilterExecution, SavedFilterExecutionError> {
+    execute_saved_filter_at_revision(filter, records, enabled_root_ids, available_root_ids, 0)
+}
+
+/// Executes a saved filter while binding its ephemeral result to a catalog revision.
+///
+/// # Errors
+///
+/// Returns the same structured query error as [`execute_saved_filter`].
+pub fn execute_saved_filter_at_revision(
+    filter: &SavedFilter,
+    records: &[AssetRecord],
+    enabled_root_ids: &BTreeSet<Uuid>,
+    available_root_ids: &BTreeSet<Uuid>,
+    catalog_revision: u64,
+) -> Result<SavedFilterExecution, SavedFilterExecutionError> {
     let query = parse_query(&filter.query).map_err(|error| SavedFilterExecutionError {
         kind: error.kind,
         offset: error.offset,
@@ -369,6 +385,7 @@ pub fn execute_saved_filter(
         effective_root_ids: effective_root_ids.into_iter().collect(),
         missing_root_ids,
         sort: filter.sort,
+        catalog_revision,
     })
 }
 
@@ -2535,13 +2552,15 @@ mod tests {
         let records = vec![medium, offline, high];
         let enabled = BTreeSet::from([root_a, root_b]);
         let available = BTreeSet::from([root_a]);
-        let first =
-            execute_saved_filter(&filter, &records, &enabled, &available).expect("first execution");
-        let rebuilt = execute_saved_filter(&filter, &records.clone(), &enabled, &available)
-            .expect("rebuilt execution");
+        let first = execute_saved_filter_at_revision(&filter, &records, &enabled, &available, 17)
+            .expect("first execution");
+        let rebuilt =
+            execute_saved_filter_at_revision(&filter, &records.clone(), &enabled, &available, 17)
+                .expect("rebuilt execution");
         assert_eq!(first.ordered_keys, ["high", "medium"]);
         assert_eq!(first.missing_root_ids, [root_b]);
         assert_eq!(first.scoped_assets, 2);
+        assert_eq!(first.catalog_revision, 17);
         assert_eq!(first, rebuilt);
     }
 

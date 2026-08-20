@@ -97,6 +97,7 @@ export interface SavedFilterExecution {
   effectiveRootIds: string[];
   missingRootIds: string[];
   sort: SavedFilterSort;
+  catalogRevision: number;
 }
 
 export type SavedFilterCommandErrorKind =

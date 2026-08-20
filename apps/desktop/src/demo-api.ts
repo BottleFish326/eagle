@@ -18,6 +18,11 @@ import type {
   SavedFilterFileVersion,
 } from "./saved-filters";
 import type {
+  QuerySelectionInput,
+  SelectionSort,
+  SelectionSnapshotSummary,
+} from "./selection-snapshots";
+import type {
   AssetTraceReport,
   LibraryConsistencyReport,
 } from "./support-tools";
@@ -40,6 +45,12 @@ export function createDemoDesktopApi(
   let roots: LibraryRootStatus[] = [demoRoot()];
   let assets = demoAssets(assetCount);
   let assetsByKey = new Map(assets.map((asset) => [asset.key, asset]));
+  let catalogRevision = 1;
+  let selectionSequence = 5_000;
+  const selectionSnapshots = new Map<
+    string,
+    { summary: SelectionSnapshotSummary; keys: string[]; expiresUnixMs: number }
+  >();
   let vaults: ObsidianVaultStatus[] = [demoVault()];
   let applicationConfig: ApplicationConfig = {
     schema: 1,
@@ -79,6 +90,64 @@ export function createDemoDesktopApi(
   const previewBytes = new Map<string, Promise<ArrayBuffer>>();
   const timers = new Map<string, number[]>();
   const watchTimers = new Map<string, number>();
+
+  const materializeSelection = (input: QuerySelectionInput): string[] => {
+    if (input.expectedCatalogRevision !== catalogRevision) {
+      throw {
+        kind: "catalog-changed",
+        message: "演示目录已变化，请刷新选择",
+        actualRevision: catalogRevision,
+      };
+    }
+    const allowed = new Set(
+      roots
+        .filter((root) => root.enabled && root.accessStatus === "available")
+        .map((root) => root.id),
+    );
+    for (const rootId of input.scopeRootIds) {
+      if (!allowed.has(rootId)) {
+        throw { kind: "root-offline", message: "演示素材根当前不可用", rootId };
+      }
+    }
+    return assets
+      .filter(
+        (asset) =>
+          asset.rootId !== null &&
+          input.scopeRootIds.includes(asset.rootId) &&
+          matchesDemoExpression(asset, input.expression),
+      )
+      .sort((left, right) =>
+        demoSavedFilterCompare(left, right, { sort: input.sort }),
+      )
+      .map((asset) => asset.key);
+  };
+
+  const createSelectionSnapshot = (keys: string[]): SelectionSnapshotSummary => {
+    if (keys.length === 0) {
+      throw { kind: "invalid-operation", message: "选择不能为空" };
+    }
+    const now = Date.now();
+    const summary = {
+      id: demoUuid(selectionSequence++),
+      catalogRevision,
+      itemCount: keys.length,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + 15 * 60_000).toISOString(),
+    };
+    selectionSnapshots.set(summary.id, {
+      summary,
+      keys: [...new Set(keys)],
+      expiresUnixMs: now + 15 * 60_000,
+    });
+    return structuredClone(summary);
+  };
+
+  const pruneSelectionSnapshots = () => {
+    const now = Date.now();
+    for (const [id, snapshot] of selectionSnapshots) {
+      if (snapshot.expiresUnixMs <= now) selectionSnapshots.delete(id);
+    }
+  };
 
   return {
     async getApplicationConfig() {
@@ -283,6 +352,7 @@ export function createDemoDesktopApi(
       roots = roots.filter((root) => root.id !== id);
       assets = assets.filter((asset) => asset.rootId !== id);
       assetsByKey = new Map(assets.map((asset) => [asset.key, asset]));
+      catalogRevision += 1;
       return structuredClone(current);
     },
     async startLibraryScan(rootId, receive) {
@@ -406,7 +476,52 @@ export function createDemoDesktopApi(
         query: emptyQuery(),
         keys,
         totalAssets: assets.length,
+        catalogRevision,
       } satisfies QueryAssetsResult;
+    },
+    async createQuerySelectionSnapshot(input) {
+      return createSelectionSnapshot(materializeSelection(input));
+    },
+    async createRangeSelectionSnapshot(input) {
+      const keys = materializeSelection(input);
+      const anchor = keys.indexOf(input.anchorKey);
+      const target = keys.indexOf(input.targetKey);
+      if (anchor < 0 || target < 0) {
+        throw { kind: "invalid-operation", message: "范围端点已离开当前结果" };
+      }
+      return createSelectionSnapshot(
+        keys.slice(Math.min(anchor, target), Math.max(anchor, target) + 1),
+      );
+    },
+    async createExplicitSelectionSnapshot(input) {
+      if (input.expectedCatalogRevision !== catalogRevision) {
+        throw {
+          kind: "catalog-changed",
+          message: "演示目录已变化，请刷新选择",
+          actualRevision: catalogRevision,
+        };
+      }
+      const keys = [...new Set(input.keys)];
+      if (keys.some((key) => !assetsByKey.has(key))) {
+        throw { kind: "asset-missing", message: "素材已离开演示目录" };
+      }
+      return createSelectionSnapshot(keys);
+    },
+    async releaseSelectionSnapshot(snapshotId) {
+      return selectionSnapshots.delete(snapshotId);
+    },
+    async getSelectionSessionStats() {
+      pruneSelectionSnapshots();
+      return {
+        snapshotCount: selectionSnapshots.size,
+        totalItemCount: [...selectionSnapshots.values()].reduce(
+          (total, snapshot) => total + snapshot.keys.length,
+          0,
+        ),
+        maximumSnapshotCount: 32,
+        maximumItemCount: 100_000,
+        maximumTotalItemCount: 200_000,
+      };
     },
     async listSavedFilters() {
       return demoSavedFilterCatalog(savedFilters, savedFilterVersion, roots);
@@ -526,6 +641,7 @@ export function createDemoDesktopApi(
         effectiveRootIds,
         missingRootIds,
         sort: structuredClone(filter.sort),
+        catalogRevision,
       };
     },
     async editAssetMetadata(input) {
@@ -557,6 +673,7 @@ export function createDemoDesktopApi(
         assetsByKey.set(next.key, next);
         updated.push(structuredClone(next));
       }
+      if (updated.length > 0) catalogRevision += 1;
       return {
         updated,
         failures: [],
@@ -1124,10 +1241,12 @@ function nextDemoSavedFilterVersion(
 function demoSavedFilterCompare(
   left: AssetRecord,
   right: AssetRecord,
-  filter: SavedFilter,
+  filter: Pick<SavedFilter, "sort"> | { sort: SelectionSort },
 ): number {
   const value = (asset: AssetRecord): string | number | null => {
     switch (filter.sort.field) {
+      case "asset-key":
+        return asset.key.normalize("NFC");
       case "file-name":
         return asset.fileName.normalize("NFC");
       case "modified-at":
