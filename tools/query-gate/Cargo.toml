@@ -1,0 +1,18 @@
+[package]
+name = "query-gate"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+asset-core = { path = "../../crates/asset-core" }
+asset-index = { path = "../../crates/index" }
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

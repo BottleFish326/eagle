@@ -19,6 +19,7 @@ members = [
   "tools/cache-fault",
   "tools/fixture-generator",
   "tools/format-gate",
+  "tools/query-gate",
   "tools/resource-soak",
   "tools/sidecar-fault",
   "tools/transaction-fault",
