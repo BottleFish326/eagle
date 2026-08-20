@@ -8,7 +8,7 @@
 |---|---|---|
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
 | 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
-| 阶段 2：可靠性与恢复 | In progress | P2-A11/P2-A12、统一外部门禁和 A04/A10 本地故障门禁均已通过；正在完成缺陷 reviewed、数据安全与最终退出收据 |
+| 阶段 2：可靠性与恢复 | In progress | P2-A11/P2-A12、统一外部门禁、A04/A10 本地故障门禁和缺陷 reviewed 审计均已通过；正在完成数据安全与最终退出收据 |
 | 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出；P3-01 至 P3-07 的完整实施准备均已收敛 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出；P4-01 至 P4-08 的完整实施准备已收敛 |
 
@@ -55,7 +55,7 @@
 | P2-06 资源与稳定性控制 | Accepted | 绑定修复提交 `c0508c6` 的 100,000 素材完整 28,800 秒任务、确定性重放、敏感信息与零漂移审计均通过；见 `reports/p2-06-acceptance.md` |
 | P2-07 诊断和支持工具 | Completed locally | 1 MiB × 5 JSONL 滚动日志、路径值脱敏、Schema 2 错误/性能导出、512 条有界只读一致性报告和 UUID 素材追踪通过；见 `reports/p2-07-acceptance.md` |
 | P2-08 平台与文件系统兼容 | Accepted | 正式运行 32332405466 在同一 commit/run/attempt 上通过 macOS 10、Linux 12、Windows 9 项原生测试、矩阵汇总与完整质量门禁；四个 artifact 和托管回执已归档；见 `reports/p2-08-acceptance.md` |
-| 阶段 2 退出验收 | Draft / Not accepted | A11/A12 外部门禁与 A04/A10 本地故障门禁已通过；当前依次提交本地收据与报告、完成 reviewed 缺陷登记、数据安全审计和最终退出收据；见 `reports/phase-2-acceptance.md` |
+| 阶段 2 退出验收 | Draft / Not accepted | A11/A12 外部门禁、A04/A10 本地故障门禁及 reviewed 缺陷登记已通过并提交；当前依次生成数据安全审计和最终退出收据；见 `reports/phase-2-acceptance.md` |
 
 ## 阶段 3 实施准备
 

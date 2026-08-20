@@ -1,6 +1,6 @@
 # 阶段 2 验收报告
 
-> 状态：Draft — Not accepted；external/local fault gates passed，data-safety/final receipts pending
+> 状态：Draft — Not accepted；external/local/reviewed gates passed，data-safety/final receipts pending
 >
 > 日期：2026-08-20
 >
@@ -10,7 +10,7 @@
 
 阶段 2 要求应用面对外部移动、监听丢失、批量中断、同步冲突、权限/移动盘变化和长期资源压力后，仍能从文件系统与相邻 Sidecar 收敛。阶段退出还要求 Windows、macOS、Linux 的原生路径测试全部通过。
 
-本报告汇总已完成证据并固定最后门禁的判定流程。它不是阶段通过声明；P2-A11/P2-A12 统一外部门禁与 P2-A04/P2-A10 本地故障门禁已通过，但本地收据/报告尚待提交，缺陷 reviewed、数据安全和最终退出收据尚未完成，因此阶段 2 必须保持 **In progress**，阶段 3 不得开始实现。
+本报告汇总已完成证据并固定最后门禁的判定流程。它不是阶段通过声明；P2-A11/P2-A12 统一外部门禁、P2-A04/P2-A10 本地故障门禁和缺陷 reviewed 审计已通过，但数据安全和最终退出收据尚未完成，因此阶段 2 必须保持 **In progress**，阶段 3 不得开始实现。
 
 全过程可运行 `npm run status:p2-exit` 获取机器状态。该只读编排器同时检查 Git、A11 final/partial、A12 hosted readiness/原始归档、外部汇总、本地故障、数据安全审计与最终收据；运行中的 A11 partial 必须逐项匹配正式 28,800 秒参数，进度按 internal/native 两条采样流的较小覆盖时长计算，并报告目标、已覆盖、剩余毫秒与百分比。final 与 partial 还会以各自记录的受测提交重新执行已加载脚本和产品输入零漂移审计；即使 JSON 原始样本重放通过，只要候选产品输入随后改变，就必须进入 `soak-failed` 而不能建议生成外部门禁。编排器会把状态归入长稳运行/失败、托管环境阻塞/可触发、外部汇总待生成/损坏、本地故障待运行/待提交、数据安全待审核/损坏/待提交、候选脏、最终待生成/待提交或 accepted，并只输出当前唯一下一动作。命令不会执行该动作，也不会构建、推送、触发 workflow 或写证据；只有矛盾/失败/损坏证据返回非零。
 
@@ -148,11 +148,11 @@ npm run test:p2-local-fault-gates
 
 任一进程状态、恢复输出、故障点数量、来源、二进制摘要或临时目录清理不满足时，命令返回非零、保留故障现场且不生成正式收据。全部满足后才删除本次精确创建的临时根；报告还必须通过独立收据检查器，随后才以不可覆盖方式写入 `docs/reports/evidence/p2-local-fault-gates.json`。[`p2-local-fault-gates.schema.json`](../../schemas/p2-local-fault-gates.schema.json) 只接受成功/abort 状态、固定 317/1000 边界、固定顺序的两个缓存故障点和已清理状态。
 
-该命令已在提交 `581a6615c06e7f94d0771647e87d523f52c2b2ff` 上运行；执行时间 `2026-08-20T12:30:39.885Z`，两个二进制、三个真实 abort/recover 用例、`317 -> 1000` 边界和临时目录清理全部通过。正式收据 SHA-256 为 `abb7269a15e3c54f615e3ba998248fca4cefd4354cd965e47758634a718de646`，独立检查器、JSON Schema 与敏感信息审计均接受；本地收据与本次报告更新尚待提交。该收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
+该命令已在提交 `581a6615c06e7f94d0771647e87d523f52c2b2ff` 上运行；执行时间 `2026-08-20T12:30:39.885Z`，两个二进制、三个真实 abort/recover 用例、`317 -> 1000` 边界和临时目录清理全部通过。正式收据 SHA-256 为 `abb7269a15e3c54f615e3ba998248fca4cefd4354cd965e47758634a718de646`，独立检查器、JSON Schema 与敏感信息审计均接受；收据与报告已在提交 `be2f4f9` 固化。该收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
 
 ## 5.3 P0/P1 数据安全缺陷审计
 
-外部门禁与本地故障收据提交后，必须对 [`docs/defects.json`](../defects.json) 做最终复核。初始 `draft` 状态故意不能通过；即使 findings 为空，也只有逐项审阅自动化、失败现场、九份阶段/工作项报告和已知限制后，才能把状态改为 `reviewed`，且 `reviewedAt` 必须晚于外部门禁与本地故障执行时间。open P0/P1 无条件阻断，open P2 必须同时记录可执行规避方式和目标版本。
+外部门禁与本地故障收据提交后，已对 [`docs/defects.json`](../defects.json) 做最终复核。完整 CI、81 项工具测试、失败现场、九份阶段/工作项报告、已知限制与四项 resolved finding 均已逐项检查；open P0/P1/P2/P3 均为零，`reviewedAt=2026-08-20T12:37:33.000Z` 晚于外部门禁与本地故障证据。
 
 登记和报告更新提交、工作树完全干净后执行：
 
@@ -161,7 +161,7 @@ npm run verify:p2-data-safety
 npm run inspect:p2-data-safety
 ```
 
-状态编排器会先区分登记册 missing/draft/reviewed/invalid，核对审核时间、提交归属和九份报告，再依次要求人工复核、提交审核输入、解决阻断项或运行正式命令，不会在 draft 时直接建议生成收据。生成器严格检查缺陷字段、ID 唯一性、优先级退出规则、九份固定控制报告 SHA-256、外部与本地收据、全部输入已提交、工作树清洁以及 `A11 <= A12 <= local faults <= data-safety candidate`。成功报告先由独立路径自检，再以不可覆盖方式生成 `p2-data-safety-audit.json`；其 accepted-only 结构由 [`p2-data-safety-audit.schema.json`](../../schemas/p2-data-safety-audit.schema.json) 固定。完整规则和十项控制见 [数据安全缺陷审计](p2-data-safety-audit.md)。当前实现与篡改测试、两份正式上游收据均已通过；登记册保持 draft，等待本次报告与本地收据提交后的最终人工复核。
+状态编排器会先区分登记册 missing/draft/reviewed/invalid，核对审核时间、提交归属和九份报告，再依次要求人工复核、提交审核输入、解决阻断项或运行正式命令，不会在 draft 时直接建议生成收据。生成器严格检查缺陷字段、ID 唯一性、优先级退出规则、九份固定控制报告 SHA-256、外部与本地收据、全部输入已提交、工作树清洁以及 `A11 <= A12 <= local faults <= data-safety candidate`。成功报告先由独立路径自检，再以不可覆盖方式生成 `p2-data-safety-audit.json`；其 accepted-only 结构由 [`p2-data-safety-audit.schema.json`](../../schemas/p2-data-safety-audit.schema.json) 固定。完整规则和十项控制见 [数据安全缺陷审计](p2-data-safety-audit.md)。当前实现与篡改测试、两份正式上游收据和最终人工复核均已通过；reviewed 输入随本次提交固化后即可生成正式收据。
 
 ## 5.4 阶段 2 最终机器退出收据
 
@@ -184,7 +184,7 @@ Git 侧还必须同时满足：
 
 任一条件失败时只输出拒绝报告并返回非零。全部通过后，生成的报告还要由一条不读取原始输入的独立检查路径核对精确字段、摘要格式、固定边界、来源提交与确定性时间；只有自检也接受，才以不可覆盖方式生成 `docs/reports/evidence/p2-phase-2-exit.json`。其 accepted-only 结构由 [`phase-2-exit-evidence.schema.json`](../../schemas/phase-2-exit-evidence.schema.json) 固定，记录三份输入收据 SHA-256、五段提交关系、候选 SHA、来源基线和最小验收摘要；归档后可运行 `npm run inspect:p2-exit` 再次离线检查。
 
-根工作区锁定 Ajv 8.20.0 与 `ajv-formats` 3.0.1，CI 会先执行根级 `npm ci`，随后由 `npm run test:tools` 严格编译全部 15 个 Draft 2020-12 Schema。合约测试使用正式构造器生成平台矩阵、托管运行源收据，以及外部汇总、本地故障、数据安全与最终退出四类阶段收据；同一组阶段收据还必须被四个独立运行时检查器接受。Schema 与运行时检查器都固定三平台及其 10/12/9 项原生测试全集、五个 hosted job、四个归档文件、九份控制报告和十项控制的精确成员，并拒绝重复/重排及正式时长、恢复数量、open P1/open P0 边界错误。当前完整工具套件 81 项通过；正式退出命令仍必须等待本地候选故障收据提交及其后的 reviewed 数据安全收据，当前不能生成 accepted 结果。
+根工作区锁定 Ajv 8.20.0 与 `ajv-formats` 3.0.1，CI 会先执行根级 `npm ci`，随后由 `npm run test:tools` 严格编译全部 15 个 Draft 2020-12 Schema。合约测试使用正式构造器生成平台矩阵、托管运行源收据，以及外部汇总、本地故障、数据安全与最终退出四类阶段收据；同一组阶段收据还必须被四个独立运行时检查器接受。Schema 与运行时检查器都固定三平台及其 10/12/9 项原生测试全集、五个 hosted job、四个归档文件、九份控制报告和十项控制的精确成员，并拒绝重复/重排及正式时长、恢复数量、open P1/open P0 边界错误。当前完整工具套件 81 项通过；正式退出命令仍必须等待 reviewed 输入提交及其后的数据安全收据，当前不能生成 accepted 结果。
 
 ## 6. 产品不变量复核
 
@@ -206,7 +206,7 @@ Git 侧还必须同时满足：
 | 崩溃测试无截断 Sidecar | Pass；候选提交统一故障收据已接受，SHA-256/Schema/敏感信息审计通过 |
 | 连续 8 小时无无界资源增长 | Pass |
 | 三平台核心路径原生测试通过 | Pass |
-| P0/P1 数据安全缺陷为零 | 预审 open P0/P1 均为零、4 项发现均 resolved；登记册仍须完成 reviewed 审计，当前不得判最终 Pass |
+| P0/P1 数据安全缺陷为零 | Pass；4 项发现均 resolved，open 各级均为零，登记册已完成 reviewed；仍须生成数据安全机器收据 |
 
 ## 8. 阶段退出操作
 
@@ -223,4 +223,4 @@ Git 侧还必须同时满足：
 
 ## 9. 当前结论
 
-P2-A11/P2-A12 外部门禁与 P2-A04/P2-A10 本地故障门禁均已通过；外部收据已提交，本地收据和本轮报告更新正在提交。下一步必须完成 reviewed 缺陷登记、数据安全审计和最终退出收据。阶段 2 当前结论仍是 **Not accepted / In progress**，不得提前宣称完成。
+P2-A11/P2-A12 外部门禁、P2-A04/P2-A10 本地故障门禁和缺陷 reviewed 审计均已通过。下一步必须提交 reviewed 输入，再生成并提交数据安全审计和最终退出收据。阶段 2 当前结论仍是 **Not accepted / In progress**，不得提前宣称完成。
