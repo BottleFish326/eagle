@@ -342,6 +342,46 @@ impl BatchPreflightStore {
     }
 }
 
+/// Revalidates every bound target immediately before a durable transaction is
+/// created. A catalog revision change alone is allowed; any target-level drift
+/// rejects the whole confirmation.
+///
+/// # Errors
+///
+/// Returns [`BatchPreflightError::PreflightStale`] when an asset, root, source,
+/// or Sidecar no longer matches the prepared plan.
+pub fn validate_metadata_preflight(
+    catalog: &AssetCatalog,
+    roots: &[BatchRootAuthorization],
+    preflight: &ResolvedMetadataPreflight,
+) -> Result<(), BatchPreflightError> {
+    let root_map = roots
+        .iter()
+        .map(|root| (root.id, root))
+        .collect::<BTreeMap<_, _>>();
+    for expected in &preflight.targets {
+        let record = catalog
+            .get(&expected.key)
+            .cloned()
+            .or_else(|| {
+                let stable_id = expected.stable_id?;
+                let matches = catalog.records_with_id(stable_id);
+                (matches.len() == 1).then(|| matches[0].clone())
+            })
+            .ok_or(BatchPreflightError::PreflightStale)?;
+        let actual =
+            inspect_target(&record, &root_map).map_err(|_| BatchPreflightError::PreflightStale)?;
+        if actual.root_id != expected.root_id
+            || actual.asset_path != expected.asset_path
+            || actual.source_version != expected.source_version
+            || actual.sidecar_version != expected.sidecar_version
+        {
+            return Err(BatchPreflightError::PreflightStale);
+        }
+    }
+    Ok(())
+}
+
 fn resolve_record(
     catalog: &AssetCatalog,
     key: &str,

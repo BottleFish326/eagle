@@ -12,8 +12,8 @@ use app_config::{
     UpdateUiPreferences,
 };
 use asset_batch_workflows::{
-    BatchPreflightError, BatchPreflightStore, BatchPreflightSummary, BatchRootAuthorization,
-    MetadataPreflightInput, RootRuntimeState,
+    BatchPreflightConfirmation, BatchPreflightError, BatchPreflightStore, BatchPreflightSummary,
+    BatchRootAuthorization, MetadataPreflightInput, RootRuntimeState, validate_metadata_preflight,
 };
 use asset_catalog::{
     AssetCatalog, BatchMetadataEdit, BatchMetadataEditResult, CatalogRootReconciliation,
@@ -46,8 +46,8 @@ use asset_selection::{
     SelectionSessionStats, SelectionSessionStore, SelectionSnapshotSummary,
 };
 use asset_transactions::{
-    MetadataTransactionStore, TransactionFailureKind, TransactionRecoveryResult,
-    TransactionScopeItem, TransactionSummary, TransactionTarget,
+    MetadataTransactionStore, TransactionCancellation, TransactionFailureKind, TransactionProgress,
+    TransactionRecoveryResult, TransactionScopeItem, TransactionSummary, TransactionTarget,
 };
 use format_worker::{WORKER_BUNDLE_MANIFEST, open_libheif_worker_bundle};
 use resource_control::{ResourceController, ResourceMode, ResourceSnapshot, WorkKind};
@@ -385,6 +385,78 @@ impl From<BatchPreflightError> for BatchCommandError {
                 BatchCommandErrorKind::Internal,
                 "batch preflight state is unavailable",
             ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchExecutionFailure {
+    key: String,
+    kind: TransactionFailureKind,
+    message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchMetadataExecutionResult {
+    operation_id: Uuid,
+    transaction: TransactionSummary,
+    updated: Vec<asset_core::AssetRecord>,
+    failures: Vec<BatchExecutionFailure>,
+    stopped: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    tag = "event",
+    content = "data"
+)]
+enum BatchExecutionEvent {
+    Progress {
+        operation_id: Uuid,
+        progress: TransactionProgress,
+    },
+}
+
+#[derive(Debug, Default)]
+struct BatchExecutionCoordinator {
+    active: Mutex<HashMap<Uuid, TransactionCancellation>>,
+}
+
+impl BatchExecutionCoordinator {
+    fn register(&self, operation_id: Uuid) -> Result<TransactionCancellation, BatchCommandError> {
+        let mut active = self.active.lock().map_err(|_| {
+            BatchCommandError::new(
+                BatchCommandErrorKind::Internal,
+                "batch execution state is unavailable",
+            )
+        })?;
+        if active.contains_key(&operation_id) {
+            return Err(BatchCommandError::new(
+                BatchCommandErrorKind::InvalidOperation,
+                "batch operation is already running",
+            ));
+        }
+        let cancellation = TransactionCancellation::default();
+        active.insert(operation_id, cancellation.clone());
+        Ok(cancellation)
+    }
+
+    fn cancel(&self, operation_id: Uuid) -> bool {
+        self.active.lock().is_ok_and(|active| {
+            active.get(&operation_id).is_some_and(|cancellation| {
+                cancellation.cancel();
+                true
+            })
+        })
+    }
+
+    fn finish(&self, operation_id: Uuid) {
+        if let Ok(mut active) = self.active.lock() {
+            active.remove(&operation_id);
         }
     }
 }
@@ -2809,6 +2881,153 @@ fn release_batch_preflight(
     preflights.release(operation_id).map_err(Into::into)
 }
 
+fn transaction_command_error(message: &'static str) -> BatchCommandError {
+    BatchCommandError::new(BatchCommandErrorKind::Internal, message)
+}
+
+#[tauri::command]
+#[allow(
+    clippy::needless_pass_by_value,
+    clippy::too_many_arguments,
+    clippy::too_many_lines
+)]
+async fn execute_metadata_batch(
+    confirmation: BatchPreflightConfirmation,
+    on_event: Channel<BatchExecutionEvent>,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    selections: State<'_, Arc<SelectionSessionStore>>,
+    preflights: State<'_, Arc<BatchPreflightStore>>,
+    transactions: State<'_, Arc<MetadataTransactionStore>>,
+    executions: State<'_, Arc<BatchExecutionCoordinator>>,
+) -> Result<BatchMetadataExecutionResult, BatchCommandError> {
+    let statuses = roots
+        .lock()
+        .map_err(|_| {
+            BatchCommandError::new(
+                BatchCommandErrorKind::Internal,
+                "library root state is unavailable",
+            )
+        })?
+        .roots();
+    let authorizations = batch_root_authorizations(&statuses);
+    let preflight = preflights.resolve_metadata(&confirmation)?;
+    if preflight.targets.is_empty() {
+        return Err(BatchCommandError::new(
+            BatchCommandErrorKind::InvalidOperation,
+            "batch has no executable targets",
+        ));
+    }
+    let operation_id = preflight.summary.operation_id;
+    let snapshot_id = preflight.summary.snapshot_id;
+    let cancellation = executions.register(operation_id)?;
+    let executions = Arc::clone(executions.inner());
+    let catalog = Arc::clone(catalog.inner());
+    let selections = Arc::clone(selections.inner());
+    let preflights = Arc::clone(preflights.inner());
+    let transactions = Arc::clone(transactions.inner());
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = (|| {
+            {
+                let catalog = catalog
+                    .lock()
+                    .map_err(|_| transaction_command_error("asset catalog state is unavailable"))?;
+                validate_metadata_preflight(&catalog, &authorizations, &preflight)?;
+            }
+            let targets = preflight
+                .targets
+                .iter()
+                .map(|target| TransactionTarget {
+                    key: target.key.clone(),
+                    root_id: target.root_id,
+                    asset_path: target.asset_path.clone(),
+                    expected_sidecar_digest: target
+                        .sidecar_version
+                        .as_ref()
+                        .map(|version| version.digest.clone()),
+                    expected_sidecar_size: target
+                        .sidecar_version
+                        .as_ref()
+                        .map(|version| version.size),
+                    expected_sidecar_modified_unix_ms: target
+                        .sidecar_version
+                        .as_ref()
+                        .map(|version| version.modified_unix_ms),
+                })
+                .collect::<Vec<_>>();
+            let transaction = transactions
+                .plan(&targets, &preflight.patch)
+                .map_err(|_| transaction_command_error("metadata transaction plan failed"))?;
+            let _ = preflights.release(operation_id);
+            let _ = selections.release(snapshot_id);
+            let execution = transactions
+                .continue_transaction_controlled(transaction.id, &cancellation, |progress| {
+                    let _ = on_event.send(BatchExecutionEvent::Progress {
+                        operation_id,
+                        progress,
+                    });
+                })
+                .map_err(|_| transaction_command_error("metadata transaction execution failed"))?;
+            let updated = {
+                let mut catalog = catalog
+                    .lock()
+                    .map_err(|_| transaction_command_error("asset catalog state is unavailable"))?;
+                execution
+                    .committed
+                    .into_iter()
+                    .filter_map(|committed| {
+                        catalog.apply_committed_sidecar(
+                            &committed.key,
+                            committed.sidecar_path,
+                            committed.sidecar,
+                            committed.version,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let failures = execution
+                .failures
+                .into_iter()
+                .map(|failure| BatchExecutionFailure {
+                    key: failure.key,
+                    kind: failure.kind,
+                    message: match failure.kind {
+                        TransactionFailureKind::Conflict => {
+                            "Sidecar changed after confirmation".into()
+                        }
+                        TransactionFailureKind::InvalidInput => {
+                            "metadata operation became invalid".into()
+                        }
+                        TransactionFailureKind::WriteFailed => {
+                            "Sidecar could not be committed".into()
+                        }
+                    },
+                })
+                .collect();
+            Ok(BatchMetadataExecutionResult {
+                operation_id,
+                transaction: execution.summary,
+                updated,
+                failures,
+                stopped: execution.stopped,
+            })
+        })();
+        executions.finish(operation_id);
+        result
+    })
+    .await
+    .map_err(|_| transaction_command_error("batch execution task did not complete"))?
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn cancel_metadata_batch(
+    operation_id: Uuid,
+    executions: State<'_, Arc<BatchExecutionCoordinator>>,
+) -> bool {
+    executions.cancel(operation_id)
+}
+
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 async fn request_thumbnail(
@@ -3194,6 +3413,7 @@ pub fn run() {
             app.manage(Arc::new(Mutex::new(AssetCatalog::default())));
             app.manage(Arc::new(SelectionSessionStore::default()));
             app.manage(Arc::new(BatchPreflightStore::default()));
+            app.manage(Arc::new(BatchExecutionCoordinator::default()));
             app.manage(Arc::new(MetadataTransactionStore::open(
                 config_directory.join("metadata-transactions-v1"),
             )?));
@@ -3312,6 +3532,8 @@ pub fn run() {
             selection_session_stats,
             prepare_metadata_batch,
             release_batch_preflight,
+            execute_metadata_batch,
+            cancel_metadata_batch,
             request_thumbnail,
             read_thumbnail,
             clear_thumbnail_cache,
@@ -3739,6 +3961,7 @@ mod tests {
                 created_at: "2026-08-19T08:00:00.000Z".into(),
                 updated_at: "2026-08-19T08:01:00.000Z".into(),
                 item_count: 1_000,
+                planned_count: 683,
                 applied_count: 317,
                 failed_count: 0,
                 conflict_count: 0,
@@ -3752,6 +3975,7 @@ mod tests {
         assert_eq!(value["transaction"]["id"], transaction_id.to_string());
         assert_eq!(value["transaction"]["state"], "active");
         assert_eq!(value["transaction"]["itemCount"], 1_000);
+        assert_eq!(value["transaction"]["plannedCount"], 683);
         assert_eq!(value["transaction"]["appliedCount"], 317);
         assert_eq!(value["transaction"]["rootIds"][0], root_id.to_string());
     }

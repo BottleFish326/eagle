@@ -9,6 +9,7 @@ export interface MetadataTransactionSummary {
   createdAt: string;
   updatedAt: string;
   itemCount: number;
+  plannedCount: number;
   appliedCount: number;
   failedCount: number;
   conflictCount: number;

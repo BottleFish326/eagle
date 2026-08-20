@@ -4,6 +4,8 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use asset_core::AssetRecord;
 use chrono::{SecondsFormat, Utc};
@@ -78,6 +80,7 @@ pub struct TransactionSummary {
     pub created_at: String,
     pub updated_at: String,
     pub item_count: usize,
+    pub planned_count: usize,
     pub applied_count: usize,
     pub failed_count: usize,
     pub conflict_count: usize,
@@ -128,6 +131,41 @@ pub struct TransactionExecution {
 pub struct TransactionRecoveryResult {
     pub summary: TransactionSummary,
     pub failures: Vec<TransactionItemFailure>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionProgress {
+    pub total: usize,
+    pub current_sequence: usize,
+    pub planned_count: usize,
+    pub applied_count: usize,
+    pub failed_count: usize,
+    pub conflict_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ControlledTransactionResult {
+    pub summary: TransactionSummary,
+    pub committed: Vec<CommittedSidecar>,
+    pub failures: Vec<TransactionItemFailure>,
+    pub stopped: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TransactionCancellation {
+    cancelled: Arc<AtomicBool>,
+}
+
+impl TransactionCancellation {
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+    }
+
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -315,20 +353,61 @@ impl MetadataTransactionStore {
         &self,
         id: Uuid,
     ) -> Result<TransactionRecoveryResult, TransactionError> {
+        let controlled =
+            self.continue_transaction_controlled(id, &TransactionCancellation::default(), |_| {})?;
+        Ok(TransactionRecoveryResult {
+            summary: controlled.summary,
+            failures: controlled.failures,
+        })
+    }
+
+    /// Continues a durable plan while checking a cooperative cancellation token
+    /// before every atomic Sidecar operation and checkpointing immediately when
+    /// stopped.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransactionError`] when the journal cannot be read or updated.
+    pub fn continue_transaction_controlled(
+        &self,
+        id: Uuid,
+        cancellation: &TransactionCancellation,
+        mut on_progress: impl FnMut(TransactionProgress),
+    ) -> Result<ControlledTransactionResult, TransactionError> {
         let mut journal = self.load(id)?;
         reconcile_actual_states(&mut journal);
         self.persist(&journal)?;
-        let mut failures = Vec::new();
+        let mut failures = journal
+            .items
+            .iter()
+            .filter(|item| item.state == TransactionItemState::Failed)
+            .map(|item| TransactionItemFailure {
+                key: item.key.clone(),
+                kind: item
+                    .failure_kind
+                    .unwrap_or(TransactionFailureKind::WriteFailed),
+                message: item.failure.clone().unwrap_or_else(|| "计划失败".into()),
+            })
+            .collect::<Vec<_>>();
+        let mut committed = Vec::new();
         let mut processed = 0;
         let mut applied = 0;
+        let mut stopped = false;
         for index in 0..journal.items.len() {
             if journal.items[index].state != TransactionItemState::Planned {
                 continue;
+            }
+            if cancellation.is_cancelled() {
+                stopped = true;
+                break;
             }
             match apply_planned_item(&journal.items[index]) {
                 Ok(()) => {
                     journal.items[index].state = TransactionItemState::Applied;
                     applied += 1;
+                    if let Some(sidecar) = journal.items[index].committed_sidecar() {
+                        committed.push(sidecar);
+                    }
                     inject_fault_after_applied(applied);
                 }
                 Err(message) => {
@@ -344,15 +423,18 @@ impl MetadataTransactionStore {
             }
             journal.touch();
             processed += 1;
+            on_progress(journal.progress(index + 1));
             if processed % JOURNAL_CHECKPOINT_ITEMS == 0 {
                 self.persist(&journal)?;
             }
         }
         journal.finish_from_items();
         self.persist(&journal)?;
-        Ok(TransactionRecoveryResult {
+        Ok(ControlledTransactionResult {
             summary: journal.summary(),
+            committed,
             failures,
+            stopped,
         })
     }
 
@@ -580,6 +662,7 @@ impl TransactionJournal {
             created_at: self.created_at.clone(),
             updated_at: self.updated_at.clone(),
             item_count: self.items.len(),
+            planned_count: count_items(&self.items, TransactionItemState::Planned),
             applied_count: count_items(&self.items, TransactionItemState::Applied),
             failed_count: count_items(&self.items, TransactionItemState::Failed),
             conflict_count: count_items(&self.items, TransactionItemState::Conflict),
@@ -590,6 +673,17 @@ impl TransactionJournal {
 
     fn touch(&mut self) {
         self.updated_at = now_rfc3339();
+    }
+
+    fn progress(&self, current_sequence: usize) -> TransactionProgress {
+        TransactionProgress {
+            total: self.items.len(),
+            current_sequence,
+            planned_count: count_items(&self.items, TransactionItemState::Planned),
+            applied_count: count_items(&self.items, TransactionItemState::Applied),
+            failed_count: count_items(&self.items, TransactionItemState::Failed),
+            conflict_count: count_items(&self.items, TransactionItemState::Conflict),
+        }
     }
 
     fn finish_from_items(&mut self) {
@@ -902,7 +996,8 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        MetadataTransactionStore, TransactionFailureKind, TransactionState, TransactionTarget,
+        MetadataTransactionStore, TransactionCancellation, TransactionFailureKind,
+        TransactionState, TransactionTarget,
     };
 
     #[test]
@@ -1001,6 +1096,63 @@ mod tests {
                 read_sidecar(&sidecar_path_for(&target.asset_path)).expect("sidecar");
             assert!(sidecar.tags.contains("batch/recovered"));
         }
+    }
+
+    #[test]
+    fn cooperative_cancel_checkpoints_exact_applied_and_planned_counts() {
+        let directory = tempdir().expect("tempdir");
+        let journal_directory = directory.path().join("transactions");
+        let store = MetadataTransactionStore::open(&journal_directory).expect("store");
+        let root_id = Uuid::now_v7();
+        let targets = (0..10)
+            .map(|index| {
+                let path = directory.path().join(format!("cancel-{index:02}.png"));
+                fs::write(&path, format!("asset {index}")).expect("asset");
+                TransactionTarget {
+                    key: format!("cancel-{index:02}"),
+                    root_id,
+                    asset_path: path,
+                    expected_sidecar_digest: None,
+                    expected_sidecar_size: None,
+                    expected_sidecar_modified_unix_ms: None,
+                }
+            })
+            .collect::<Vec<_>>();
+        let planned = store
+            .plan(
+                &targets,
+                &MetadataPatch {
+                    add_tags: BTreeSet::from(["batch/cancelled".into()]),
+                    ..MetadataPatch::default()
+                },
+            )
+            .expect("plan");
+        let cancellation = TransactionCancellation::default();
+        let callback_token = cancellation.clone();
+        let stopped = store
+            .continue_transaction_controlled(planned.id, &cancellation, move |progress| {
+                if progress.applied_count == 3 {
+                    callback_token.cancel();
+                }
+            })
+            .expect("controlled continuation");
+        assert!(stopped.stopped);
+        assert_eq!(stopped.summary.state, TransactionState::Active);
+        assert_eq!(stopped.summary.applied_count, 3);
+        assert_eq!(stopped.summary.planned_count, 7);
+        assert_eq!(stopped.committed.len(), 3);
+
+        drop(store);
+        let reopened = MetadataTransactionStore::open(&journal_directory).expect("reopen");
+        let discovered = reopened.list().expect("discover checkpoint");
+        assert_eq!(discovered[0].applied_count, 3);
+        assert_eq!(discovered[0].planned_count, 7);
+        let completed = reopened
+            .continue_transaction(discovered[0].id)
+            .expect("continue after stop");
+        assert_eq!(completed.summary.state, TransactionState::Completed);
+        assert_eq!(completed.summary.applied_count, 10);
+        assert_eq!(completed.summary.planned_count, 0);
     }
 
     #[test]

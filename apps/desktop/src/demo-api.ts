@@ -52,7 +52,15 @@ export function createDemoDesktopApi(
     string,
     { summary: SelectionSnapshotSummary; keys: string[]; expiresUnixMs: number }
   >();
-  const batchPreflights = new Map<string, { expiresUnixMs: number }>();
+  const batchPreflights = new Map<
+    string,
+    {
+      expiresUnixMs: number;
+      snapshotId: string;
+      patch: import("./metadata-editor").MetadataPatch;
+      digest: string;
+    }
+  >();
   let vaults: ObsidianVaultStatus[] = [demoVault()];
   let applicationConfig: ApplicationConfig = {
     schema: 1,
@@ -551,11 +559,97 @@ export function createDemoDesktopApi(
         createdAt: new Date(now).toISOString(),
         expiresAt: new Date(now + 15 * 60_000).toISOString(),
       };
-      batchPreflights.set(operationId, { expiresUnixMs: now + 15 * 60_000 });
+      batchPreflights.set(operationId, {
+        expiresUnixMs: now + 15 * 60_000,
+        snapshotId: input.snapshotId,
+        patch: structuredClone(input.patch),
+        digest: summary.confirmationDigest,
+      });
       return summary;
     },
     async releaseBatchPreflight(operationId) {
       return batchPreflights.delete(operationId);
+    },
+    async executeMetadataBatch(confirmation, receive) {
+      const preflight = batchPreflights.get(confirmation.operationId);
+      const snapshot = selectionSnapshots.get(confirmation.snapshotId);
+      if (
+        preflight === undefined ||
+        snapshot === undefined ||
+        preflight.snapshotId !== confirmation.snapshotId ||
+        preflight.digest !== confirmation.confirmationDigest ||
+        snapshot.keys.length !== confirmation.executableCount
+      ) {
+        throw { kind: "preflight-stale", message: "演示预检已变化" };
+      }
+      const updated: AssetRecord[] = [];
+      for (const key of snapshot.keys) {
+        const index = assets.findIndex((asset) => asset.key === key);
+        if (index < 0) continue;
+        const current = assets[index];
+        const tags = new Set(preflight.patch.setTags ?? current.tags);
+        for (const tag of preflight.patch.addTags ?? []) tags.add(tag);
+        for (const tag of preflight.patch.removeTags ?? []) tags.delete(tag);
+        const next = {
+          ...current,
+          tags: [...tags].sort(),
+          rating: preflight.patch.rating ?? current.rating,
+          favorite: preflight.patch.favorite ?? current.favorite,
+          note: preflight.patch.note ?? current.note,
+          aliases: preflight.patch.aliases ?? current.aliases,
+          sidecarPath: `${current.path}.asset.yml`,
+          sidecarState: {
+            schema: 1,
+            digest: demoFingerprint(`${key}:${String(Date.now())}`),
+            size: 0,
+            modifiedUnixMs: Date.now(),
+            updatedAt: new Date().toISOString(),
+          },
+        } satisfies AssetRecord;
+        assets[index] = next;
+        assetsByKey.set(key, next);
+        updated.push(structuredClone(next));
+        receive({
+          event: "progress",
+          data: {
+            operationId: confirmation.operationId,
+            progress: {
+              total: snapshot.keys.length,
+              currentSequence: updated.length,
+              plannedCount: snapshot.keys.length - updated.length,
+              appliedCount: updated.length,
+              failedCount: 0,
+              conflictCount: 0,
+            },
+          },
+        });
+      }
+      catalogRevision += 1;
+      batchPreflights.delete(confirmation.operationId);
+      selectionSnapshots.delete(confirmation.snapshotId);
+      const now = new Date().toISOString();
+      return {
+        operationId: confirmation.operationId,
+        transaction: {
+          id: demoUuid(preflightSequence++),
+          state: "completed",
+          createdAt: now,
+          updatedAt: now,
+          itemCount: snapshot.keys.length,
+          plannedCount: 0,
+          appliedCount: updated.length,
+          failedCount: 0,
+          conflictCount: 0,
+          restoredCount: 0,
+          rootIds: [DEMO_ROOT_ID],
+        },
+        updated,
+        failures: [],
+        stopped: false,
+      };
+    },
+    async cancelMetadataBatch() {
+      return false;
     },
     async listSavedFilters() {
       return demoSavedFilterCatalog(savedFilters, savedFilterVersion, roots);

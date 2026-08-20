@@ -1,6 +1,8 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 
 import type { MetadataPatch } from "./metadata-editor";
+import type { MetadataTransactionSummary } from "./metadata-transactions";
+import type { AssetRecord } from "./scanner";
 
 export type BatchFailureKind =
   | "asset-missing"
@@ -39,6 +41,43 @@ export interface BatchPreflightSummary {
   expiresAt: string;
 }
 
+export interface BatchPreflightConfirmation {
+  operationId: string;
+  snapshotId: string;
+  catalogRevision: number;
+  requestedCount: number;
+  executableCount: number;
+  confirmationDigest: string;
+}
+
+export interface BatchExecutionProgress {
+  total: number;
+  currentSequence: number;
+  plannedCount: number;
+  appliedCount: number;
+  failedCount: number;
+  conflictCount: number;
+}
+
+export type BatchExecutionEvent = {
+  event: "progress";
+  data: { operationId: string; progress: BatchExecutionProgress };
+};
+
+export interface BatchExecutionFailure {
+  key: string;
+  kind: "conflict" | "invalid-input" | "write-failed";
+  message: string;
+}
+
+export interface BatchMetadataExecutionResult {
+  operationId: string;
+  transaction: MetadataTransactionSummary;
+  updated: AssetRecord[];
+  failures: BatchExecutionFailure[];
+  stopped: boolean;
+}
+
 export type BatchCommandErrorKind =
   | "snapshot-not-found"
   | "snapshot-expired"
@@ -71,4 +110,41 @@ export function releaseBatchPreflight(
   call: Invoke = invoke,
 ): Promise<boolean> {
   return call("release_batch_preflight", { operationId });
+}
+
+interface BatchChannel {
+  onmessage: (message: BatchExecutionEvent) => void;
+}
+
+type ChannelFactory = () => BatchChannel;
+
+export function executeMetadataBatch(
+  confirmation: BatchPreflightConfirmation,
+  receive: (event: BatchExecutionEvent) => void,
+  call: Invoke = invoke,
+  createChannel: ChannelFactory = () => new Channel<BatchExecutionEvent>(),
+): Promise<BatchMetadataExecutionResult> {
+  const onEvent = createChannel();
+  onEvent.onmessage = receive;
+  return call("execute_metadata_batch", { confirmation, onEvent });
+}
+
+export function cancelMetadataBatch(
+  operationId: string,
+  call: Invoke = invoke,
+): Promise<boolean> {
+  return call("cancel_metadata_batch", { operationId });
+}
+
+export function preflightConfirmation(
+  summary: BatchPreflightSummary,
+): BatchPreflightConfirmation {
+  return {
+    operationId: summary.operationId,
+    snapshotId: summary.snapshotId,
+    catalogRevision: summary.catalogRevision,
+    requestedCount: summary.requestedCount,
+    executableCount: summary.executableCount,
+    confirmationDigest: summary.confirmationDigest,
+  };
 }

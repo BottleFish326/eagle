@@ -1,10 +1,15 @@
 import type { QueryAssetsInput, QueryAssetsResult } from "./asset-query";
 import { queryAssets } from "./asset-query";
 import type {
+  BatchExecutionEvent,
+  BatchMetadataExecutionResult,
+  BatchPreflightConfirmation,
   BatchPreflightSummary,
   MetadataPreflightInput,
 } from "./batch-workflows";
 import {
+  cancelMetadataBatch,
+  executeMetadataBatch,
   prepareMetadataBatch,
   releaseBatchPreflight,
 } from "./batch-workflows";
@@ -166,6 +171,11 @@ export interface DesktopApi {
   getSelectionSessionStats(): Promise<SelectionSessionStats>;
   prepareMetadataBatch(input: MetadataPreflightInput): Promise<BatchPreflightSummary>;
   releaseBatchPreflight(operationId: string): Promise<boolean>;
+  executeMetadataBatch(
+    confirmation: BatchPreflightConfirmation,
+    receive: (event: BatchExecutionEvent) => void,
+  ): Promise<BatchMetadataExecutionResult>;
+  cancelMetadataBatch(operationId: string): Promise<boolean>;
   listSavedFilters(): Promise<SavedFilterCatalog>;
   createSavedFilter(
     expectedVersion: SavedFilterFileVersion,
@@ -242,6 +252,8 @@ export const tauriDesktopApi: DesktopApi = {
   getSelectionSessionStats,
   prepareMetadataBatch,
   releaseBatchPreflight,
+  executeMetadataBatch,
+  cancelMetadataBatch,
   listSavedFilters,
   createSavedFilter,
   updateSavedFilter,

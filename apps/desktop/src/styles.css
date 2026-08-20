@@ -745,6 +745,54 @@ textarea:focus-visible {
   background: transparent;
 }
 
+.batch-confirmation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #c6cfbd;
+  border-radius: 12px;
+  background: #f2f3e9;
+}
+
+.batch-confirmation > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: #4d584b;
+  font-size: 0.72rem;
+}
+
+.batch-confirmation small {
+  overflow: hidden;
+  color: #7a6a5e;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-confirmation__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 7px;
+}
+
+.batch-confirmation__actions button {
+  padding: 7px 10px;
+  border: 1px solid #b8c1b1;
+  border-radius: 8px;
+  color: #405348;
+  background: #fff;
+  font-size: 0.68rem;
+}
+
+.batch-confirmation__actions button:first-child {
+  border-color: var(--accent);
+  color: #fff;
+  background: var(--accent);
+}
+
 .result-meta {
   justify-content: space-between;
   min-height: 44px;

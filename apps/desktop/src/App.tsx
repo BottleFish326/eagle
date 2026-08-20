@@ -14,6 +14,11 @@ import {
   type SavedTagFilterState,
 } from "./application-runtime";
 import { type BuildInfo, loadBuildInfo } from "./build-info";
+import {
+  preflightConfirmation,
+  type BatchExecutionProgress,
+  type BatchPreflightSummary,
+} from "./batch-workflows";
 import { createDemoDesktopApi, demoAssetCountFromSearch } from "./demo-api";
 import {
   type DesktopApi,
@@ -184,6 +189,9 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   >(() => new Map());
   const [vaultReferencesPending, setVaultReferencesPending] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
+  const [pendingBatch, setPendingBatch] = useState<BatchPreflightSummary>();
+  const [batchProgress, setBatchProgress] = useState<BatchExecutionProgress>();
+  const [batchExecutionOperation, setBatchExecutionOperation] = useState<string>();
   const [applicationConfig, setApplicationConfig] =
     useState<ApplicationConfig>();
   const [recoveryStatus, setRecoveryStatus] = useState<RuntimeRecoveryStatus>();
@@ -820,11 +828,36 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       if (selectionContext === undefined) {
         throw new Error("目录 revision 尚未就绪，请等待当前视图刷新");
       }
-      const snapshot = await api.createExplicitSelectionSnapshot({
-        expectedCatalogRevision: selectionContext.expectedCatalogRevision,
-        keys: selectedAssets.map((asset) => asset.key),
-      });
-      await replaceSelectionSnapshot(snapshot);
+      const currentSnapshot = selectionSnapshotRef.current;
+      const snapshot =
+        currentSnapshot !== undefined &&
+        currentSnapshot.itemCount === selectedAssets.length &&
+        currentSnapshot.catalogRevision ===
+          selectionContext.expectedCatalogRevision
+          ? currentSnapshot
+          : await api.createExplicitSelectionSnapshot({
+              expectedCatalogRevision: selectionContext.expectedCatalogRevision,
+              keys: selectedAssets.map((asset) => asset.key),
+            });
+      if (snapshot.id !== currentSnapshot?.id) {
+        await replaceSelectionSnapshot(snapshot);
+      }
+      if (selectedAssets.length > 1) {
+        const preflight = await api.prepareMetadataBatch({
+          snapshotId: snapshot.id,
+          patch,
+        });
+        setPendingBatch(preflight);
+        setBatchProgress(undefined);
+        setNotice({
+          tone: preflight.failureCount > 0 ? "error" : "info",
+          message:
+            preflight.failureCount > 0
+              ? `预检完成：${preflight.executableCount}/${preflight.requestedCount} 项可执行，${preflight.failureCount} 项需跳过。请检查后确认。`
+              : `预检完成：${preflight.executableCount} 项可执行，请确认批量写入。`,
+        });
+        return;
+      }
       const result = await api.editAssetMetadata({
         targets: selectedAssets.map((asset) => ({
           key: asset.key,
@@ -870,6 +903,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         });
       }
     } catch (error) {
+      await replaceSelectionSnapshot(undefined);
       setNotice({
         tone: "error",
         message: `元数据写入失败：${errorMessage(error)}`,
@@ -877,6 +911,61 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     } finally {
       setEditBusy(false);
     }
+  };
+
+  const confirmPendingBatch = async () => {
+    if (pendingBatch === undefined || pendingBatch.executableCount === 0) return;
+    setEditBusy(true);
+    setBatchExecutionOperation(pendingBatch.operationId);
+    try {
+      const result = await api.executeMetadataBatch(
+        preflightConfirmation(pendingBatch),
+        (event) => setBatchProgress(event.data.progress),
+      );
+      selectionSnapshotRef.current = undefined;
+      setSelectionSnapshot(undefined);
+      setPendingBatch(undefined);
+      setAssets((current) => upsertAssets(current, result.updated));
+      setMetadataTransactions((current) => [
+        result.transaction,
+        ...current.filter((item) => item.id !== result.transaction.id),
+      ]);
+      setNotice({
+        tone: result.failures.length > 0 ? "error" : "info",
+        message: result.stopped
+          ? `批量写入已停止：${result.transaction.appliedCount} 项完成，${result.transaction.plannedCount} 项待继续。`
+          : `批量写入完成：${result.transaction.appliedCount} 项成功，${result.failures.length} 项失败。`,
+      });
+    } catch (error) {
+      await api
+        .releaseBatchPreflight(pendingBatch.operationId)
+        .catch(() => false);
+      setPendingBatch(undefined);
+      await replaceSelectionSnapshot(undefined);
+      void api
+        .listMetadataTransactions()
+        .then(setMetadataTransactions)
+        .catch(() => undefined);
+      setNotice({
+        tone: "error",
+        message: `批量写入失败：${errorMessage(error)}`,
+      });
+    } finally {
+      setBatchExecutionOperation(undefined);
+      setEditBusy(false);
+    }
+  };
+
+  const cancelPendingBatch = async () => {
+    if (pendingBatch === undefined) return;
+    if (batchExecutionOperation !== undefined) {
+      await api.cancelMetadataBatch(batchExecutionOperation);
+      return;
+    }
+    await api.releaseBatchPreflight(pendingBatch.operationId).catch(() => false);
+    setPendingBatch(undefined);
+    setBatchProgress(undefined);
+    await replaceSelectionSnapshot(undefined);
   };
 
   const resolveConflict = async (
@@ -1753,6 +1842,44 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
               >
                 <Icon name="close" size={13} />
               </button>
+            </div>
+          ) : null}
+          {pendingBatch ? (
+            <div className="batch-confirmation" role="region" aria-label="批量操作确认">
+              <div>
+                <strong>批量预检</strong>
+                <span>
+                  {pendingBatch.executableCount}/{pendingBatch.requestedCount} 项可执行
+                  {pendingBatch.failureCount > 0
+                    ? `，${pendingBatch.failureCount} 项失败`
+                    : ""}
+                </span>
+                {batchProgress ? (
+                  <span>
+                    已提交 {batchProgress.appliedCount}，待处理 {batchProgress.plannedCount}
+                  </span>
+                ) : null}
+                {pendingBatch.failures[0] ? (
+                  <small>
+                    首项：{pendingBatch.failures[0].key} · {pendingBatch.failures[0].message}
+                  </small>
+                ) : null}
+              </div>
+              <div className="batch-confirmation__actions">
+                <button
+                  disabled={
+                    pendingBatch.executableCount === 0 ||
+                    batchExecutionOperation !== undefined
+                  }
+                  onClick={() => void confirmPendingBatch()}
+                  type="button"
+                >
+                  确认写入
+                </button>
+                <button onClick={() => void cancelPendingBatch()} type="button">
+                  {batchExecutionOperation === undefined ? "取消" : "停止后续写入"}
+                </button>
+              </div>
             </div>
           ) : null}
 
