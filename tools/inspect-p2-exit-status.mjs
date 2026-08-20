@@ -22,6 +22,11 @@ import {
   FORMAL_RESOURCE_STABILITY_OPTIONS,
   inspectResourceStabilityReport,
 } from "./resource-stability-report.mjs";
+import {
+  buildSoakBaselineAudit,
+  FORMAL_SOAK_LOADED_PATHS,
+  FORMAL_SOAK_PRODUCT_SCOPES,
+} from "./soak-baseline-audit.mjs";
 
 const repository = path.resolve(import.meta.dirname, "..");
 const evidenceDirectory = path.join(repository, "docs", "reports", "evidence");
@@ -61,7 +66,7 @@ try {
   const hostedReadiness = buildP2HostedReadiness(
     await collectP2HostedReadinessInputs(repository),
   );
-  const resource = await collectResourceState();
+  const resource = await collectResourceState(git.currentCommit);
   const platform = await collectPlatformState();
   const hostedRun = await collectHostedRunState(platform);
   const externalGates = await collectExternalState({
@@ -118,7 +123,7 @@ function collectGitState() {
   };
 }
 
-async function collectResourceState() {
+async function collectResourceState(currentCommit) {
   const finalEvidence = await readOptionalJson(
     files.resource,
     32 * 1024 * 1024,
@@ -142,14 +147,21 @@ async function collectResourceState() {
     const inspection = inspectResourceStabilityReport(finalEvidence.value, {
       expectedOptions: FORMAL_RESOURCE_STABILITY_OPTIONS,
     });
+    const baselineAudit = collectSoakBaselineAudit(
+      finalEvidence.value?.gitCommit,
+      currentCommit,
+    );
+    const failures = [...inspection.failures, ...baselineAudit.failures];
     return {
       gate: {
-        state: inspection.accepted ? "passed" : "failed",
-        failures: inspection.failures,
+        state:
+          inspection.accepted && baselineAudit.accepted ? "passed" : "failed",
+        failures,
         summary: inspection.replayedReport?.summary ?? null,
       },
       finalEvidence,
       replayedReport: inspection.replayedReport,
+      baselineAudit,
     };
   }
   if (partialEvidence.exists) {
@@ -159,19 +171,71 @@ async function collectResourceState() {
       partialEvidence.value,
       { expectedOptions: FORMAL_RESOURCE_STABILITY_OPTIONS },
     );
+    const baselineAudit = collectSoakBaselineAudit(
+      partialEvidence.value?.gitCommit,
+      currentCommit,
+    );
+    const failures = [...inspection.failures, ...baselineAudit.failures];
     return {
       gate: {
-        state: inspection.healthy ? "running" : "failed",
-        failures: inspection.failures,
+        state:
+          inspection.healthy && baselineAudit.accepted ? "running" : "failed",
+        failures,
         summary: inspection.summary,
       },
       finalEvidence,
+      baselineAudit,
     };
   }
   return {
     gate: { state: "missing", failures: [], summary: null },
     finalEvidence,
   };
+}
+
+function collectSoakBaselineAudit(baselineCommit, currentCommit) {
+  const baselineExists =
+    isCommit(baselineCommit) &&
+    gitStatus(["cat-file", "-e", `${baselineCommit}^{commit}`]);
+  return buildSoakBaselineAudit({
+    baselineCommit,
+    currentCommit,
+    descendantOfBaseline:
+      baselineExists && isAncestor(baselineCommit, currentCommit),
+    loadedChangedPaths: baselineExists
+      ? changedPaths(baselineCommit, FORMAL_SOAK_LOADED_PATHS)
+      : [],
+    productChangedPaths: baselineExists
+      ? changedPaths(baselineCommit, FORMAL_SOAK_PRODUCT_SCOPES)
+      : [],
+  });
+}
+
+function changedPaths(baselineCommit, scopes) {
+  const tracked = gitNullDelimited([
+    "diff",
+    "--name-only",
+    "--no-renames",
+    "-z",
+    baselineCommit,
+    "--",
+    ...scopes,
+  ]);
+  const untracked = gitNullDelimited([
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "-z",
+    "--",
+    ...scopes,
+  ]);
+  return [...new Set([...tracked, ...untracked])].toSorted();
+}
+
+function gitNullDelimited(args) {
+  return git(args)
+    .split("\0")
+    .filter((entry) => entry.length > 0);
 }
 
 function failedResource(message, finalEvidence) {
