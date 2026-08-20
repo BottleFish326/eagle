@@ -21,6 +21,7 @@ export function inspectP2HostedRun({
       accepted: false,
       failures: ["hosted run metadata is not an object"],
       jobs: [],
+      runUrl: null,
     };
   }
   if (String(run.databaseId) !== String(requestedRunId))
@@ -38,7 +39,8 @@ export function inspectP2HostedRun({
   if (run.workflowName !== "CI")
     failures.push("hosted run workflow name is not CI");
   const expectedUrl = `https://github.com/${String(repositorySlug)}/actions/runs/${String(requestedRunId)}`;
-  if (run.url !== expectedUrl)
+  const expectedAttemptUrl = `${expectedUrl}/attempts/${String(requestedAttempt)}`;
+  if (run.url !== expectedUrl && run.url !== expectedAttemptUrl)
     failures.push("hosted run URL does not match repository and run ID");
   if (!isOrderedIsoRange(run.createdAt, run.startedAt, run.updatedAt))
     failures.push("hosted run timestamps are invalid or unordered");
@@ -80,7 +82,12 @@ export function inspectP2HostedRun({
       });
     }
   }
-  return { accepted: failures.length === 0, failures, jobs };
+  return {
+    accepted: failures.length === 0,
+    failures,
+    jobs,
+    runUrl: expectedUrl,
+  };
 }
 
 export function p2HostedArtifactPatterns(commit, attempt) {
@@ -108,7 +115,11 @@ export async function collectP2HostedEvidence({
     throw new Error(
       `P2-A12 hosted run rejected: ${inspection?.failures?.join("; ") ?? "invalid inspection"}`,
     );
-  const expectedPatterns = p2HostedArtifactPatterns(run?.headSha, run?.attempt);
+  const acceptedRun = { ...run, url: inspection.runUrl };
+  const expectedPatterns = p2HostedArtifactPatterns(
+    acceptedRun.headSha,
+    acceptedRun.attempt,
+  );
   if (JSON.stringify(patterns) !== JSON.stringify(expectedPatterns))
     throw new Error("P2-A12 artifact patterns do not match the accepted run");
   await downloadArtifacts({ patterns, downloadDirectory });
@@ -117,7 +128,7 @@ export async function collectP2HostedEvidence({
     throw new Error("P2-A12 archive did not report success");
   const receipt = buildP2HostedRunReceipt({
     inspection,
-    run,
+    run: acceptedRun,
     repositorySlug,
     archive,
   });

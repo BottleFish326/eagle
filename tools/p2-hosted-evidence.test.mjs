@@ -30,6 +30,36 @@ test("accepts exact completed manual-run metadata and binds artifact patterns", 
   ]);
 });
 
+test("accepts the exact gh attempt URL and normalizes it to the canonical run URL", () => {
+  const run = acceptedRun();
+  run.url = `${run.url}/attempts/2`;
+  const inspection = inspectP2HostedRun({
+    run,
+    requestedRunId: 123,
+    requestedAttempt: 2,
+    expectedCommit: commit,
+    repositorySlug,
+  });
+
+  assert.equal(inspection.accepted, true, inspection.failures.join("; "));
+  assert.equal(
+    inspection.runUrl,
+    `https://github.com/${repositorySlug}/actions/runs/123`,
+  );
+
+  run.url = `https://github.com/${repositorySlug}/actions/runs/123/attempts/1`;
+  assert.equal(
+    inspectP2HostedRun({
+      run,
+      requestedRunId: 123,
+      requestedAttempt: 2,
+      expectedCommit: commit,
+      repositorySlug,
+    }).accepted,
+    false,
+  );
+});
+
 test("rejects mismatched, incomplete, or non-manual workflow metadata", () => {
   const run = {
     ...acceptedRun(),
@@ -57,6 +87,7 @@ test("rejects mismatched, incomplete, or non-manual workflow metadata", () => {
 test("downloads, archives, then removes only a successfully processed bundle", async () => {
   const calls = [];
   const run = acceptedRun();
+  run.url = `${run.url}/attempts/2`;
   const inspection = inspectP2HostedRun({
     run,
     requestedRunId: 123,
@@ -83,6 +114,10 @@ test("downloads, archives, then removes only a successfully processed bundle", a
   assert.equal(result.temporaryDownloadRemoved, true);
   assert.equal(result.jobs.length, 5);
   assert.equal(result.archive.files.length, 4);
+  assert.equal(
+    result.run.url,
+    `https://github.com/${repositorySlug}/actions/runs/123`,
+  );
   assert.deepEqual(
     calls.map(([name]) => name),
     ["download", "archive", "remove", "publish"],
