@@ -3228,6 +3228,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "query-scan-gate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "asset-catalog",
+ "asset-core",
+ "asset-filesystem",
+ "asset-index",
+ "clap",
+ "metadata",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
