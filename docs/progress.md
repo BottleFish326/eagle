@@ -62,7 +62,7 @@
 | 准备项 | 状态 | 证据 |
 |---|---|---|
 | P3-01 扩展格式能力管线 | In progress | P3-01A/B/D/E/F Completed locally；P3-01C 已通过三平台固定 libheif backend 与成品重放；PDF 页数/首页面尺寸/主动内容隔离已接入，视频帧与 PDFium worker 按发行门禁暂缓；P3-A01/A02 未判定，下一动作是统一执行器和资源证据，见 `reports/p3-01a-acceptance.md` 至 `reports/p3-01f-acceptance.md` |
-| P3-02 智能属性与高级过滤 | Design ready | 已固定定型谓词、整数单位、RFC 3339、精确宽高比、未知属性、混合索引和独立三方查询语料；阶段 2 退出前不计作 P3 开始，见 `reports/p3-02-readiness.md` |
+| P3-02 智能属性与高级过滤 | A-D completed locally；E pending | 定型 AST、文件派生视频旋转、混合索引、64/64/25 三方语料和 L 100,000 条 × 200 次查询已通过；桌面字段编辑器和文件扫描端到端收据未完成，P3-A03 未关闭，见 `reports/p3-02a-d-acceptance.md` |
 | P3-03 保存过滤器 | Design ready | 已固定用户级 YAML、条目隔离、未知字段保留、完整版本、精确 Tag AST 重写和跨文件协调恢复；阶段 2 退出前不计作 P3 开始，见 `reports/p3-03-readiness.md` |
 | P3-04 批量工作流 | Design ready | 已固定精确全选快照、catalog revision、只读预检、协作取消、事务续传与剪贴板单次提交；阶段 2 退出前不计作 P3 开始，见 `reports/p3-04-readiness.md` |
 | P3-05 重复素材分析 | Design ready | 已固定大小/快速指纹/完整 SHA-256、当前文件重读、物理别名、视觉候选隔离和非破坏性报告；阶段 2 退出前不计作 P3 开始，见 `reports/p3-05-readiness.md` |

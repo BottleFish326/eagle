@@ -1,0 +1,569 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "failures": [],
+  "manifest": {
+    "suiteId": "advanced-query-p3-a03",
+    "suiteVersion": 1,
+    "sha256": "501c582ff9b39f61c9eeca8c230dde7efb6cd5270f5aec6e5ee733be52b78d31",
+    "recordCount": 64,
+    "validCaseCount": 64,
+    "invalidCaseCount": 25
+  },
+  "product": {
+    "gitCommit": "cb7708fcb84c3988c966201ef1a20f7eff6a402d",
+    "nodeVersion": "v24.19.0"
+  },
+  "validCases": [
+    {
+      "id": "all-assets",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 64,
+      "elapsedNanoseconds": 1875
+    },
+    {
+      "id": "tag-all",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 64,
+      "elapsedNanoseconds": 28875
+    },
+    {
+      "id": "tag-all-two",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 13,
+      "elapsedNanoseconds": 7375
+    },
+    {
+      "id": "tag-any",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 64,
+      "elapsedNanoseconds": 6833
+    },
+    {
+      "id": "tag-none",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 42,
+      "elapsedNanoseconds": 2750
+    },
+    {
+      "id": "tag-namespace",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 64,
+      "elapsedNanoseconds": 4167
+    },
+    {
+      "id": "tag-explicit",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 64,
+      "elapsedNanoseconds": 3458
+    },
+    {
+      "id": "tag-unicode",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 7,
+      "elapsedNanoseconds": 2375
+    },
+    {
+      "id": "type-image",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 13,
+      "elapsedNanoseconds": 3125
+    },
+    {
+      "id": "type-image-video",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 26,
+      "elapsedNanoseconds": 4000
+    },
+    {
+      "id": "extension-png",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 13,
+      "elapsedNanoseconds": 2750
+    },
+    {
+      "id": "extension-pdf-wav",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 26,
+      "elapsedNanoseconds": 2958
+    },
+    {
+      "id": "favorite-true",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 32,
+      "elapsedNanoseconds": 2042
+    },
+    {
+      "id": "favorite-false",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 32,
+      "elapsedNanoseconds": 1750
+    },
+    {
+      "id": "rating-zero",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 11,
+      "elapsedNanoseconds": 4375
+    },
+    {
+      "id": "rating-high",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 20,
+      "elapsedNanoseconds": 2541
+    },
+    {
+      "id": "rating-range",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 32,
+      "elapsedNanoseconds": 7459
+    },
+    {
+      "id": "size-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 6,
+      "elapsedNanoseconds": 3208
+    },
+    {
+      "id": "size-zero",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 1,
+      "elapsedNanoseconds": 3292
+    },
+    {
+      "id": "size-at-least-10-mib",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 49,
+      "elapsedNanoseconds": 2708
+    },
+    {
+      "id": "size-window",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 15,
+      "elapsedNanoseconds": 4709
+    },
+    {
+      "id": "width-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 10,
+      "elapsedNanoseconds": 2584
+    },
+    {
+      "id": "width-hd",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 27,
+      "elapsedNanoseconds": 2500
+    },
+    {
+      "id": "height-small",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 41,
+      "elapsedNanoseconds": 2208
+    },
+    {
+      "id": "aspect-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 10,
+      "elapsedNanoseconds": 2583
+    },
+    {
+      "id": "aspect-square",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 14,
+      "elapsedNanoseconds": 3083
+    },
+    {
+      "id": "aspect-wide",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 27,
+      "elapsedNanoseconds": 2166
+    },
+    {
+      "id": "aspect-four-three",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 0,
+      "elapsedNanoseconds": 2375
+    },
+    {
+      "id": "orientation-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 10,
+      "elapsedNanoseconds": 3916
+    },
+    {
+      "id": "orientation-landscape",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 27,
+      "elapsedNanoseconds": 3667
+    },
+    {
+      "id": "orientation-portrait-square",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 27,
+      "elapsedNanoseconds": 4667
+    },
+    {
+      "id": "created-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 5,
+      "elapsedNanoseconds": 2417
+    },
+    {
+      "id": "created-after",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 42,
+      "elapsedNanoseconds": 5958
+    },
+    {
+      "id": "created-offset",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 42,
+      "elapsedNanoseconds": 4875
+    },
+    {
+      "id": "modified-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 4,
+      "elapsedNanoseconds": 2333
+    },
+    {
+      "id": "modified-before",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 22,
+      "elapsedNanoseconds": 3666
+    },
+    {
+      "id": "duration-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 40,
+      "elapsedNanoseconds": 2250
+    },
+    {
+      "id": "duration-zero",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 0,
+      "elapsedNanoseconds": 2791
+    },
+    {
+      "id": "duration-thirty-seconds",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 13,
+      "elapsedNanoseconds": 2209
+    },
+    {
+      "id": "duration-one-minute",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 2,
+      "elapsedNanoseconds": 2125
+    },
+    {
+      "id": "pages-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 53,
+      "elapsedNanoseconds": 2208
+    },
+    {
+      "id": "pages-two",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 11,
+      "elapsedNanoseconds": 1959
+    },
+    {
+      "id": "root-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 16,
+      "elapsedNanoseconds": 2959
+    },
+    {
+      "id": "root-a",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 16,
+      "elapsedNanoseconds": 8500
+    },
+    {
+      "id": "root-a-b",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 48,
+      "elapsedNanoseconds": 10375
+    },
+    {
+      "id": "root-removed",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 0,
+      "elapsedNanoseconds": 5625
+    },
+    {
+      "id": "path-brand",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 11,
+      "elapsedNanoseconds": 7542
+    },
+    {
+      "id": "path-chinese",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 11,
+      "elapsedNanoseconds": 3666
+    },
+    {
+      "id": "path-japanese",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 11,
+      "elapsedNanoseconds": 3666
+    },
+    {
+      "id": "path-emoji",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 11,
+      "elapsedNanoseconds": 2792
+    },
+    {
+      "id": "path-case-sensitive",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 10,
+      "elapsedNanoseconds": 3458
+    },
+    {
+      "id": "path-two-fragments",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 11,
+      "elapsedNanoseconds": 9000
+    },
+    {
+      "id": "color-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 16,
+      "elapsedNanoseconds": 2750
+    },
+    {
+      "id": "color-srgb",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 32,
+      "elapsedNanoseconds": 2792
+    },
+    {
+      "id": "color-two",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 48,
+      "elapsedNanoseconds": 4167
+    },
+    {
+      "id": "note-true",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 32,
+      "elapsedNanoseconds": 1875
+    },
+    {
+      "id": "note-false",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 32,
+      "elapsedNanoseconds": 1792
+    },
+    {
+      "id": "alpha-unknown",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 22,
+      "elapsedNanoseconds": 2583
+    },
+    {
+      "id": "alpha-true",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 21,
+      "elapsedNanoseconds": 1792
+    },
+    {
+      "id": "alpha-false",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 21,
+      "elapsedNanoseconds": 1708
+    },
+    {
+      "id": "combined-basic",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 8,
+      "elapsedNanoseconds": 8292
+    },
+    {
+      "id": "combined-advanced",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 13,
+      "elapsedNanoseconds": 10041
+    },
+    {
+      "id": "empty-result",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 0,
+      "elapsedNanoseconds": 4875
+    },
+    {
+      "id": "large-candidate-set",
+      "oracleMatchesExpected": true,
+      "productMatchesExpected": true,
+      "matchCount": 64,
+      "elapsedNanoseconds": 1708
+    }
+  ],
+  "invalidCases": [
+    {
+      "id": "invalid-operator",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-integer",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-unit",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "numeric-overflow",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-ratio",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-date",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-enum",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-root-id",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-path-parent",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-path-windows",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "unsupported-unknown",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "conflicting-range",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "conflicting-value",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "unclosed-quote",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "trailing-escape",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "empty-tag",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "tag-too-long",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-wildcard",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-or-group",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "unknown-filter",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-type",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-extension",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "invalid-favorite",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "conflicting-favorite",
+      "productMatchesExpected": true
+    },
+    {
+      "id": "second-invalid-operator",
+      "productMatchesExpected": true
+    }
+  ]
+}
