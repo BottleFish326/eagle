@@ -513,6 +513,7 @@ fn parse_asset(
                 }
                 asset.media = Some(MediaProperties {
                     duration_ms: inspection.duration_ms,
+                    display_quarter_turns: inspection.display_quarter_turns,
                     video_track_count: Some(inspection.video_track_count),
                     audio_track_count: Some(inspection.audio_track_count),
                     codec: inspection.codec.map(str::to_owned),
@@ -1029,6 +1030,7 @@ mod tests {
             );
             let media = asset.media.as_ref().expect("normal video media properties");
             assert_eq!(media.duration_ms, Some(2_000), "{name}");
+            assert_eq!(media.display_quarter_turns, Some(0), "{name}");
             assert_eq!(media.video_track_count, Some(1), "{name}");
             assert_eq!(media.audio_track_count, Some(1), "{name}");
             assert_eq!(media.codec.as_deref(), Some(codec), "{name}");

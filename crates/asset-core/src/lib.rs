@@ -57,6 +57,7 @@ pub struct AssetDimensions {
 #[serde(rename_all = "camelCase")]
 pub struct MediaProperties {
     pub duration_ms: Option<u64>,
+    pub display_quarter_turns: Option<u8>,
     pub page_count: Option<u32>,
     pub frame_count: Option<u32>,
     pub video_track_count: Option<u32>,
@@ -212,6 +213,7 @@ mod tests {
             height: 533,
         });
         record.media = Some(MediaProperties {
+            display_quarter_turns: Some(1),
             frame_count: Some(1),
             video_track_count: Some(1),
             audio_track_count: Some(0),
@@ -221,6 +223,7 @@ mod tests {
         });
         let value = serde_json::to_value(&record).expect("record JSON");
         assert_eq!(value["dimensions"]["width"], 800);
+        assert_eq!(value["media"]["displayQuarterTurns"], 1);
         assert_eq!(value["media"]["frameCount"], 1);
         assert_eq!(value["media"]["videoTrackCount"], 1);
         assert_eq!(value["media"]["audioTrackCount"], 0);

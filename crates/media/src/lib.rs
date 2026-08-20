@@ -44,6 +44,13 @@ const EBML_ID_INFO: u64 = 0x1549_a966;
 const EBML_ID_TRACKS: u64 = 0x1654_ae6b;
 const EBML_ID_CLUSTER: u64 = 0x1f43_b675;
 const EBML_ID_VOID: u64 = 0xec;
+const EBML_ID_TRACK_ENTRY: u64 = 0xae;
+const EBML_ID_TRACK_TYPE: u64 = 0x83;
+const EBML_ID_VIDEO: u64 = 0xe0;
+const EBML_ID_PROJECTION: u64 = 0x7670;
+const EBML_ID_PROJECTION_POSE_YAW: u64 = 0x7673;
+const EBML_ID_PROJECTION_POSE_PITCH: u64 = 0x7674;
+const EBML_ID_PROJECTION_POSE_ROLL: u64 = 0x7675;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoContainer {
@@ -98,6 +105,7 @@ impl VideoContainer {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VideoInspection {
     pub duration_ms: Option<u64>,
+    pub display_quarter_turns: Option<u8>,
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub video_track_count: u32,
@@ -138,10 +146,10 @@ pub fn inspect_video_file(
     if timeout.is_zero() {
         return Err(MediaInspectError::ResourceLimited);
     }
-    match container {
+    let display_quarter_turns = match container {
         VideoContainer::Mp4 | VideoContainer::Mov => preflight_iso_bmff(path, before.len)?,
         VideoContainer::Webm => preflight_webm(path, before.len)?,
-    }
+    };
 
     let state = Arc::new(SourceLimitState::new(timeout));
     let file = File::open(path).map_err(|_| MediaInspectError::Unreadable)?;
@@ -226,6 +234,7 @@ pub fn inspect_video_file(
     }
     Ok(VideoInspection {
         duration_ms,
+        display_quarter_turns,
         width: dimensions.map(|value| value.0),
         height: dimensions.map(|value| value.1),
         video_track_count,
@@ -788,71 +797,212 @@ fn source_version(path: &Path) -> Result<SourceVersion, MediaInspectError> {
     })
 }
 
-fn preflight_iso_bmff(path: &Path, file_len: u64) -> Result<(), MediaInspectError> {
+fn preflight_iso_bmff(path: &Path, file_len: u64) -> Result<Option<u8>, MediaInspectError> {
     let mut file = File::open(path).map_err(|_| MediaInspectError::Unreadable)?;
     let mut position = 0_u64;
     let mut count = 0_u64;
     let mut found_ftyp = false;
     let mut found_moov = false;
+    let mut display_quarter_turns = None;
     while position < file_len {
-        count = count.saturating_add(1);
-        if count > MAX_CONTAINER_ELEMENTS {
-            return Err(MediaInspectError::ResourceLimited);
-        }
-        file.seek(SeekFrom::Start(position))
-            .map_err(|_| MediaInspectError::Unreadable)?;
-        let mut header = [0_u8; 16];
-        file.read_exact(&mut header[..8])
-            .map_err(|_| MediaInspectError::InvalidContent)?;
-        let size32 = u32::from_be_bytes(header[..4].try_into().expect("four-byte slice"));
-        let atom_type: [u8; 4] = header[4..8].try_into().expect("four-byte slice");
-        let (header_len, size) = match size32 {
-            0 => (8_u64, file_len.saturating_sub(position)),
-            1 => {
-                file.read_exact(&mut header[8..16])
-                    .map_err(|_| MediaInspectError::InvalidContent)?;
-                (
-                    16,
-                    u64::from_be_bytes(header[8..16].try_into().expect("eight-byte slice")),
-                )
-            }
-            value => (8, u64::from(value)),
-        };
-        if size < header_len {
-            return Err(MediaInspectError::InvalidContent);
-        }
-        let end = position
-            .checked_add(size)
-            .filter(|end| *end <= file_len)
-            .ok_or(MediaInspectError::InvalidContent)?;
-        match &atom_type {
+        count_container_element(&mut count)?;
+        let atom = read_iso_box(&mut file, position, file_len)?;
+        match &atom.kind {
             b"ftyp" => found_ftyp = true,
             b"moov" => {
                 if found_moov {
                     return Err(MediaInspectError::InvalidContent);
                 }
-                if size > MAX_CONTAINER_METADATA_BYTES {
+                if atom.end.saturating_sub(position) > MAX_CONTAINER_METADATA_BYTES {
                     return Err(MediaInspectError::ResourceLimited);
                 }
                 found_moov = true;
+                display_quarter_turns = iso_video_display_quarter_turns(
+                    &mut file,
+                    atom.payload_start,
+                    atom.end,
+                    &mut count,
+                )?;
             }
-            b"meta" | b"sidx" if size > MAX_CONTAINER_METADATA_BYTES => {
+            b"meta" | b"sidx"
+                if atom.end.saturating_sub(position) > MAX_CONTAINER_METADATA_BYTES =>
+            {
                 return Err(MediaInspectError::ResourceLimited);
             }
             _ => {}
         }
-        if end == position {
-            return Err(MediaInspectError::InvalidContent);
-        }
-        position = end;
+        position = atom.end;
     }
     if !found_ftyp || !found_moov {
         return Err(MediaInspectError::InvalidContent);
     }
-    Ok(())
+    Ok(display_quarter_turns)
 }
 
-fn preflight_webm(path: &Path, file_len: u64) -> Result<(), MediaInspectError> {
+#[derive(Debug, Clone, Copy)]
+struct IsoBox {
+    kind: [u8; 4],
+    payload_start: u64,
+    end: u64,
+}
+
+fn read_iso_box(
+    file: &mut File,
+    position: u64,
+    parent_end: u64,
+) -> Result<IsoBox, MediaInspectError> {
+    file.seek(SeekFrom::Start(position))
+        .map_err(|_| MediaInspectError::Unreadable)?;
+    let mut header = [0_u8; 16];
+    file.read_exact(&mut header[..8])
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    let size32 = u32::from_be_bytes(header[..4].try_into().expect("four-byte slice"));
+    let kind = header[4..8].try_into().expect("four-byte slice");
+    let (header_len, size) = match size32 {
+        0 => (8_u64, parent_end.saturating_sub(position)),
+        1 => {
+            file.read_exact(&mut header[8..16])
+                .map_err(|_| MediaInspectError::InvalidContent)?;
+            (
+                16,
+                u64::from_be_bytes(header[8..16].try_into().expect("eight-byte slice")),
+            )
+        }
+        value => (8, u64::from(value)),
+    };
+    if size < header_len {
+        return Err(MediaInspectError::InvalidContent);
+    }
+    let payload_start = position
+        .checked_add(header_len)
+        .ok_or(MediaInspectError::InvalidContent)?;
+    let end = position
+        .checked_add(size)
+        .filter(|end| *end <= parent_end && *end > position)
+        .ok_or(MediaInspectError::InvalidContent)?;
+    Ok(IsoBox {
+        kind,
+        payload_start,
+        end,
+    })
+}
+
+fn iso_video_display_quarter_turns(
+    file: &mut File,
+    start: u64,
+    end: u64,
+    count: &mut u64,
+) -> Result<Option<u8>, MediaInspectError> {
+    let mut position = start;
+    while position < end {
+        count_container_element(count)?;
+        let atom = read_iso_box(file, position, end)?;
+        if &atom.kind == b"trak" {
+            let (is_video, turns) = iso_track_display(file, atom.payload_start, atom.end, count)?;
+            if is_video {
+                return Ok(turns);
+            }
+        }
+        position = atom.end;
+    }
+    Ok(None)
+}
+
+fn iso_track_display(
+    file: &mut File,
+    start: u64,
+    end: u64,
+    count: &mut u64,
+) -> Result<(bool, Option<u8>), MediaInspectError> {
+    let mut position = start;
+    let mut is_video = false;
+    let mut turns = None;
+    while position < end {
+        count_container_element(count)?;
+        let atom = read_iso_box(file, position, end)?;
+        match &atom.kind {
+            b"tkhd" => turns = iso_track_header_quarter_turns(file, atom)?,
+            b"mdia" => {
+                is_video = iso_media_is_video(file, atom.payload_start, atom.end, count)?;
+            }
+            _ => {}
+        }
+        position = atom.end;
+    }
+    Ok((is_video, turns))
+}
+
+fn iso_media_is_video(
+    file: &mut File,
+    start: u64,
+    end: u64,
+    count: &mut u64,
+) -> Result<bool, MediaInspectError> {
+    let mut position = start;
+    while position < end {
+        count_container_element(count)?;
+        let atom = read_iso_box(file, position, end)?;
+        if &atom.kind == b"hdlr" {
+            if atom.end.saturating_sub(atom.payload_start) < 12 {
+                return Err(MediaInspectError::InvalidContent);
+            }
+            file.seek(SeekFrom::Start(atom.payload_start + 8))
+                .map_err(|_| MediaInspectError::Unreadable)?;
+            let mut handler = [0_u8; 4];
+            file.read_exact(&mut handler)
+                .map_err(|_| MediaInspectError::InvalidContent)?;
+            return Ok(&handler == b"vide");
+        }
+        position = atom.end;
+    }
+    Ok(false)
+}
+
+fn iso_track_header_quarter_turns(
+    file: &mut File,
+    atom: IsoBox,
+) -> Result<Option<u8>, MediaInspectError> {
+    file.seek(SeekFrom::Start(atom.payload_start))
+        .map_err(|_| MediaInspectError::Unreadable)?;
+    let mut version = [0_u8; 1];
+    file.read_exact(&mut version)
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    let matrix_offset = match version[0] {
+        0 => 40_u64,
+        1 => 52,
+        _ => return Ok(None),
+    };
+    let matrix_start = atom
+        .payload_start
+        .checked_add(matrix_offset)
+        .filter(|start| start.saturating_add(36) <= atom.end)
+        .ok_or(MediaInspectError::InvalidContent)?;
+    file.seek(SeekFrom::Start(matrix_start))
+        .map_err(|_| MediaInspectError::Unreadable)?;
+    let mut bytes = [0_u8; 36];
+    file.read_exact(&mut bytes)
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    let component = |index: usize| {
+        i32::from_be_bytes(
+            bytes[index * 4..index * 4 + 4]
+                .try_into()
+                .expect("four-byte matrix component"),
+        )
+    };
+    if component(2) != 0 || component(5) != 0 || component(8) != 0x4000_0000 {
+        return Ok(None);
+    }
+    let rotation = match (component(0), component(1), component(3), component(4)) {
+        (0x0001_0000, 0, 0, 0x0001_0000) => Some(0),
+        (0, 0x0001_0000, -0x0001_0000, 0) => Some(1),
+        (-0x0001_0000, 0, 0, -0x0001_0000) => Some(2),
+        (0, -0x0001_0000, 0x0001_0000, 0) => Some(3),
+        _ => None,
+    };
+    Ok(rotation)
+}
+
+fn preflight_webm(path: &Path, file_len: u64) -> Result<Option<u8>, MediaInspectError> {
     let mut file = File::open(path).map_err(|_| MediaInspectError::Unreadable)?;
     let header = read_ebml_header(&mut file, 0, file_len)?;
     if header.id != EBML_ID_HEADER {
@@ -869,17 +1019,21 @@ fn preflight_webm(path: &Path, file_len: u64) -> Result<(), MediaInspectError> {
     let mut metadata_bytes = 0_u64;
     let mut found_info = false;
     let mut found_tracks = false;
+    let mut display_quarter_turns = None;
     while position < segment_end {
-        count = count.saturating_add(1);
-        if count > MAX_CONTAINER_ELEMENTS {
-            return Err(MediaInspectError::ResourceLimited);
-        }
+        count_container_element(&mut count)?;
         let child = read_ebml_header(&mut file, position, segment_end)?;
         let child_end = child.end(segment_end)?;
         if child.id == EBML_ID_INFO {
             found_info = true;
         } else if child.id == EBML_ID_TRACKS {
             found_tracks = true;
+            display_quarter_turns = webm_video_display_quarter_turns(
+                &mut file,
+                child.payload_start,
+                child_end,
+                &mut count,
+            )?;
         }
         if !matches!(child.id, EBML_ID_CLUSTER | EBML_ID_VOID) {
             let element_bytes = child_end.saturating_sub(position);
@@ -904,6 +1058,173 @@ fn preflight_webm(path: &Path, file_len: u64) -> Result<(), MediaInspectError> {
     }
     if !found_info || !found_tracks {
         return Err(MediaInspectError::InvalidContent);
+    }
+    Ok(display_quarter_turns)
+}
+
+fn webm_video_display_quarter_turns(
+    file: &mut File,
+    start: u64,
+    end: u64,
+    count: &mut u64,
+) -> Result<Option<u8>, MediaInspectError> {
+    let mut position = start;
+    while position < end {
+        count_container_element(count)?;
+        let child = read_ebml_header(file, position, end)?;
+        let child_end = child.end(end)?;
+        if child.id == EBML_ID_TRACK_ENTRY {
+            let (is_video, turns) =
+                webm_track_display(file, child.payload_start, child_end, count)?;
+            if is_video {
+                return Ok(turns);
+            }
+        }
+        if child.size.is_none() {
+            return Err(MediaInspectError::UnsupportedFeature);
+        }
+        position = child_end;
+    }
+    Ok(None)
+}
+
+fn webm_track_display(
+    file: &mut File,
+    start: u64,
+    end: u64,
+    count: &mut u64,
+) -> Result<(bool, Option<u8>), MediaInspectError> {
+    let mut position = start;
+    let mut track_type = None;
+    let mut turns = Some(0);
+    while position < end {
+        count_container_element(count)?;
+        let child = read_ebml_header(file, position, end)?;
+        let child_end = child.end(end)?;
+        match child.id {
+            EBML_ID_TRACK_TYPE => track_type = Some(read_ebml_unsigned(file, child)?),
+            EBML_ID_VIDEO => {
+                turns = webm_video_rotation(file, child.payload_start, child_end, count)?;
+            }
+            _ => {}
+        }
+        if child.size.is_none() {
+            return Err(MediaInspectError::UnsupportedFeature);
+        }
+        position = child_end;
+    }
+    Ok((track_type == Some(1), turns))
+}
+
+fn webm_video_rotation(
+    file: &mut File,
+    start: u64,
+    end: u64,
+    count: &mut u64,
+) -> Result<Option<u8>, MediaInspectError> {
+    let mut position = start;
+    while position < end {
+        count_container_element(count)?;
+        let child = read_ebml_header(file, position, end)?;
+        let child_end = child.end(end)?;
+        if child.id == EBML_ID_PROJECTION {
+            return webm_projection_rotation(file, child.payload_start, child_end, count);
+        }
+        if child.size.is_none() {
+            return Err(MediaInspectError::UnsupportedFeature);
+        }
+        position = child_end;
+    }
+    Ok(Some(0))
+}
+
+fn webm_projection_rotation(
+    file: &mut File,
+    start: u64,
+    end: u64,
+    count: &mut u64,
+) -> Result<Option<u8>, MediaInspectError> {
+    let mut position = start;
+    let mut yaw = 0_f64;
+    let mut pitch = 0_f64;
+    let mut roll = 0_f64;
+    while position < end {
+        count_container_element(count)?;
+        let child = read_ebml_header(file, position, end)?;
+        let child_end = child.end(end)?;
+        match child.id {
+            EBML_ID_PROJECTION_POSE_YAW => yaw = read_ebml_float(file, child)?,
+            EBML_ID_PROJECTION_POSE_PITCH => pitch = read_ebml_float(file, child)?,
+            EBML_ID_PROJECTION_POSE_ROLL => roll = read_ebml_float(file, child)?,
+            _ => {}
+        }
+        if child.size.is_none() {
+            return Err(MediaInspectError::UnsupportedFeature);
+        }
+        position = child_end;
+    }
+    if !yaw.is_finite()
+        || !pitch.is_finite()
+        || !roll.is_finite()
+        || yaw.abs() > 180.0
+        || pitch.abs() > 90.0
+        || roll.abs() > 180.0
+    {
+        return Err(MediaInspectError::InvalidContent);
+    }
+    if yaw.abs() > 0.001 || pitch.abs() > 0.001 {
+        return Ok(None);
+    }
+    Ok(clockwise_quarter_turns(-roll))
+}
+
+fn read_ebml_unsigned(file: &mut File, element: EbmlHeader) -> Result<u64, MediaInspectError> {
+    let size = element.size.ok_or(MediaInspectError::UnsupportedFeature)?;
+    if !(1..=8).contains(&size) {
+        return Err(MediaInspectError::InvalidContent);
+    }
+    file.seek(SeekFrom::Start(element.payload_start))
+        .map_err(|_| MediaInspectError::Unreadable)?;
+    let mut bytes = [0_u8; 8];
+    let offset = 8_usize
+        .saturating_sub(usize::try_from(size).map_err(|_| MediaInspectError::InvalidContent)?);
+    file.read_exact(&mut bytes[offset..])
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    Ok(u64::from_be_bytes(bytes))
+}
+
+fn read_ebml_float(file: &mut File, element: EbmlHeader) -> Result<f64, MediaInspectError> {
+    let size = element.size.ok_or(MediaInspectError::UnsupportedFeature)?;
+    file.seek(SeekFrom::Start(element.payload_start))
+        .map_err(|_| MediaInspectError::Unreadable)?;
+    match size {
+        4 => {
+            let mut bytes = [0_u8; 4];
+            file.read_exact(&mut bytes)
+                .map_err(|_| MediaInspectError::InvalidContent)?;
+            Ok(f64::from(f32::from_bits(u32::from_be_bytes(bytes))))
+        }
+        8 => {
+            let mut bytes = [0_u8; 8];
+            file.read_exact(&mut bytes)
+                .map_err(|_| MediaInspectError::InvalidContent)?;
+            Ok(f64::from_bits(u64::from_be_bytes(bytes)))
+        }
+        _ => Err(MediaInspectError::InvalidContent),
+    }
+}
+
+fn clockwise_quarter_turns(degrees: f64) -> Option<u8> {
+    let normalized = degrees.rem_euclid(360.0);
+    [(0.0, 0), (90.0, 1), (180.0, 2), (270.0, 3)]
+        .into_iter()
+        .find_map(|(candidate, turns)| ((normalized - candidate).abs() <= 0.001).then_some(turns))
+}
+
+fn count_container_element(count: &mut u64) -> Result<(), MediaInspectError> {
+    *count = count.saturating_add(1);
+    if *count > MAX_CONTAINER_ELEMENTS {
+        return Err(MediaInspectError::ResourceLimited);
     }
     Ok(())
 }
@@ -1062,6 +1383,7 @@ impl MediaSource for BoundedMediaSource {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::PathBuf;
 
     use super::*;
@@ -1089,6 +1411,7 @@ mod tests {
                 inspect_video_file(&fixture(name), container, WallDuration::from_secs(1))
                     .unwrap_or_else(|error| panic!("{name}: {error:?}"));
             assert_eq!(inspection.duration_ms, Some(2_000), "{name}");
+            assert_eq!(inspection.display_quarter_turns, Some(0), "{name}");
             assert_eq!(
                 (inspection.width, inspection.height),
                 (Some(320), Some(180))
@@ -1097,6 +1420,67 @@ mod tests {
             assert_eq!(inspection.audio_track_count, 1);
             assert_eq!(inspection.codec, Some(codec));
         }
+    }
+
+    #[test]
+    fn reads_iso_track_matrix_and_webm_projection_rotation() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let rotated_mp4 = directory.path().join("rotated.mp4");
+        let mut mp4 = fs::read(fixture("minimal.mp4")).expect("read MP4 fixture");
+        let tkhd = mp4
+            .windows(4)
+            .position(|bytes| bytes == b"tkhd")
+            .expect("video track header");
+        let matrix_start = tkhd + 44;
+        let rotated_matrix = [0_i32, 0x0001_0000, 0, -0x0001_0000, 0, 0, 0, 0, 0x4000_0000]
+            .into_iter()
+            .flat_map(i32::to_be_bytes)
+            .collect::<Vec<_>>();
+        mp4[matrix_start..matrix_start + 36].copy_from_slice(&rotated_matrix);
+        fs::write(&rotated_mp4, mp4).expect("write rotated MP4");
+        let inspection = inspect_video_file(
+            &rotated_mp4,
+            VideoContainer::Mp4,
+            WallDuration::from_secs(1),
+        )
+        .expect("inspect rotated MP4");
+        assert_eq!(inspection.display_quarter_turns, Some(1));
+        assert_eq!(
+            (inspection.width, inspection.height),
+            (Some(320), Some(180))
+        );
+
+        let rotated_webm = directory.path().join("rotated.webm");
+        let track_type = test_ebml_element(&[0x83], &[1]);
+        let roll = test_ebml_element(&[0x76, 0x75], &90_f64.to_be_bytes());
+        let projection = test_ebml_element(&[0x76, 0x70], &roll);
+        let video = test_ebml_element(&[0xe0], &projection);
+        let track = test_ebml_element(&[0xae], &[track_type, video].concat());
+        let tracks = test_ebml_element(&[0x16, 0x54, 0xae, 0x6b], &track);
+        let info = test_ebml_element(&[0x15, 0x49, 0xa9, 0x66], &[]);
+        let cluster = test_ebml_element(&[0x1f, 0x43, 0xb6, 0x75], &[]);
+        let segment =
+            test_ebml_element(&[0x18, 0x53, 0x80, 0x67], &[info, tracks, cluster].concat());
+        let header = test_ebml_element(&[0x1a, 0x45, 0xdf, 0xa3], &[]);
+        fs::write(&rotated_webm, [header, segment].concat()).expect("write rotated WebM");
+        assert_eq!(
+            preflight_webm(
+                &rotated_webm,
+                fs::metadata(&rotated_webm).expect("WebM metadata").len(),
+            )
+            .expect("preflight rotated WebM"),
+            Some(3),
+        );
+    }
+
+    fn test_ebml_element(id: &[u8], payload: &[u8]) -> Vec<u8> {
+        assert!(payload.len() < 127);
+        [
+            id,
+            &[0x80 | u8::try_from(payload.len()).expect("small payload")],
+            payload,
+        ]
+        .concat()
     }
 
     #[test]

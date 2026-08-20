@@ -40,6 +40,7 @@ export interface SidecarState {
 
 export interface MediaProperties {
   durationMs: number | null;
+  displayQuarterTurns: number | null;
   pageCount: number | null;
   frameCount: number | null;
   videoTrackCount: number | null;

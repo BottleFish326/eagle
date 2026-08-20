@@ -58,7 +58,7 @@ FormatDescriptor {
 
 ```text
 MediaProperties {
-  durationMs?, pageCount?, frameCount?,
+  durationMs?, displayQuarterTurns?, pageCount?, frameCount?,
   videoTrackCount?, audioTrackCount?,
   sampleRateHz?, channelCount?, bitDepth?,
   colorSpace?, codec?, hasAlpha?

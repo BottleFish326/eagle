@@ -411,11 +411,17 @@ fn range_contains<T: Ord>(range: &RangeConstraint<T>, value: &T) -> bool {
 
 fn effective_dimensions(record: &AssetRecord) -> Option<(u32, u32)> {
     let dimensions = record.dimensions?;
-    let swaps_axes = record
+    let image_swaps_axes = record
         .native_metadata
         .as_ref()
         .and_then(|metadata| metadata.orientation)
         .is_some_and(|orientation| (5..=8).contains(&orientation));
+    let video_swaps_axes = record
+        .media
+        .as_ref()
+        .and_then(|media| media.display_quarter_turns)
+        .is_some_and(|turns| turns % 2 == 1);
+    let swaps_axes = image_swaps_axes || video_swaps_axes;
     if swaps_axes {
         Some((dimensions.height, dimensions.width))
     } else {
@@ -799,5 +805,32 @@ mod tests {
                 .query(&parse_query("orientation:square").expect("removed category query"))
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn video_display_rotation_changes_effective_dimensions() {
+        let mut record = typed_record("rotated-video", "mp4", "video/mp4", &[], false);
+        record.dimensions = Some(AssetDimensions {
+            width: 1080,
+            height: 1920,
+        });
+        record.media = Some(MediaProperties {
+            display_quarter_turns: Some(1),
+            ..MediaProperties::default()
+        });
+        let index = AssetIndex::from_records([record]);
+
+        for expression in [
+            "width:1920",
+            "height:1080",
+            "aspect:16/9",
+            "orientation:landscape",
+        ] {
+            assert_eq!(
+                index.query(&parse_query(expression).expect("rotated video query")),
+                BTreeSet::from(["rotated-video".into()]),
+                "expression: {expression}",
+            );
+        }
     }
 }
