@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "failures": [],
+  "evidenceAt": "2026-08-20T12:37:33.000Z",
+  "candidateCommit": "d4d78bec0521d6a846e489bf8713786df1d3d354",
+  "workingTreeClean": true,
+  "commitOrderVerified": true,
+  "externalEvidenceInLocalCandidate": true,
+  "localEvidenceCommitted": true,
+  "dataSafetyEvidenceCommitted": true,
+  "soakBaseline": {
+    "verified": true,
+    "baselineCommit": "c0508c66ec6905decc1e70cc328e585a887fb6c5",
+    "loadedChangedPaths": [],
+    "productChangedPaths": []
+  },
+  "localCandidate": {
+    "gitCommit": "581a6615c06e7f94d0771647e87d523f52c2b2ff",
+    "allowedScopes": [
+      "README.md",
+      "docs"
+    ],
+    "driftPaths": []
+  },
+  "p2External": {
+    "fileName": "p2-external-gates.json",
+    "sha256": "ed900239c14d1dde425eeb29e85c6b43d1d43d24ee64b246e7f99e55fa0257ed",
+    "evidenceAt": "2026-08-20T12:16:18.337Z",
+    "p2A11Commit": "c0508c66ec6905decc1e70cc328e585a887fb6c5",
+    "p2A12Commit": "9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751",
+    "runUrl": "https://github.com/BottleFish326/eagle/actions/runs/32332405466"
+  },
+  "p2LocalFaults": {
+    "fileName": "p2-local-fault-gates.json",
+    "sha256": "abb7269a15e3c54f615e3ba998248fca4cefd4354cd965e47758634a718de646",
+    "gitCommit": "581a6615c06e7f94d0771647e87d523f52c2b2ff",
+    "executedAt": "2026-08-20T12:30:39.885Z",
+    "environment": {
+      "platform": "darwin",
+      "architecture": "arm64",
+      "nodeVersion": "v24.19.0",
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)"
+    },
+    "binaries": {
+      "transactionFault": "8a8c82b2291056440458e1394b787c13c67c295fcde5335fdc1b2c1f7a5801b1",
+      "cacheFault": "23d34c1adcc937c0a98ba13f963e47039b65968f2612d1ef15e0294b653d0132"
+    },
+    "transaction": {
+      "abortAfterApplied": 317,
+      "appliedAtDiscovery": 317,
+      "recoveredCount": 1000
+    },
+    "cacheFaultPoints": [
+      "after-cache-rename",
+      "after-cache-recreate"
+    ],
+    "temporaryWorkspacesRemoved": true
+  },
+  "p2DataSafety": {
+    "fileName": "p2-data-safety-audit.json",
+    "sha256": "a87c0ee715eeab797b546a9cf5d5d91b8dfe94992341780180fa944062292d76",
+    "candidateCommit": "11db4c178b824684de6616976c61d4590f5139df",
+    "evidenceAt": "2026-08-20T12:37:33.000Z",
+    "openP0": 0,
+    "openP1": 0
+  }
+}

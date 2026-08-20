@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段 0 与阶段 1 已通过本地验收。阶段 2 的 P2-01 至 P2-08、P2-A11 100,000 素材连续 8 小时正式验收、P2-A12 GitHub-hosted macOS/Linux/Windows 原生矩阵、统一外部门禁、本地故障门禁和缺陷 reviewed 审计均已通过；当前正在完成数据安全和阶段 2 最终退出收据。SSH origin、`main` 与托管 CI 已就绪。开发阶段、交付物和验收规范见：
+阶段 0、阶段 1 与阶段 2 已通过验收。阶段 2 的 P2-01 至 P2-08、P2-A11 100,000 素材连续 8 小时正式验收、P2-A12 GitHub-hosted macOS/Linux/Windows 原生矩阵、统一外部门禁、本地故障、数据安全和最终退出重放全部通过；阶段 3 尚未开始实现，下一动作是 P3-01A。SSH origin、`main` 与托管 CI 已就绪。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
@@ -19,7 +19,7 @@
 - [P2-06 验收报告](docs/reports/p2-06-acceptance.md)
 - [P2-07 验收报告](docs/reports/p2-07-acceptance.md)
 - [P2-08 验收报告](docs/reports/p2-08-acceptance.md)
-- [阶段 2 验收报告（草案）](docs/reports/phase-2-acceptance.md)
+- [阶段 2 验收报告](docs/reports/phase-2-acceptance.md)
 - [P3-01 扩展格式实施准备](docs/reports/p3-01-readiness.md)
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
