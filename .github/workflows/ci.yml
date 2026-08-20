@@ -57,7 +57,7 @@ jobs:
 
       - name: Run P3-A01 core-only format manifest replay
         run: >-
-          cargo run --quiet -p format-gate --
+          cargo run --release --quiet -p format-gate --
           --manifest fixtures/formats/manifest.json
           --provider-profile core-only
           > "${{ runner.temp }}/p3-a01-core-only.json"
@@ -257,7 +257,7 @@ jobs:
 
       - name: Run P3-A01 bundled-codecs format manifest replay
         run: >-
-          cargo run --quiet -p format-gate --
+          cargo run --release --quiet -p format-gate --
           --manifest fixtures/formats/manifest.json
           --provider-profile bundled-codecs
           --worker-bundle "${{ runner.temp }}/format-worker-bundle"
@@ -354,7 +354,7 @@ jobs:
       - name: Run P3-A01 bundled-codecs format manifest replay
         shell: pwsh
         run: |
-          cargo run --quiet -p format-gate -- `
+          cargo run --release --quiet -p format-gate -- `
             --manifest fixtures/formats/manifest.json `
             --provider-profile bundled-codecs `
             --worker-bundle "$env:RUNNER_TEMP\format-worker-bundle" `

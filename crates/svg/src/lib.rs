@@ -28,7 +28,7 @@ pub struct RenderedSvg {
 
 #[derive(Debug, Error)]
 pub enum SvgError {
-    #[error("SVG source exceeds the {MAX_SVG_SOURCE_BYTES} byte safety limit")]
+    #[error("SVG source exceeds a fixed safety limit")]
     ResourceLimited,
     #[error("SVG file cannot be read at {path}: {source}")]
     Unreadable {
@@ -162,6 +162,18 @@ fn inspect_xml_safety(text: &str) -> Result<(), SvgError> {
     if !root.tag_name().name().eq_ignore_ascii_case("svg") {
         return Err(SvgError::InvalidRoot);
     }
+    if root
+        .attribute("width")
+        .is_some_and(declared_dimension_exceeds_limit)
+        || root
+            .attribute("height")
+            .is_some_and(declared_dimension_exceeds_limit)
+        || root
+            .attribute("viewBox")
+            .is_some_and(declared_view_box_exceeds_limit)
+    {
+        return Err(SvgError::ResourceLimited);
+    }
     for node in document.descendants().filter(roxmltree::Node::is_element) {
         let name = node.tag_name().name();
         if name.eq_ignore_ascii_case("script") {
@@ -228,6 +240,30 @@ fn matches_ignore_ascii_case(value: &str, candidates: &[&str]) -> bool {
     candidates
         .iter()
         .any(|candidate| value.eq_ignore_ascii_case(candidate))
+}
+
+fn declared_dimension_exceeds_limit(value: &str) -> bool {
+    let value = value.trim();
+    let number = value
+        .strip_suffix("px")
+        .unwrap_or(value)
+        .trim()
+        .parse::<f32>();
+    number.is_ok_and(|number| number.is_finite() && number > MAX_SVG_DIMENSION_F32)
+}
+
+fn declared_view_box_exceeds_limit(value: &str) -> bool {
+    let values = value
+        .split(|character: char| character.is_ascii_whitespace() || character == ',')
+        .filter(|value| !value.is_empty())
+        .map(str::parse::<f32>)
+        .collect::<Result<Vec<_>, _>>();
+    values.is_ok_and(|values| {
+        values.len() == 4
+            && values[2..]
+                .iter()
+                .any(|dimension| dimension.is_finite() && *dimension > MAX_SVG_DIMENSION_F32)
+    })
 }
 
 fn fit_dimensions(inspection: SvgInspection, max_edge: u32) -> (u32, u32) {
@@ -334,6 +370,14 @@ mod tests {
         let oversized = vec![b' '; usize::try_from(MAX_SVG_SOURCE_BYTES).unwrap() + 1];
         assert!(matches!(
             inspect_svg(&oversized),
+            Err(SvgError::ResourceLimited)
+        ));
+        assert!(matches!(
+            inspect_svg(br#"<svg xmlns="http://www.w3.org/2000/svg" width="70000" height="1"/>"#),
+            Err(SvgError::ResourceLimited)
+        ));
+        assert!(matches!(
+            inspect_svg(br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 70000"/>"#),
             Err(SvgError::ResourceLimited)
         ));
     }

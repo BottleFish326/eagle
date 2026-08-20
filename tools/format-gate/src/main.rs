@@ -6,7 +6,9 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 use asset_core::{AssetIssue, AssetKind, AssetRecord};
-use asset_filesystem::{ScanOptions, scan_root};
+use asset_filesystem::{
+    ScanCancellation, ScanCompletion, ScanOptions, scan_root, scan_root_incremental,
+};
 use asset_preview::{
     ThumbnailOutcome, ThumbnailPlaceholderReason, ThumbnailReady, ThumbnailService,
 };
@@ -39,6 +41,7 @@ struct Manifest {
 struct Fixture {
     id: String,
     path: String,
+    case: String,
     expectations: Vec<PlatformExpectation>,
     budgets: Budgets,
 }
@@ -99,10 +102,22 @@ struct GateReport {
     manifest_sha256: String,
     fixture_count: usize,
     checked_fixture_count: usize,
+    adversarial_fixture_count: usize,
     scan_elapsed_ms: u128,
     source_bytes: u64,
     source_digest_unchanged: bool,
+    cancellation: CancellationEvidence,
     failures: Vec<GateFailure>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CancellationEvidence {
+    accepted: bool,
+    completion: &'static str,
+    visited_files: usize,
+    asset_count: usize,
+    problem_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -179,6 +194,15 @@ fn run_gate(
         .into_iter()
         .map(|asset| (portable_relative_path(&asset.relative_path), asset))
         .collect::<BTreeMap<_, _>>();
+    let cancellation = exercise_scan_cancellation(&source_root)?;
+    if !cancellation.accepted {
+        failure(
+            &mut failures,
+            "<cancellation>",
+            "cancellation",
+            "incremental scan did not stop at the first completed one-file batch",
+        );
+    }
 
     let cache = TempDir::new().context("create isolated preview cache")?;
     let mut previews = ThumbnailService::open(cache.path(), 1).context("open preview cache")?;
@@ -266,10 +290,46 @@ fn run_gate(
         manifest_sha256: digest_bytes(&manifest_bytes),
         fixture_count: manifest.fixtures.len(),
         checked_fixture_count,
+        adversarial_fixture_count: manifest
+            .fixtures
+            .iter()
+            .filter(|fixture| fixture.case != "normal")
+            .count(),
         scan_elapsed_ms,
         source_bytes,
         source_digest_unchanged,
+        cancellation,
         failures,
+    })
+}
+
+fn exercise_scan_cancellation(source_root: &Path) -> Result<CancellationEvidence> {
+    let cancellation = ScanCancellation::new();
+    let options = ScanOptions {
+        batch_size: 1,
+        ..ScanOptions::default()
+    };
+    let mut emitted_assets = 0;
+    let mut emitted_problems = 0;
+    let summary = scan_root_incremental(None, source_root, &options, &cancellation, |batch| {
+        emitted_assets += batch.assets.len();
+        emitted_problems += batch.problems.len();
+        cancellation.cancel();
+    })
+    .context("exercise incremental format scan cancellation")?;
+    let completion = match summary.completion {
+        ScanCompletion::Completed => "completed",
+        ScanCompletion::Cancelled => "cancelled",
+    };
+    Ok(CancellationEvidence {
+        accepted: summary.completion == ScanCompletion::Cancelled
+            && summary.visited_files == 1
+            && emitted_assets == 1
+            && emitted_problems == 0,
+        completion,
+        visited_files: summary.visited_files,
+        asset_count: emitted_assets,
+        problem_count: emitted_problems,
     })
 }
 
@@ -555,6 +615,7 @@ fn metadata_issue_status(asset: &AssetRecord, issue: &AssetIssue) -> (&'static s
                 ("resource-limited", "worker-resource-limited")
             }
             "application/pdf" => ("resource-limited", "pdf-metadata-limit"),
+            "image/svg+xml" => ("resource-limited", "svg-resource-limit"),
             mime if mime.starts_with("video/") => ("resource-limited", "video-metadata-limit"),
             mime if mime.starts_with("audio/") => ("resource-limited", "audio-metadata-limit"),
             _ => ("resource-limited", "metadata-resource-limit"),
@@ -649,6 +710,7 @@ fn preview_reason_code(
         }
         ThumbnailPlaceholderReason::ResourceLimited => match asset.mime.as_str() {
             "image/avif" | "image/heic" | "image/heif" => "worker-resource-limited",
+            "image/svg+xml" => "svg-resource-limit",
             mime if mime.starts_with("audio/") => "audio-cover-limit",
             _ => "preview-resource-limit",
         },
@@ -795,9 +857,11 @@ mod tests {
         )
         .expect("run tracked core-only gate");
         assert!(report.accepted, "{:#?}", report.failures);
-        assert_eq!(report.fixture_count, 42);
-        assert_eq!(report.checked_fixture_count, 42);
+        assert_eq!(report.fixture_count, 43);
+        assert_eq!(report.checked_fixture_count, 43);
+        assert_eq!(report.adversarial_fixture_count, 31);
         assert!(report.source_digest_unchanged);
+        assert!(report.cancellation.accepted);
     }
 
     #[test]

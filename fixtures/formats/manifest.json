@@ -167,6 +167,45 @@
       }
     },
     {
+      "id": "svg-oversized-dimensions",
+      "path": "sources/svg/oversized-dimensions.svg",
+      "format": "svg",
+      "case": "oversized-declaration",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "f2cd796e7431fb690351cfa07a03b9c0cfc8b686788075d5b666c8fa8e164aa0",
+      "size": 89,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "image/svg+xml",
+            "kind": "image",
+            "issueCodes": ["resource-limited"],
+            "metadata": {
+              "status": "resource-limited",
+              "reasonCode": "svg-resource-limit",
+              "properties": {}
+            },
+            "preview": {
+              "status": "resource-limited",
+              "reasonCode": "svg-resource-limit"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
       "id": "avif-libheif-normal",
       "path": "sources/avif/libheif-example.avif",
       "format": "avif",
