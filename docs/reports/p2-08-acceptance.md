@@ -1,6 +1,6 @@
 # P2-08 平台与文件系统兼容验收报告
 
-- 状态：Implemented locally；P2-A12 hosted matrix pending
+- 状态：Accepted；P2-A12 hosted matrix passed
 - 日期：2026-08-20
 - 对应：P2-08、P2-A08、P2-A09、P2-A12
 - 决策：[ADR-025](../../specs/adr/025-platform-path-and-offline-root-semantics.md)
@@ -75,9 +75,9 @@ macOS ARM64 共 10 项通过：
 |---|---|---|
 | P2-A08 扫描中撤权或拔盘 | Pass locally | 两种故障均转为非权威失败；后端恢复前态，UI 只标记对应根离线且不退出应用 |
 | P2-A09 符号链接循环和重叠根 | Pass locally | 不跟随链接、无重复计数、有明确问题；三种根重叠明确拒绝 |
-| P2-A12 三平台路径兼容 | Pending | macOS 原生 10 项通过；Linux 预期 12 项、Windows 预期 9 项；逐平台证据与跨平台重放汇总 job 均已配置，但尚无远程仓库可触发 |
+| P2-A12 三平台路径兼容 | Pass | GitHub-hosted macOS ARM64 10 项、Linux X64 12 项、Windows X64 9 项全部通过；同一 run/attempt/commit 的逐平台源证据、矩阵汇总和完整质量门禁均为 success |
 
-P2-08 实现可合并，但不能把 P2-A12 或阶段 2 标为 Accepted。必须取得 GitHub Actions Ubuntu/macOS/Windows 三个 matrix leg 的实际通过结果；条件编译通过只证明这些原生用例可构建，不证明 NTFS/ext4 行为。
+P2-08 与 P2-A12 已通过。阶段 2 仍不能标为 Accepted：Windows 长路径修复后的 P2-A11 重新验证、统一外部门禁、本地故障收据、数据安全审计和最终退出收据尚未完成。
 
 ## 4. 跨目标检查
 
@@ -94,25 +94,22 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 
 ## 5. 完整质量门禁
 
-完整执行并通过 `npm run ci`：
+本机及正式 GitHub-hosted `quality` job 均完整执行并通过 `npm run ci`：
 
-- Rust：128 项测试；
+- 工具链：81 项测试；
+- Rust：129 项测试；
 - 桌面 TypeScript：46 项测试；
 - Obsidian Bridge：8 项测试；
 - Clippy、Rust/TypeScript 格式和静态检查：通过；
 - S 数据集：1,000 素材、200 Sidecar、999 个有效尺寸、1 个损坏图片隔离、0 个扫描问题，56 毫秒，原始素材摘要不变；
 - Tauri release、桌面 Vite 与 Obsidian Bridge production build：通过。
 
-## 6. 后续验收动作
+## 6. 正式托管证据与后续动作
 
-1. 建立 GitHub origin、安装并认证 GitHub CLI，把当前 `main` 推送为 `origin/main`；
-2. 运行 `npm run audit:p2-hosted-readiness`；`ready=false` 时按 `remediations` 的固定顺序处理缺失 CLI、认证、GitHub origin、main/default/upstream 和发布状态，命令中的仓库 URL 仍必须由用户选择；只有输出 `ready=true` 时才使用报告内的 commit-bound 命令触发 `ci.yml`。该预检只读，不安装软件、不认证、不修改 remote、不推送、不触发 workflow；
-3. 确认 `platform-paths` 的三个 matrix leg、`platform-matrix-evidence` 和 `quality` 均实际通过，核对 CLI 返回的 run ID/attempt 后执行 `npm run collect:p2-hosted-evidence -- --run-id <run-id> --attempt <attempt>`；采集器会再次验证运行身份和五个 job，精确下载并调用归档器，不能改用“最新运行”；
-4. 确认 Windows leg 实际执行强制符号链接、260+ 路径扫描及 Sidecar 原子替换，不能以 skip 计为通过；
-5. 确认 Linux leg 实际执行大小写并存、权限撤销和移动根目录掉线；
-6. 确认最终 `p2-08-platform-matrix.json` 是 `accepted=true`、`failures=[]`、同一 Git commit/run/attempt，且三个源 artifact 的 SHA-256、expected/listed/executed 和 summary 均被重放核对；
-7. 确认采集器输出 `accepted=true`、`failures=[]`、`temporaryDownloadRemoved=true`，提交固定证据目录及 `p2-a12-hosted-run.json`；
-8. 运行 `npm run verify:p2-external`，只有统一报告 `accepted=true` 后才评估阶段 2 退出；归档审阅可再运行 `npm run inspect:p2-external`，但离线收据检查不能替代原始 artifact 重放；
-9. P2-A11 连续 8 小时仍按 P2-06 报告独立执行，二者全部通过后才评估阶段 2 退出。
+- GitHub Actions 运行：[32332405466](https://github.com/BottleFish326/eagle/actions/runs/32332405466)，attempt 1，事件 `workflow_dispatch`；
+- 受测提交：`9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751`；运行时间 `2026-08-20T04:35:01Z` 至 `2026-08-20T04:44:27Z`；
+- 五个必需 job 均为 completed/success：完整质量门禁、macOS、Windows、Linux 与矩阵汇总；
+- 三个平台源 artifact 和矩阵 artifact 已由指定运行采集器重新下载、计算 SHA-256、重放并归档到 `docs/reports/evidence/p2-a12-platform-evidence/`；
+- `docs/reports/evidence/p2-a12-hosted-run.json` 为 `accepted=true`、`failures=[]`，归档提交为 `b1a3af5`。
 
-若首次运行有 leg 失败，必须使用 “Re-run all jobs” 进行正式复验；只重跑失败 job 会保留不同 attempt 的成功 leg，汇总器会按设计拒绝混合证据。
+剩余动作是等待当前 P2-A11 重新验证完整结束，以新 final JSON 替换旧基线证据，再执行 `npm run verify:p2-external`。只有统一报告 `accepted=true` 后才继续本地故障、数据安全和阶段 2 最终退出门禁。

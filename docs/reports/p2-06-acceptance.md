@@ -1,9 +1,11 @@
 # P2-06 资源与稳定性控制验收报告
 
-- 状态：Completed locally；P2-A11 passed
+- 状态：Completed locally；P2-A11 candidate revalidation running
 - 日期：2026-08-20
 - 对应：P2-06、P2-A11
 - 决策：[ADR-023](../../specs/adr/023-unified-bounded-resource-scheduling.md)
+
+> 本报告下文保留首次正式 8 小时运行的历史结果。该结果本身已通过重放，但随后为 P2-A12 修复了 Windows 长路径扫描与 Sidecar 原子替换，产品输入相对旧受测提交发生变化，因此旧证据不再作为当前候选的退出依据。绑定修复提交 `c0508c66ec6905decc1e70cc328e585a887fb6c5` 的完整 28,800 秒重跑已于 `2026-08-20T04:16:01.018Z` 启动，结束前不得执行本地故障门禁。
 
 ## 1. 已交付范围
 
@@ -103,7 +105,7 @@ npm run test:resource-stability
 | 缓存终值 | 20,000 项，未超过固定上限 | Pass |
 | 调度峰值 | active 2 / waiting 0 | Pass |
 
-独立 `inspectResourceStabilityReport` 使用全部原始样本和正式参数重新构造报告，返回 `accepted=true`、`failures=[]`，重放结果与磁盘 JSON 语义完全相同。`npm run audit:p2-soak-baseline` 同时确认三份已加载输入和全部产品输入 `changedPaths=[]`。因此 P2-A11 正式通过，P2-06 可标记为 Completed locally；阶段 2 仍须等待 P2-A12、候选故障收据、数据安全审计和最终退出收据。
+独立 `inspectResourceStabilityReport` 对首次证据使用全部原始样本和正式参数重新构造报告，返回 `accepted=true`、`failures=[]`，重放结果与磁盘 JSON 语义完全相同。该次历史运行曾通过零漂移审计；Windows 长路径修复后，基线审计正确报告 `crates/filesystem/src/scanner.rs` 与 `crates/metadata/src/lib.rs` 已变化，因而触发当前完整重跑。P2-06 实现仍为 Completed locally，但 P2-A11 只有新 final JSON 完成重放及零漂移审计后才能重新判 Pass。
 
 ## 6. 当前质量门禁
 

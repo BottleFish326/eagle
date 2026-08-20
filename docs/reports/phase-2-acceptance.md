@@ -1,16 +1,16 @@
 # 阶段 2 验收报告
 
-> 状态：Draft — Not accepted；P2-A11 passed，P2-A12 pending
+> 状态：Draft — Not accepted；P2-A11 candidate revalidation running，P2-A12 passed
 >
 > 日期：2026-08-20
 >
-> P2-A11 受测基线：`c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21`；正式任务加载的分析、检查点写入和运行器三份文件与该提交逐字相同，最终原始样本重放及产品输入零漂移审计均已通过
+> 当前 P2-A11 重跑基线：`c0508c66ec6905decc1e70cc328e585a887fb6c5`；P2-A12 受测提交：`9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751`，GitHub Actions 运行 32332405466 attempt 1
 
 ## 1. 验收范围
 
 阶段 2 要求应用面对外部移动、监听丢失、批量中断、同步冲突、权限/移动盘变化和长期资源压力后，仍能从文件系统与相邻 Sidecar 收敛。阶段退出还要求 Windows、macOS、Linux 的原生路径测试全部通过。
 
-本报告汇总已完成证据并固定最后门禁的判定流程。它不是阶段通过声明；P2-A11 已通过，但 P2-A12 和后续统一收据尚未完成，因此阶段 2 必须保持 **In progress**，阶段 3 不得开始实现。
+本报告汇总已完成证据并固定最后门禁的判定流程。它不是阶段通过声明；P2-A12 已通过，但 Windows 长路径修复后的 P2-A11 完整重跑以及后续统一收据尚未完成，因此阶段 2 必须保持 **In progress**，阶段 3 不得开始实现。
 
 全过程可运行 `npm run status:p2-exit` 获取机器状态。该只读编排器同时检查 Git、A11 final/partial、A12 hosted readiness/原始归档、外部汇总、本地故障、数据安全审计与最终收据；运行中的 A11 partial 必须逐项匹配正式 28,800 秒参数，进度按 internal/native 两条采样流的较小覆盖时长计算，并报告目标、已覆盖、剩余毫秒与百分比。编排器会把状态归入长稳运行/失败、托管环境阻塞/可触发、外部汇总待生成/损坏、本地故障待运行/待提交、数据安全待审核/损坏/待提交、候选脏、最终待生成/待提交或 accepted，并只输出当前唯一下一动作。命令不会执行该动作，也不会构建、推送、触发 workflow 或写证据；只有矛盾/失败/损坏证据返回非零。
 
@@ -23,9 +23,9 @@
 | P2-03 批量事务恢复 | Pass locally | [P2-03 报告](p2-03-acceptance.md)：1,000 项真实中断、继续、条件恢复 |
 | P2-04 并发与同步冲突 | Pass locally | [P2-04 报告](p2-04-acceptance.md)：完整版本、字段选择、冲突副本只读诊断 |
 | P2-05 缓存生命周期 | Pass locally | [P2-05 报告](p2-05-acceptance.md)：容量/期限/版本边界与双崩溃点恢复 |
-| P2-06 资源稳定性 | Pass locally | [P2-06 报告](p2-06-acceptance.md)：正式 28,800 秒任务正常结束，最终样本重放和基线零漂移审计通过 |
+| P2-06 资源稳定性 | Candidate revalidation running | [P2-06 报告](p2-06-acceptance.md)：旧正式任务已通过；Windows 长路径产品修复后，绑定 `c0508c6` 的完整 28,800 秒重跑正在执行 |
 | P2-07 诊断支持 | Pass locally | [P2-07 报告](p2-07-acceptance.md)：滚动日志、脱敏导出、一致性与 ID 追踪 |
-| P2-08 平台兼容 | Acceptance pending | [P2-08 报告](p2-08-acceptance.md)：macOS 原生通过；Windows/Linux 托管运行待远程 |
+| P2-08 平台兼容 | Pass | [P2-08 报告](p2-08-acceptance.md)：GitHub-hosted macOS/Linux/Windows 原生测试、矩阵汇总和完整质量门禁均通过，原始 artifact 已归档 |
 
 ## 3. 验收用例
 
@@ -41,10 +41,12 @@
 | P2-A08 | Pass locally | 扫描中拔盘/撤权返回非权威 root-offline/permission-denied，应用与其他根保持运行 |
 | P2-A09 | Pass locally | 重叠根拒绝；符号链接循环不跟随、不重复计数并输出明确诊断 |
 | P2-A10 | Pass locally | 缓存根轮换的两个进程中断点均可启动恢复，素材与 Sidecar SHA-256 不变；候选收据执行器已就绪 |
-| P2-A11 | Pass | 正式 28,800 秒 L 数据集任务正常结束；5,333/5,749 个内部/原生样本通过确定性重放，资源曲线有界 |
-| P2-A12 | Pending | macOS ARM64 10 项通过；尚无 Windows NTFS/Linux 原生托管结果 |
+| P2-A11 | Revalidation running | 旧 28,800 秒任务通过，但候选产品输入随后改变；绑定 `c0508c6` 的 100,000 素材完整重跑正在执行 |
+| P2-A12 | Pass | 正式运行 32332405466 attempt 1：macOS ARM64 10、Linux X64 12、Windows X64 9 项通过，五个必需 job 全部 success |
 
 ## 4. P2-A11 正式证据状态
+
+下列 `c18e1ca` 结果保留为历史记录，但因后续 Windows 长路径产品修复已不再满足当前候选的零漂移条件。当前正式重跑绑定 `c0508c66ec6905decc1e70cc328e585a887fb6c5`，使用相同的 Node.js 24、macOS ARM64、100,000 素材、60 秒预热、5 秒采样、60 秒检查点和 28,800 秒目标；开始时间为 `2026-08-20T04:16:01.018Z`。新进程正常结束、final JSON 通过确定性重放并重新完成基线零漂移审计前，P2-A11 保持 Revalidation running。
 
 正式任务使用 Node.js 24.19.0、macOS ARM64、100,000 素材、60 秒预热、5 秒采样和 60 秒检查点，绑定提交：
 
@@ -86,13 +88,13 @@ npm run audit:p2-soak-baseline
 
 ## 5. P2-A12 托管矩阵关闭流程
 
-当前工作流 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 已定义 `ubuntu-24.04`、`macos-15`、`windows-2025` 三个独立 `platform-paths` leg，`fail-fast: false`，并定义依赖三者的 `platform-matrix-evidence` 汇总 job；`workflow_dispatch` 允许在工作流进入默认分支后显式运行。阶段退出需要用户先建立 GitHub origin、安装并认证 GitHub CLI、把候选 `main` 推送到 `origin/main`，然后执行：
+当前工作流 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 定义 `ubuntu-24.04`、`macos-15`、`windows-2025` 三个独立 `platform-paths` leg，`fail-fast: false`，并定义依赖三者的 `platform-matrix-evidence` 汇总 job。GitHub origin、SSH、CLI 认证和默认分支均已就绪，正式运行前执行：
 
 ```text
 npm run audit:p2-hosted-readiness
 ```
 
-预检不会安装软件、发起认证、创建仓库、修改 remote、推送或触发 workflow。它要求 CLI/认证/remote/默认分支/本地分支/upstream/远端 commit/tracked 清洁状态和手动入口全部匹配；`ready=false` 时按依赖顺序输出结构化 `remediations`，当前 Homebrew 环境会先给出 `brew install gh`，随后才是认证、用户选择 GitHub URL、发布 main 等动作。只有 `ready=true` 时才输出绑定当前 SHA 的 `gh workflow run`、`gh run list/watch` 与指定 run/attempt 的一体化证据采集命令，并按输出触发真实 hosted run，然后归档：
+预检确认 CLI/认证/remote/默认分支、本地分支/upstream、远端 commit、tracked 清洁状态和手动入口全部匹配。正式运行 32332405466 attempt 1 已绑定提交 `9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751` 完成，以下要求全部满足：
 
 - remote URL、汇总 JSON 自动生成的 workflow `runUrl`、commit SHA、runner image/version 和时间；
 - 三个 leg 均 success，并下载各自保留 90 天的 `p2-a12-source-<runner>-<sha>-attempt-<n>` JSON artifact；
@@ -116,7 +118,7 @@ npm run audit:p2-hosted-readiness
 npm run collect:p2-hosted-evidence -- --run-id <run-id> --attempt <attempt>
 ```
 
-采集器重新查询指定 attempt 的运行元数据，要求 completed/success、手动事件、workflow、分支、候选 SHA 与 URL 全部精确匹配；三个原生平台 leg、矩阵汇总和完整质量门禁五个 job 还必须各出现一次且 completed/success。随后把该 attempt 的四个 artifact 下载到受保护临时目录并调用原有归档器。归档器会再次重放、确认受测 commit 是当前 HEAD 祖先，并把原始字节目录级原子保存到 `docs/reports/evidence/p2-a12-platform-evidence/`。只有归档成功才清理临时下载，并以不可覆盖、相同输入可幂等复核的方式发布 `docs/reports/evidence/p2-a12-hosted-run.json`；下载或重放失败会保留现场路径。不得省略显式 run ID/attempt、改用“最新 artifact”或手工复制结果替代该步骤。
+采集器已重新查询指定 attempt 的运行元数据，并确认 completed/success、手动事件、workflow、分支、候选 SHA 与 URL 全部精确匹配；三个原生平台 leg、矩阵汇总和完整质量门禁五个 job 各出现一次且 completed/success。四个 artifact 的原始字节已归档到 `docs/reports/evidence/p2-a12-platform-evidence/`，托管回执已保存为 `docs/reports/evidence/p2-a12-hosted-run.json` 并在提交 `b1a3af5` 固化。P2-A12 因此判定为 Pass。
 
 ## 5.1 P2-A11/P2-A12 统一机器结论
 
@@ -146,7 +148,7 @@ npm run test:p2-local-fault-gates
 
 任一进程状态、恢复输出、故障点数量、来源、二进制摘要或临时目录清理不满足时，命令返回非零、保留故障现场且不生成正式收据。全部满足后才删除本次精确创建的临时根；报告还必须通过独立收据检查器，随后才以不可覆盖方式写入 `docs/reports/evidence/p2-local-fault-gates.json`。[`p2-local-fault-gates.schema.json`](../../schemas/p2-local-fault-gates.schema.json) 只接受成功/abort 状态、固定 317/1000 边界、固定顺序的两个缓存故障点和已清理状态。
 
-该命令会构建并运行 Rust 故障负载；P2-A11 已正常结束，因此不再受采样隔离限制。当前执行器、Schema、离线严格检查器与七项纯判定测试已通过；正式候选收据仍 pending，必须先完成 P2-A12、生成并提交外部门禁，再从新的干净候选提交运行。该本地收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
+该命令会构建并运行 Rust 故障负载；当前 P2-A11 重跑尚未结束，因此仍受采样隔离限制，禁止并行执行。执行器、Schema、离线严格检查器与七项纯判定测试已通过；正式候选收据仍 pending，必须先完成 P2-A11、生成并提交外部门禁，再从新的干净候选提交运行。该本地收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
 
 ## 5.3 P0/P1 数据安全缺陷审计
 
@@ -192,18 +194,18 @@ Git 侧还必须同时满足：
 | 不自动重构/删除原始素材 | Pass locally；移动重联要求后端候选 handle 与用户确认，重复分析尚未进入本阶段 |
 | 外部变化最终由完整扫描收敛 | Pass locally；取消/失败恢复前态，成功批次原子替换根目录结果 |
 | Sidecar 不被截断/静默覆盖 | Pass locally；原子写、完整版本、事务摘要与真实中断覆盖 |
-| 队列、缓存和诊断有界 | Pass locally；8 小时正式门禁及最终原始样本重放通过 |
-| 平台路径不产生错误合并/逃逸 | macOS pass；Windows/Linux runtime pending |
+| 队列、缓存和诊断有界 | Pass locally；修复候选上的 8 小时正式重跑进行中 |
+| 平台路径不产生错误合并/逃逸 | Pass；macOS/Linux/Windows hosted 原生测试和矩阵重放通过 |
 
 ## 7. 退出条件
 
 | 条件 | 当前状态 |
 |---|---|
-| P2-A01 至 P2-A12 全部通过 | Pending：A11 passed，A12 pending；外部与最终退出验证器均已就绪 |
+| P2-A01 至 P2-A12 全部通过 | Pending：A12 passed，A11 candidate revalidation running；外部与最终退出验证器均已就绪 |
 | 完整扫描与增量模型最终一致 | Pass locally |
 | 崩溃测试无截断 Sidecar | Pass locally；候选提交统一故障收据 pending |
-| 连续 8 小时无无界资源增长 | Pass |
-| 三平台核心路径原生测试通过 | Pending |
+| 连续 8 小时无无界资源增长 | Revalidation running |
+| 三平台核心路径原生测试通过 | Pass |
 | P0/P1 数据安全缺陷为零 | 审计链已实现；登记册保持 draft，须在 A11/A12 与本地故障门禁后完成 reviewed 审计，当前不得判 Pass |
 
 ## 8. 阶段退出操作
@@ -222,4 +224,4 @@ Git 侧还必须同时满足：
 
 ## 9. 当前结论
 
-P2-A01 至 P2-A11 已有本地自动化、故障注入或正式长稳证据，P2-A11 最终收据已通过原始样本重放与基线零漂移审计。A04/A10 候选收据、数据安全审计和阶段 2 最终退出验证器均已就绪，但必须等待 P2-A12 托管证据及统一外部门禁提交后按顺序执行；缺陷登记继续保持 draft。P2-A12 仍受没有 Git remote 的外部托管矩阵阻塞，因此阶段 2 当前结论是 **Not accepted / In progress**，不得提前宣称完成。
+P2-A12 的正式 GitHub-hosted 三平台证据和托管回执已通过并归档。旧 P2-A11 结果因后续 Windows 长路径产品修复而不再覆盖当前候选，绑定修复提交的完整 8 小时重跑正在执行。A04/A10 候选收据、数据安全审计和阶段 2 最终退出验证器均已就绪；新 A11 通过后必须按统一外部门禁、本地故障、reviewed 缺陷登记、数据安全、最终退出的顺序完成。阶段 2 当前结论仍是 **Not accepted / In progress**，不得提前宣称完成。
