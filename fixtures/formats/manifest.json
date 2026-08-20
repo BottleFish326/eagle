@@ -198,6 +198,31 @@
               "reasonCode": "libheif-worker-unavailable"
             }
           }
+        },
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "bundled-codecs",
+          "result": {
+            "recognized": true,
+            "mime": "image/avif",
+            "kind": "image",
+            "issueCodes": [],
+            "metadata": {
+              "status": "available",
+              "properties": {
+                "width": 800,
+                "height": 533,
+                "frameCount": 1
+              }
+            },
+            "preview": {
+              "status": "available",
+              "referencePath": "references/avif/libheif-example-64.png",
+              "referenceSha256": "536aa4fdc12f4ea10da01e0480b992553f872b8b87a1a82a38ffa414a93c68cd",
+              "width": 64,
+              "height": 42
+            }
+          }
         }
       ],
       "budgets": {
@@ -237,6 +262,31 @@
             "preview": {
               "status": "codec-unavailable",
               "reasonCode": "libheif-worker-unavailable"
+            }
+          }
+        },
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "bundled-codecs",
+          "result": {
+            "recognized": true,
+            "mime": "image/heic",
+            "kind": "image",
+            "issueCodes": [],
+            "metadata": {
+              "status": "available",
+              "properties": {
+                "width": 1280,
+                "height": 854,
+                "frameCount": 2
+              }
+            },
+            "preview": {
+              "status": "available",
+              "referencePath": "references/heic/libheif-example-64.png",
+              "referenceSha256": "e1d73bde97bd44876f89376a49aca8b0ea8e89cacb5ab7348a0d919239ab1bd1",
+              "width": 64,
+              "height": 42
             }
           }
         }
@@ -463,6 +513,31 @@
             "preview": {
               "status": "codec-unavailable",
               "reasonCode": "libheif-worker-unavailable"
+            }
+          }
+        },
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "bundled-codecs",
+          "result": {
+            "recognized": true,
+            "mime": "image/avif",
+            "kind": "image",
+            "issueCodes": ["mime-mismatch"],
+            "metadata": {
+              "status": "available",
+              "properties": {
+                "width": 800,
+                "height": 533,
+                "frameCount": 1
+              }
+            },
+            "preview": {
+              "status": "available",
+              "referencePath": "references/avif/libheif-example-64.png",
+              "referenceSha256": "536aa4fdc12f4ea10da01e0480b992553f872b8b87a1a82a38ffa414a93c68cd",
+              "width": 64,
+              "height": 42
             }
           }
         }

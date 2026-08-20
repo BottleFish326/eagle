@@ -14,14 +14,16 @@ use uuid::Uuid;
 
 #[test]
 fn fixed_libheif_reads_metadata_and_generates_bounded_pngs() {
-    for (relative, expected_dimensions, expected_image_count) in [
+    for (relative, reference, expected_dimensions, expected_image_count) in [
         (
             "fixtures/formats/sources/avif/libheif-example.avif",
+            "fixtures/formats/references/avif/libheif-example-64.png",
             (800, 533),
             1,
         ),
         (
             "fixtures/formats/sources/heic/libheif-example.heic",
+            "fixtures/formats/references/heic/libheif-example-64.png",
             (1_280, 854),
             2,
         ),
@@ -44,6 +46,11 @@ fn fixed_libheif_reads_metadata_and_generates_bounded_pngs() {
         assert_eq!(payload.byte_length, u64::try_from(png.len()).unwrap());
         assert_eq!(payload.sha256, format!("{:x}", Sha256::digest(&png)));
         assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+        assert_eq!(
+            png,
+            fs::read(workspace_root().join(reference)).expect("reference PNG"),
+            "{relative}",
+        );
     }
 }
 

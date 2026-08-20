@@ -398,7 +398,7 @@ jobs:
       - name: Re-probe staged worker through the runtime loader
         run: |
           cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- \
-            apps/desktop/src-tauri/resources/format-workers/libheif \
+            "${{ github.workspace }}/apps/desktop/src-tauri/resources/format-workers/libheif" \
             fixtures/formats/sources
         if: runner.os != 'Windows'
 
@@ -406,7 +406,7 @@ jobs:
         shell: pwsh
         run: |
           cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- `
-            apps/desktop/src-tauri/resources/format-workers/libheif `
+            "$env:GITHUB_WORKSPACE\apps\desktop\src-tauri\resources\format-workers\libheif" `
             fixtures/formats/sources
         if: runner.os == 'Windows'
 
@@ -450,7 +450,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- \
-            'target/release/bundle/macos/Material Eagle.app/Contents/Resources/format-workers/libheif' \
+            '${{ github.workspace }}/target/release/bundle/macos/Material Eagle.app/Contents/Resources/format-workers/libheif' \
             fixtures/formats/sources
 
       - name: Verify worker inside Windows application bundle

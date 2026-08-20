@@ -1,7 +1,7 @@
 # P3-01C AVIF/HEIC 就绪报告
 
-- 状态：In progress；core-only boundary accepted locally，Linux/macOS fixed libheif jobs verified，Windows packaging fix awaiting hosted proof
-- 日期：2026-08-20
+- 状态：In progress；core-only boundary accepted locally，three-platform fixed libheif jobs verified，application bundles pending
+- 日期：2026-08-21
 - 范围：P3-01C 的格式识别、真实正常夹具、worker 隔离与固定 backend
 - 非结论：不代表 P3-01C、P3-01、P3-A01 或 P3-A02 通过
 
@@ -22,6 +22,11 @@ brand。AVIF 优先识别 `avif/avis`，HEIC/HEIF 覆盖静态与 sequence brand
 宽度声明和 64 字节 PNG 输出预算。生成器固定变异 offset，拒绝非规则文件和非显式替换，
 测试同时证明原始上游样本字节不变。
 
+正常 AVIF/HEIC 的 64px PNG 由摘要验证后的静态 macOS bundle 通过专用导出器生成；
+导出器只接受夹具根内普通相对路径，拒绝符号链接/越界和覆盖不同内容，并以同目录临时
+文件原子发布。两张 PNG 的尺寸、SHA-256 和 `bundled-codecs` 属性/预览期望已进入清单；
+backend 和 bundle verifier 现在要求输出字节与参考图完全一致。
+
 ## 2. 当前能力结果
 
 | 路径 | AVIF | HEIC |
@@ -33,6 +38,7 @@ brand。AVIF 优先识别 `avif/avis`，HEIC/HEIF 覆盖静态与 sequence brand
 | Linux backend 属性 | 800 × 533、1 图 | 1280 × 854、2 图 |
 | Linux backend 预览 | 64px 内 PNG | 64px 内 PNG |
 | macOS backend 属性/预览 | 800 × 533、1 图；64px 内 PNG | 1280 × 854、2 图；64px 内 PNG |
+| Windows backend 属性/预览 | 800 × 533、1 图；64px 内 PNG | 1280 × 854、2 图；64px 内 PNG |
 | 桌面预览入口 | 仅在固定 bundle 清单和库根授权同时成立时调用 worker | 同左 |
 | 桌面扫描属性 | `dimensions` + `media` 派生字段，不写 Sidecar | 同左，含图像数 |
 | 原素材 | 只读且摘要不变 | 只读且摘要不变 |
@@ -64,8 +70,10 @@ provider 和摘要校验；CI 只归档通过该重放的 bundle。
 只显式启用 AOM；libde265 由该 port 的核心依赖提供。这样 Windows 门禁不会隐式引入
 x265 encoder，Linux/macOS 也不再依赖 runner 上偶然存在的 Homebrew/APT codec。
 Unix 使用固定 vcpkg 静态库，门禁拒绝成品中的 libheif/AOM/libde265 等外部动态依赖；
-Windows 使用 `x64-windows-static-md`。每个 job 必须真实解码两个固定样本、生成摘要清单
-并由同一 runtime loader 重放后才归档；当前实现已进入托管 CI，结果尚未接受。
+Windows 使用固定 vcpkg checkout 的经典安装布局与 `x64-windows-static-md`，适配
+`vcpkg-rs 0.2.15` 只读取 `<root>/installed` 的约束。每个 job 必须真实解码两个固定样本、
+重放对抗集合、生成摘要清单并由同一 runtime loader 校验后才归档；三平台 backend 已在
+run `32390573705` 通过。
 
 stdin 请求与 stdout JSON header 均使用四字节长度前缀，PNG payload 具有独立长度、
 SHA-256 和 IHDR 尺寸约束。父进程并行、持续排空 stdout/stderr，但只保留受限字节；
@@ -94,7 +102,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test -p format-worker --all-targets --features embedded-libheif
 ```
 
-- 格式清单：13 个源文件、1,400,364 字节源内容、285 字节引用计数；
+- 格式清单：13 个源文件、1,400,364 字节源内容、24,243 字节引用计数；
 - filesystem：52 项通过，其中真实 AVIF/HEIC 与 7 个对抗样本均按内容识别；两类扩展
   伪装产生 `mime-mismatch`，单文件失败不影响扁平目录；
 - preview：22 项通过，其中真实 AVIF/HEIC 均稳定降级且缓存保持为空，派生属性映射不改
@@ -116,17 +124,19 @@ cargo test -p format-worker --all-targets --features embedded-libheif
 - 从 `32388115625` 下载的静态 macOS bundle 已由当前 verifier 重放全部正常和对抗样本：
   损坏/截断为 `invalid-content`，未知 codec 为 `codec-unavailable`，超大声明和 64 字节
   输出预算为 `resource-limited`，所有源 SHA-256 保持不变。
+- GitHub run `32390573705` 的全仓质量、三平台路径和 Linux/macOS/Windows 固定 worker
+  jobs 全部通过，关闭 Windows 经典 vcpkg 布局问题。三个应用 bundle job 在 staged
+  verifier 入口统一拒绝相对 bundle 路径，尚未开始 Tauri 构建；生产 loader 本来就要求
+  绝对资源路径，门禁现已改为传入各 runner 的绝对 workspace 路径。
 - GitHub run `32380847491` 全部成功；其 `Fixed libheif worker backend` job：6 项 feature 单元测试
   与 1 项真实 backend 集成测试通过；固定 AVIF/HEIC 均完成属性与受限 PNG 解码。
 
 ## 5. 未关闭范围与下一动作
 
-P3-01C 仍缺少 Windows backend 的已接受托管证据和三平台随应用打包。下一轮 CI 将重放
-Windows 正常/对抗样本、Unix 动态依赖审计，以及依赖 Linux/macOS/Windows worker
-artifact 的 `deb`、`.app` 和 NSIS 构建；每个构建都会从成品中提取资源，再由生产
-runtime loader 执行同一正常与对抗集合。扫描属性接线已本地实现，但还要用真实应用
-bundle 关闭端到端扫描门禁。正常 AVIF/HEIC 的 `bundled-codecs` 精确参考 PNG 仍待三平台
-产物一致性确认；对抗夹具已有本地清单与静态 macOS 重放，但尚未取得 Windows/Linux/macOS
-同一提交的完整托管证据。
+P3-01C 仍缺少三平台随应用打包。下一轮 CI 将从已验证 worker artifact 构建 `deb`、
+`.app` 和 NSIS，再从成品中提取资源，由生产 runtime loader 执行同一正常与对抗集合。
+扫描属性接线已本地实现，但还要用真实应用 bundle 关闭端到端扫描门禁。正常 AVIF/HEIC
+的 `bundled-codecs` 精确参考 PNG 已固定，但仍待 Linux/macOS/Windows 输出逐字节一致性
+确认；对抗夹具已取得同一提交的三平台 backend 证据，随包后的再次重放仍未完成。
 
 在这些项目完成前，P3-01C 保持 **In progress**，P3-A01/P3-A02 不判定通过。

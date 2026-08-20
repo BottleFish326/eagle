@@ -54,4 +54,12 @@ test("pins every bundled worker to decoder-only libheif 1.23.1 dependencies", as
   assert.match(workflow, new RegExp(`ref: ${fixedVcpkgBaseline}`, "u"));
   assert.match(workflow, /"libheif\[aom\]:x64-windows-static-md"/u);
   assert.doesNotMatch(workflow, /VCPKG_INSTALLATION_ROOT/u);
+  assert.doesNotMatch(
+    workflow,
+    /material-eagle-verify-worker-bundle -- \\\n\s+apps\/desktop\/src-tauri\/resources/u,
+  );
+  assert.match(
+    workflow,
+    /\$\{\{ github\.workspace \}\}\/apps\/desktop\/src-tauri\/resources\/format-workers\/libheif/u,
+  );
 });

@@ -34,5 +34,9 @@ path = "src/bin/format_worker_fixture.rs"
 name = "material-eagle-verify-worker-bundle"
 path = "src/bin/verify_worker_bundle.rs"
 
+[[bin]]
+name = "material-eagle-export-worker-reference"
+path = "src/bin/export_worker_reference.rs"
+
 [lints]
 workspace = true
