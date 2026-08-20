@@ -1,11 +1,11 @@
 # P2-06 资源与稳定性控制验收报告
 
-- 状态：Completed locally；P2-A11 candidate revalidation running
+- 状态：Accepted；P2-A11 passed
 - 日期：2026-08-20
 - 对应：P2-06、P2-A11
 - 决策：[ADR-023](../../specs/adr/023-unified-bounded-resource-scheduling.md)
 
-> 本报告下文保留首次正式 8 小时运行的历史结果。该结果本身已通过重放，但随后为 P2-A12 修复了 Windows 长路径扫描与 Sidecar 原子替换，产品输入相对旧受测提交发生变化，因此旧证据不再作为当前候选的退出依据。绑定修复提交 `c0508c66ec6905decc1e70cc328e585a887fb6c5` 的完整 28,800 秒重跑已于 `2026-08-20T04:16:01.018Z` 启动，结束前不得执行本地故障门禁。
+> 首次正式结果曾因后续 Windows 长路径扫描与 Sidecar 原子替换修复而失去零漂移条件。绑定修复提交 `c0508c66ec6905decc1e70cc328e585a887fb6c5` 的完整 28,800 秒重跑已正常完成，并通过确定性重放、文件边界、SHA-256、敏感信息和零漂移审计；本报告以下结果与仓库中的正式 JSON 均为当前候选证据。
 
 ## 1. 已交付范围
 
@@ -79,7 +79,7 @@ npm run test:resource-stability
 
 命令在非 Node 24 或脏 Git 工作区拒绝启动。自动拒绝条件包括：提交号/运行时缺失、检查点写入失败、进程非零或信号退出、未产生覆盖请求时长的完整结束样本、内部时间轴倒退、素材数不符、内部或原生样本少于理论采样数的 75%、样本结构非法、RSS 增长超过 256 MiB、RSS 斜率超过 8 MiB/分钟、句柄增长超过 64、句柄波动超过 128、线程峰值超过预热基线 16、CPU 超出调度容量包络、许可或等待队列越界、缓存越界以及扫描/事件/哈希/解码任一活动缺失。
 
-最终验收不能只读取 `accepted`。独立只读模块 `resource-stability-report.mjs` 中的 `inspectResourceStabilityReport` 会固定正式参数为 28,800/60/100,000/5/60，使用报告内的原始内部/原生样本、退出状态、stderr、环境和时间重新构造完整报告；重放结果必须继续通过并与磁盘 JSON 在语义上完全一致。正式任务加载的 `resource-stability-analysis.mjs`、`resource-stability-checkpoint.mjs` 与 `verify-resource-stability.mjs` 保持和受测 commit `c18e1ca` 逐字相同；最终重放和 partial 检查分别位于独立只读模块，不改变正在运行的生成器、检查点写入器或原始判定器。
+最终验收不能只读取 `accepted`。独立只读模块 `resource-stability-report.mjs` 中的 `inspectResourceStabilityReport` 会固定正式参数为 28,800/60/100,000/5/60，使用报告内的原始内部/原生样本、退出状态、stderr、环境和时间重新构造完整报告；重放结果必须继续通过并与磁盘 JSON 在语义上完全一致。正式任务加载的 `resource-stability-analysis.mjs`、`resource-stability-checkpoint.mjs` 与 `verify-resource-stability.mjs` 保持和受测 commit `c0508c66ec6905decc1e70cc328e585a887fb6c5` 逐字相同；最终重放和 partial 检查分别位于独立只读模块，不改变生成器、检查点写入器或原始判定器。
 
 阶段退出时运行 `npm run audit:p2-soak-baseline`。该只读门禁固定基线 SHA 和上述三份运行时输入，同时检查 `Cargo.toml`、锁文件、Node 版本、全部产品 crate/应用/Obsidian Bridge、夹具生成器与 soak 负载；它覆盖从基线到当前工作树的 tracked 差异和 scope 内未跟踪文件，并要求当前 HEAD 是受测 commit 的后代。只有机器输出 `accepted=true`、两个 `changedPaths` 均为空时，才能证明后续证据链改动没有污染正在运行的受测实现。
 
@@ -89,23 +89,23 @@ npm run test:resource-stability
 
 ## 5. P2-A11 正式验收结果
 
-正式任务从 `2026-08-19T15:37:27.899Z` 连续运行至 `2026-08-19T23:37:43.909Z`，正常写入 [`p2-06-resource-soak.json`](evidence/p2-06-resource-soak.json) 并清除 `.partial`。最终文件是 8,798,760 字节的普通文件，不是符号链接；SHA-256 为 `180537f44705b3a51da1132a7ba4bd02d4d36104bb7c1de896be36f1d0f494e4`，受测提交为 `c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21`。
+正式任务从 `2026-08-20T04:16:01.018Z` 连续运行至 `2026-08-20T12:16:18.337Z`，总历时 28,817,319 毫秒，正常写入 [`p2-06-resource-soak.json`](evidence/p2-06-resource-soak.json) 并清除 `.partial`。最终文件是 8,676,077 字节的普通文件，不是符号链接；SHA-256 为 `52af476de4ea7e06d5e58223338b7f8cba8df5cdbf36193dfad008d1878a50fd`，受测提交为 `c0508c66ec6905decc1e70cc328e585a887fb6c5`。
 
 | 判据 | 实际结果 | 结论 |
 |---|---:|---|
-| 内部样本 / 最低要求 | 5,333 / 4,320 | Pass |
-| 原生样本 / 最低要求 | 5,749 / 4,311 | Pass |
+| 内部样本 / 最低要求 | 5,250 / 4,320 | Pass |
+| 原生样本 / 最低要求 | 5,750 / 4,311 | Pass |
 | 非法内部 / 原生样本 | 0 / 0 | Pass |
-| RSS 净增长 / 斜率 | -49,312 KiB / -33.17 KiB/min | Pass |
-| 句柄净增长 / 最大值 | -2 / 12 | Pass |
+| RSS 净增长 / 斜率 | 127,008 KiB / 431.46 KiB/min | Pass |
+| 句柄净增长 / 最大值 | 2 / 12 | Pass |
 | 线程基线 / 峰值 | 4 / 4 | Pass |
-| CPU 峰值 | 171.6%，低于 8 个前台许可的容量包络 | Pass |
-| 扫描 / 事件 / watcher 批次 | 1,487 / 40,705 / 40,704 | Pass |
-| 哈希 / 解码请求 | 54,384 / 54,384 | Pass |
+| CPU 峰值 | 185.4%，低于 8 个前台许可的容量包络 | Pass |
+| 扫描 / 事件 / watcher 批次 | 1,293 / 32,851 / 32,851 | Pass |
+| 哈希 / 解码请求 | 47,352 / 47,352 | Pass |
 | 缓存终值 | 20,000 项，未超过固定上限 | Pass |
 | 调度峰值 | active 2 / waiting 0 | Pass |
 
-独立 `inspectResourceStabilityReport` 对首次证据使用全部原始样本和正式参数重新构造报告，返回 `accepted=true`、`failures=[]`，重放结果与磁盘 JSON 语义完全相同。该次历史运行曾通过零漂移审计；Windows 长路径修复后，基线审计正确报告 `crates/filesystem/src/scanner.rs` 与 `crates/metadata/src/lib.rs` 已变化，因而触发当前完整重跑。P2-06 实现仍为 Completed locally，但 P2-A11 只有新 final JSON 完成重放及零漂移审计后才能重新判 Pass。
+独立 `inspectResourceStabilityReport` 使用全部原始样本和正式参数重新构造报告，返回 `accepted=true`、`failures=[]`，重放结果与磁盘 JSON 语义完全相同。文件普通性、32 MiB 上限、提交与参数绑定、完整时长、空 stderr、无本机路径或令牌模式也全部通过；`npm run audit:p2-soak-baseline` 返回 `accepted=true`，loaded/product `changedPaths` 均为空。P2-06 与 P2-A11 重新判定为 Pass；阶段 2 仍须完成统一外部门禁、本地故障、缺陷 reviewed、数据安全与最终退出收据。
 
 ## 6. 当前质量门禁
 

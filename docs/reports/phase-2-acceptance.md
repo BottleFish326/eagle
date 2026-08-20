@@ -1,16 +1,16 @@
 # 阶段 2 验收报告
 
-> 状态：Draft — Not accepted；P2-A11 candidate revalidation running，P2-A12 passed
+> 状态：Draft — Not accepted；P2-A11/P2-A12 passed，exit receipts pending
 >
 > 日期：2026-08-20
 >
-> 当前 P2-A11 重跑基线：`c0508c66ec6905decc1e70cc328e585a887fb6c5`；P2-A12 受测提交：`9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751`，GitHub Actions 运行 32332405466 attempt 1
+> P2-A11 受测提交：`c0508c66ec6905decc1e70cc328e585a887fb6c5`；P2-A12 受测提交：`9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751`，GitHub Actions 运行 32332405466 attempt 1
 
 ## 1. 验收范围
 
 阶段 2 要求应用面对外部移动、监听丢失、批量中断、同步冲突、权限/移动盘变化和长期资源压力后，仍能从文件系统与相邻 Sidecar 收敛。阶段退出还要求 Windows、macOS、Linux 的原生路径测试全部通过。
 
-本报告汇总已完成证据并固定最后门禁的判定流程。它不是阶段通过声明；P2-A12 已通过，但 Windows 长路径修复后的 P2-A11 完整重跑以及后续统一收据尚未完成，因此阶段 2 必须保持 **In progress**，阶段 3 不得开始实现。
+本报告汇总已完成证据并固定最后门禁的判定流程。它不是阶段通过声明；P2-A11 与 P2-A12 已通过，但统一外部门禁、本地故障、缺陷 reviewed、数据安全和最终退出收据尚未完成，因此阶段 2 必须保持 **In progress**，阶段 3 不得开始实现。
 
 全过程可运行 `npm run status:p2-exit` 获取机器状态。该只读编排器同时检查 Git、A11 final/partial、A12 hosted readiness/原始归档、外部汇总、本地故障、数据安全审计与最终收据；运行中的 A11 partial 必须逐项匹配正式 28,800 秒参数，进度按 internal/native 两条采样流的较小覆盖时长计算，并报告目标、已覆盖、剩余毫秒与百分比。final 与 partial 还会以各自记录的受测提交重新执行已加载脚本和产品输入零漂移审计；即使 JSON 原始样本重放通过，只要候选产品输入随后改变，就必须进入 `soak-failed` 而不能建议生成外部门禁。编排器会把状态归入长稳运行/失败、托管环境阻塞/可触发、外部汇总待生成/损坏、本地故障待运行/待提交、数据安全待审核/损坏/待提交、候选脏、最终待生成/待提交或 accepted，并只输出当前唯一下一动作。命令不会执行该动作，也不会构建、推送、触发 workflow 或写证据；只有矛盾/失败/损坏证据返回非零。
 
@@ -23,7 +23,7 @@
 | P2-03 批量事务恢复 | Pass locally | [P2-03 报告](p2-03-acceptance.md)：1,000 项真实中断、继续、条件恢复 |
 | P2-04 并发与同步冲突 | Pass locally | [P2-04 报告](p2-04-acceptance.md)：完整版本、字段选择、冲突副本只读诊断 |
 | P2-05 缓存生命周期 | Pass locally | [P2-05 报告](p2-05-acceptance.md)：容量/期限/版本边界与双崩溃点恢复 |
-| P2-06 资源稳定性 | Candidate revalidation running | [P2-06 报告](p2-06-acceptance.md)：旧正式任务已通过；Windows 长路径产品修复后，绑定 `c0508c6` 的完整 28,800 秒重跑正在执行 |
+| P2-06 资源稳定性 | Pass | [P2-06 报告](p2-06-acceptance.md)：绑定 `c0508c6` 的 100,000 素材完整 28,800 秒任务、确定性重放、敏感信息与零漂移审计均通过 |
 | P2-07 诊断支持 | Pass locally | [P2-07 报告](p2-07-acceptance.md)：滚动日志、脱敏导出、一致性与 ID 追踪 |
 | P2-08 平台兼容 | Pass | [P2-08 报告](p2-08-acceptance.md)：GitHub-hosted macOS/Linux/Windows 原生测试、矩阵汇总和完整质量门禁均通过，原始 artifact 已归档 |
 
@@ -41,26 +41,26 @@
 | P2-A08 | Pass locally | 扫描中拔盘/撤权返回非权威 root-offline/permission-denied，应用与其他根保持运行 |
 | P2-A09 | Pass locally | 重叠根拒绝；符号链接循环不跟随、不重复计数并输出明确诊断 |
 | P2-A10 | Pass locally | 缓存根轮换的两个进程中断点均可启动恢复，素材与 Sidecar SHA-256 不变；候选收据执行器已就绪 |
-| P2-A11 | Revalidation running | 旧 28,800 秒任务通过，但候选产品输入随后改变；绑定 `c0508c6` 的 100,000 素材完整重跑正在执行 |
+| P2-A11 | Pass | 绑定 `c0508c6` 的 100,000 素材任务覆盖 28,817,319 ms；重放 accepted/no failures，内部/原生样本 5,250/5,750 |
 | P2-A12 | Pass | 正式运行 32332405466 attempt 1：macOS ARM64 10、Linux X64 12、Windows X64 9 项通过，五个必需 job 全部 success |
 
 ## 4. P2-A11 正式证据状态
 
-下列 `c18e1ca` 结果保留为历史记录，但因后续 Windows 长路径产品修复已不再满足当前候选的零漂移条件。当前正式重跑绑定 `c0508c66ec6905decc1e70cc328e585a887fb6c5`，使用相同的 Node.js 24、macOS ARM64、100,000 素材、60 秒预热、5 秒采样、60 秒检查点和 28,800 秒目标；开始时间为 `2026-08-20T04:16:01.018Z`。新进程正常结束、final JSON 通过确定性重放并重新完成基线零漂移审计前，P2-A11 保持 Revalidation running。
+当前正式证据绑定 `c0508c66ec6905decc1e70cc328e585a887fb6c5`，使用 Node.js 24、macOS ARM64、100,000 素材、60 秒预热、5 秒采样、60 秒检查点和 28,800 秒目标。任务正常退出，final JSON 通过确定性重放、文件边界、SHA-256、敏感信息与零漂移审计，P2-A11 判定为 Pass。
 
 正式任务使用 Node.js 24.19.0、macOS ARM64、100,000 素材、60 秒预热、5 秒采样和 60 秒检查点，绑定提交：
 
 ```text
-c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21
+c0508c66ec6905decc1e70cc328e585a887fb6c5
 ```
 
-运行时间：`2026-08-19T15:37:27.899Z` 至 `2026-08-19T23:37:43.909Z`。最终证据为：
+运行时间：`2026-08-20T04:16:01.018Z` 至 `2026-08-20T12:16:18.337Z`，共 28,817,319 毫秒。最终证据为：
 
 ```text
 docs/reports/evidence/p2-06-resource-soak.json
 ```
 
-最终文件为 8,798,760 字节的普通文件，SHA-256 是 `180537f44705b3a51da1132a7ba4bd02d4d36104bb7c1de896be36f1d0f494e4`；正常结束已删除 `.partial`。`inspectResourceStabilityReport` 从全部原始样本重建报告后返回 accepted/no failures，且与磁盘 JSON 语义完全一致。
+最终文件为 8,676,077 字节的普通文件，SHA-256 是 `52af476de4ea7e06d5e58223338b7f8cba8df5cdbf36193dfad008d1878a50fd`；正常结束已删除 `.partial`。`inspectResourceStabilityReport` 从全部原始样本重建报告后返回 accepted/no failures，且与磁盘 JSON 语义完全一致；敏感模式扫描与 stderr 检查均为空。
 
 基线隔离使用以下只读门禁复核；非零退出或机器输出 `accepted=false` 都必须停止验收并解释差异：
 
@@ -84,7 +84,7 @@ npm run audit:p2-soak-baseline
 8. scan/event/hash/decode 和 background mode 全部实际出现；
 9. 使用 `inspectResourceStabilityReport` 从原始样本确定性重放，重放报告与最终 JSON 语义完全一致；随后再人工复核异常趋势，更新 P2-06 报告和本报告并提交最终 JSON。
 
-任务非零退出、信号终止、机器睡眠造成采样不足或任一自动 failure 都必须保留失败证据并重新运行完整 8 小时；不得拼接两次运行或手工修改 JSON。本次任务正常退出，内部/原生样本 5,333/5,749 均超过最低 4,320/4,311，非法样本为零；RSS 净增长 -49,312 KiB、斜率 -33.17 KiB/min，句柄净增长 -2、线程峰值 4，扫描 1,487 次、事件 40,705 次、哈希/解码各 54,384 次，缓存终值 20,000，调度峰值 active 2/waiting 0。九项唯一判据全部满足。
+任务非零退出、信号终止、机器睡眠造成采样不足或任一自动 failure 都必须保留失败证据并重新运行完整 8 小时；不得拼接两次运行或手工修改 JSON。本次任务正常退出，内部/原生样本 5,250/5,750 均超过最低 4,320/4,311，非法样本为零；RSS 净增长 127,008 KiB、斜率 431.46 KiB/min，句柄净增长 2、线程峰值 4，扫描 1,293 次、事件与 watcher 批次各 32,851 次、哈希/解码各 47,352 次，缓存终值 20,000，调度峰值 active 2/waiting 0。九项唯一判据全部满足。
 
 ## 5. P2-A12 托管矩阵关闭流程
 
@@ -148,7 +148,7 @@ npm run test:p2-local-fault-gates
 
 任一进程状态、恢复输出、故障点数量、来源、二进制摘要或临时目录清理不满足时，命令返回非零、保留故障现场且不生成正式收据。全部满足后才删除本次精确创建的临时根；报告还必须通过独立收据检查器，随后才以不可覆盖方式写入 `docs/reports/evidence/p2-local-fault-gates.json`。[`p2-local-fault-gates.schema.json`](../../schemas/p2-local-fault-gates.schema.json) 只接受成功/abort 状态、固定 317/1000 边界、固定顺序的两个缓存故障点和已清理状态。
 
-该命令会构建并运行 Rust 故障负载；当前 P2-A11 重跑尚未结束，因此仍受采样隔离限制，禁止并行执行。执行器、Schema、离线严格检查器与七项纯判定测试已通过；正式候选收据仍 pending，必须先完成 P2-A11、生成并提交外部门禁，再从新的干净候选提交运行。该本地收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
+该命令会构建并运行 Rust 故障负载。A11 已结束，但正式候选收据仍 pending；必须先提交 A11 原始证据与文档、在干净 tracked 候选上生成并提交外部门禁，再从新的完全干净候选提交运行。执行器、Schema、离线严格检查器与七项纯判定测试已通过；该本地收据与第 5.1 节外部门禁互相独立，两者都不能替代另一方。
 
 ## 5.3 P0/P1 数据安全缺陷审计
 
@@ -194,17 +194,17 @@ Git 侧还必须同时满足：
 | 不自动重构/删除原始素材 | Pass locally；移动重联要求后端候选 handle 与用户确认，重复分析尚未进入本阶段 |
 | 外部变化最终由完整扫描收敛 | Pass locally；取消/失败恢复前态，成功批次原子替换根目录结果 |
 | Sidecar 不被截断/静默覆盖 | Pass locally；原子写、完整版本、事务摘要与真实中断覆盖 |
-| 队列、缓存和诊断有界 | Pass locally；修复候选上的 8 小时正式重跑进行中 |
+| 队列、缓存和诊断有界 | Pass；修复候选上的 8 小时正式任务与重放通过 |
 | 平台路径不产生错误合并/逃逸 | Pass；macOS/Linux/Windows hosted 原生测试和矩阵重放通过 |
 
 ## 7. 退出条件
 
 | 条件 | 当前状态 |
 |---|---|
-| P2-A01 至 P2-A12 全部通过 | Pending：A12 passed，A11 candidate revalidation running；外部与最终退出验证器均已就绪 |
+| P2-A01 至 P2-A12 全部通过 | Pass；统一外部与最终退出收据仍 pending |
 | 完整扫描与增量模型最终一致 | Pass locally |
 | 崩溃测试无截断 Sidecar | Pass locally；候选提交统一故障收据 pending |
-| 连续 8 小时无无界资源增长 | Revalidation running |
+| 连续 8 小时无无界资源增长 | Pass |
 | 三平台核心路径原生测试通过 | Pass |
 | P0/P1 数据安全缺陷为零 | 审计链已实现；登记册保持 draft，须在 A11/A12 与本地故障门禁后完成 reviewed 审计，当前不得判 Pass |
 
@@ -212,16 +212,15 @@ Git 侧还必须同时满足：
 
 只有第 4、5 节证据都通过后，执行一次候选提交审计：
 
-1. 确认 P2-A11 final JSON、P2-A12 已归档 consolidated matrix/三个源 artifact、`p2-a12-hosted-run.json`/hosted logs 与实现 commit 可追溯，并生成 `p2-external-gates.json`；
-2. 执行 `npm run audit:p2-soak-baseline`，确认正式 soak 生成器、原始判定器和该任务已编译的产品代码均未变化；若任一 scope 出现差异则重新跑相应门禁；
-3. 提交所有候选代码与上述正式证据，确认没有 partial、临时 fixture、token 或本机路径，且 `git status` 完全干净；
-4. 执行 `npm run test:p2-local-fault-gates`，检查不可覆盖收据通过 Schema 并绑定该干净候选提交；失败时保留现场、修复后从新的干净提交完整重跑；
-5. 添加本地故障收据，更新 P2-03/P2-05/P2-06/P2-08、本报告、`docs/progress.md` 和 README，运行文档/Schema 检查与最终快速质量门禁，然后提交；此后不得修改 README/docs 之外的路径；
-6. 复核所有自动化、失败现场和已知限制，把 `docs/defects.json` 更新为真实 reviewed 状态；open P0/P1 必须为零，open P2 必须有规避方式和目标版本，审核时间必须晚于最终门禁证据，然后提交；
-7. 在干净候选上执行 `npm run verify:p2-data-safety`，要求 accepted、自检通过且生成不可覆盖收据；添加并提交收据；
-8. 再次确认工作树完全干净，执行 `npm run verify:p2-exit`，要求输出 `accepted=true`、`failures=[]` 并通过最终 Schema；
-9. 把本报告改为实际 Accepted、添加最终退出收据并提交，再把阶段 3 从 Not started 改为 In progress。
+1. 确认 P2-A11 final JSON、P2-A12 consolidated matrix/三个源 artifact 与 hosted 收据可追溯；执行确定性重放、SHA-256、敏感信息和 `npm run audit:p2-soak-baseline`，提交 A11 原始证据与当前文档，使 tracked 工作树完全干净；
+2. 在该干净候选上执行 `npm run verify:p2-external` 和 `npm run inspect:p2-external`，要求 accepted/no failures，再提交不可覆盖的 `p2-external-gates.json`；
+3. 从新的完全干净候选执行 `npm run test:p2-local-fault-gates`，检查不可覆盖收据通过 Schema 并绑定该提交；失败时保留现场、修复后从新提交完整重跑；
+4. 添加本地故障收据并更新对应报告后提交；此后不得修改 README/docs 之外的路径；
+5. 复核所有自动化、失败现场和已知限制，把 `docs/defects.json` 更新为真实 reviewed 状态；open P0/P1 必须为零，open P2 必须有规避方式和目标版本，审核时间必须晚于外部与本地故障证据，然后提交；
+6. 在干净候选上执行 `npm run verify:p2-data-safety` 与离线检查，要求 accepted、自检通过且输入均已提交；添加并提交收据；
+7. 再次确认工作树完全干净，执行 `npm run verify:p2-exit`，要求输出 `accepted=true`、`failures=[]` 并通过最终 Schema；
+8. 把本报告改为实际 Accepted、添加最终退出收据并提交，再把阶段 3 从 Not started 改为 In progress。
 
 ## 9. 当前结论
 
-P2-A12 的正式 GitHub-hosted 三平台证据和托管回执已通过并归档。旧 P2-A11 结果因后续 Windows 长路径产品修复而不再覆盖当前候选，绑定修复提交的完整 8 小时重跑正在执行。A04/A10 候选收据、数据安全审计和阶段 2 最终退出验证器均已就绪；新 A11 通过后必须按统一外部门禁、本地故障、reviewed 缺陷登记、数据安全、最终退出的顺序完成。阶段 2 当前结论仍是 **Not accepted / In progress**，不得提前宣称完成。
+P2-A11 修复候选的完整 8 小时任务与 P2-A12 GitHub-hosted 三平台证据均已通过并归档。A04/A10 候选收据、数据安全审计和阶段 2 最终退出验证器均已就绪；当前必须按提交 A11 原始证据、统一外部门禁、本地故障、reviewed 缺陷登记、数据安全、最终退出的顺序完成。阶段 2 当前结论仍是 **Not accepted / In progress**，不得提前宣称完成。

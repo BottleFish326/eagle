@@ -8,7 +8,7 @@
 |---|---|---|
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
 | 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
-| 阶段 2：可靠性与恢复 | In progress | P2-A12 三平台托管矩阵已通过；Windows 长路径修复后的 P2-A11 连续 8 小时重新验证正在运行，完成后继续统一外部门禁与退出收据 |
+| 阶段 2：可靠性与恢复 | In progress | P2-A11 修复候选连续 8 小时任务与 P2-A12 三平台托管矩阵均已通过；正在完成统一外部门禁、本地故障、数据安全与最终退出收据 |
 | 阶段 3：完整素材能力 | Not started | 等待阶段 2 退出；P3-01 至 P3-07 的完整实施准备均已收敛 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出；P4-01 至 P4-08 的完整实施准备已收敛 |
 
@@ -52,10 +52,10 @@
 | P2-03 批量操作事务与恢复 | Completed locally | 全量预写计划、逐项原子提交、32 项检查点、摘要重建、继续/条件恢复、授权根复核与外部修改保护通过；A04 候选故障收据执行器已就绪；见 `reports/p2-03-acceptance.md` |
 | P2-04 并发编辑与同步冲突 | Completed locally | mtime/大小/SHA-256 三元版本、Tag 显式三方合并、标量字段逐项选择、二次版本复核及同步冲突副本只读诊断通过；见 `reports/p2-04-acceptance.md` |
 | P2-05 缓存生命周期 | Completed locally | 20,000 项/1 GiB/30 天边界、LRU、解码器描述精确失效、扫描后孤立回收、手动回收及双崩溃点安全轮换通过；A10 候选故障收据执行器已就绪；见 `reports/p2-05-acceptance.md` |
-| P2-06 资源与稳定性控制 | Acceptance revalidation running | 旧 28,800 秒正式证据已通过，但后续 Windows 长路径产品修复使其基线失效；绑定修复提交 `c0508c6` 的 100,000 素材完整 8 小时重跑正在隔离执行；见 `reports/p2-06-acceptance.md` |
+| P2-06 资源与稳定性控制 | Accepted | 绑定修复提交 `c0508c6` 的 100,000 素材完整 28,800 秒任务、确定性重放、敏感信息与零漂移审计均通过；见 `reports/p2-06-acceptance.md` |
 | P2-07 诊断和支持工具 | Completed locally | 1 MiB × 5 JSONL 滚动日志、路径值脱敏、Schema 2 错误/性能导出、512 条有界只读一致性报告和 UUID 素材追踪通过；见 `reports/p2-07-acceptance.md` |
 | P2-08 平台与文件系统兼容 | Accepted | 正式运行 32332405466 在同一 commit/run/attempt 上通过 macOS 10、Linux 12、Windows 9 项原生测试、矩阵汇总与完整质量门禁；四个 artifact 和托管回执已归档；见 `reports/p2-08-acceptance.md` |
-| 阶段 2 退出验收 | Draft / Not accepted | P2-A12 已通过；当前等待修复提交上的 P2-A11 重跑完成。之后依次生成统一外部门禁、本地故障收据、reviewed 缺陷登记、数据安全审计与最终退出收据；见 `reports/phase-2-acceptance.md` |
+| 阶段 2 退出验收 | Draft / Not accepted | P2-A11/P2-A12 已通过；当前依次提交 A11 原始证据、生成统一外部门禁、本地故障收据、reviewed 缺陷登记、数据安全审计与最终退出收据；见 `reports/phase-2-acceptance.md` |
 
 ## 阶段 3 实施准备
 
