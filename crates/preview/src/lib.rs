@@ -1088,6 +1088,41 @@ mod tests {
     }
 
     #[test]
+    fn pinned_libheif_images_degrade_without_writing_preview_cache() {
+        let directory = tempdir().expect("tempdir");
+        let service = ThumbnailService::open(&directory.path().join("cache"), 1).expect("service");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/formats/sources");
+
+        for (relative, mime) in [
+            ("avif/libheif-example.avif", "image/avif"),
+            ("heic/libheif-example.heic", "image/heic"),
+        ] {
+            let path = root.join(relative);
+            let metadata = fs::metadata(&path).expect("pinned libheif metadata");
+            let source_digest = digest_file(&path).expect("source digest");
+            let record = AssetRecord::untagged(
+                path.to_string_lossy().into_owned(),
+                path,
+                mime.into(),
+                metadata.len(),
+                0,
+            );
+            assert!(matches!(
+                service.request(&record, 32).expect("provider outcome"),
+                ThumbnailOutcome::Placeholder {
+                    reason: ThumbnailPlaceholderReason::CodecUnavailable,
+                    ..
+                }
+            ));
+            assert_eq!(
+                digest_file(&record.path).expect("source digest after"),
+                source_digest
+            );
+        }
+        assert_eq!(png_files(service.cache.root()), 0);
+    }
+
+    #[test]
     fn safe_svg_provider_generates_a_bounded_png() {
         let directory = tempdir().expect("tempdir");
         let asset = directory.path().join("asset.svg");

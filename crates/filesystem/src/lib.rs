@@ -1,5 +1,6 @@
 mod events;
 mod formats;
+mod isobmff;
 mod library;
 mod platform;
 mod reconciliation;

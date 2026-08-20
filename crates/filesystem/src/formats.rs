@@ -1,5 +1,7 @@
 use asset_core::AssetKind;
 
+use crate::isobmff::{IsoBmffKind, classify_file_type};
+
 /// Maximum prefix read while identifying an asset. Format recognition must stay bounded.
 pub const MAX_SIGNATURE_BYTES: u64 = 64 * 1024;
 
@@ -179,55 +181,7 @@ fn descriptor_for_content(prefix: &[u8]) -> Option<&'static FormatDescriptor> {
 }
 
 fn recognize_iso_bmff(prefix: &[u8]) -> Option<&'static str> {
-    if prefix.len() < 12 || &prefix[4..8] != b"ftyp" {
-        return None;
-    }
-    let box_length = u32::from_be_bytes(prefix[..4].try_into().ok()?) as usize;
-    let available = prefix.len().min(box_length.max(12));
-    let mut brands = vec![&prefix[8..12]];
-    let mut offset = 16;
-    while offset + 4 <= available {
-        brands.push(&prefix[offset..offset + 4]);
-        offset += 4;
-    }
-    if brands
-        .iter()
-        .any(|brand| matches!(*brand, b"avif" | b"avis"))
-    {
-        Some("avif")
-    } else if brands
-        .iter()
-        .any(|brand| matches!(*brand, b"heic" | b"heix" | b"hevc" | b"hevx"))
-    {
-        Some("heic")
-    } else if brands
-        .iter()
-        .any(|brand| matches!(*brand, b"heif" | b"mif1" | b"msf1"))
-    {
-        Some("heif")
-    } else if brands.iter().any(|brand| *brand == b"qt  ") {
-        Some("mov")
-    } else if brands.iter().any(|brand| {
-        matches!(
-            *brand,
-            b"isom"
-                | b"iso2"
-                | b"iso3"
-                | b"iso4"
-                | b"iso5"
-                | b"iso6"
-                | b"avc1"
-                | b"dash"
-                | b"M4V "
-                | b"mp41"
-                | b"mp42"
-                | b"mp71"
-        )
-    }) {
-        Some("mp4")
-    } else {
-        None
-    }
+    classify_file_type(prefix).map(IsoBmffKind::format_id)
 }
 
 fn has_mpeg_audio_sync(prefix: &[u8]) -> bool {
@@ -270,6 +224,8 @@ fn looks_like_svg(prefix: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
+    use std::fs;
+    use std::path::Path;
 
     use super::*;
 
@@ -329,5 +285,22 @@ mod tests {
         assert_eq!(recognition.descriptor.id, "svg");
         assert_eq!(recognition.source, RecognitionSource::Extension);
         assert!(!recognition.extension_mismatch);
+    }
+
+    #[test]
+    fn recognizes_the_pinned_libheif_avif_and_heic_fixtures_from_content() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/formats/sources");
+        for (relative, expected) in [
+            ("avif/libheif-example.avif", "avif"),
+            ("heic/libheif-example.heic", "heic"),
+        ] {
+            let bytes = fs::read(root.join(relative)).expect("pinned libheif fixture");
+            let prefix_len = bytes
+                .len()
+                .min(usize::try_from(MAX_SIGNATURE_BYTES).expect("signature bound"));
+            let recognition = recognize_format(None, &bytes[..prefix_len]).expect("recognized");
+            assert_eq!(recognition.descriptor.id, expected);
+            assert_eq!(recognition.source, RecognitionSource::Content);
+        }
     }
 }

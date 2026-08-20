@@ -890,6 +890,28 @@ mod tests {
     }
 
     #[test]
+    fn scans_pinned_libheif_images_without_requiring_a_codec() {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/formats/sources");
+        let report = scan_root(&root, &ScanOptions::default()).expect("scan format fixtures");
+
+        for (name, mime) in [
+            ("libheif-example.avif", "image/avif"),
+            ("libheif-example.heic", "image/heic"),
+        ] {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .expect("pinned libheif asset");
+            assert_eq!(asset.mime, mime);
+            assert_eq!(asset.kind, AssetKind::Image);
+            assert!(asset.dimensions.is_none());
+            assert!(asset.issues.is_empty());
+        }
+    }
+
+    #[test]
     fn extracts_safe_svg_dimensions_and_isolates_active_content() {
         let directory = tempdir().expect("tempdir");
         fs::write(

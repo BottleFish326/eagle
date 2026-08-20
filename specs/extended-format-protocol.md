@@ -136,6 +136,11 @@ worker 请求只包含请求 ID、provider ID/version、已授权 canonical path
 - ISO BMFF brand 识别与通用卡片先通过；
 - 三平台 worker 打包完成后开放属性/缩略图 capability。
 
+实施状态（2026-08-20）：In progress。首个 `ftyp` box 的边界、major/compatible
+brand、标准/扩展/开放长度和 HEIF sequence brand 已由无分配分类器覆盖；固定的官方
+libheif AVIF/HEIC 样本验证扫描可见与 `codec-unavailable` 无缓存降级。三平台
+decoder-only libheif worker、属性/PNG 响应和恶意/超限 worker 夹具尚未完成。
+
 ### P3-01D：视频
 
 - MP4/MOV/WebM 轨道和时长；未知 codec 降级；

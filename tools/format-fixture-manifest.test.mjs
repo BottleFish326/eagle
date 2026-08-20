@@ -20,8 +20,8 @@ test("accepts the tracked format fixture manifest with real integrity metadata",
     manifestPath: trackedManifest,
   });
   assert.equal(report.accepted, true, report.failures.join("; "));
-  assert.equal(report.fixtureCount, 4);
-  assert.equal(report.sourceBytes, 507);
+  assert.equal(report.fixtureCount, 6);
+  assert.equal(report.sourceBytes, 832225);
   assert.equal(report.referenceBytes, 95);
 });
 

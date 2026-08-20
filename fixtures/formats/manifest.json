@@ -165,6 +165,88 @@
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
+    },
+    {
+      "id": "avif-libheif-normal",
+      "path": "sources/avif/libheif-example.avif",
+      "format": "avif",
+      "case": "normal",
+      "source": {
+        "origin": "redistributable",
+        "license": "MIT (libheif examples/COPYING)",
+        "sourceUrl": "https://raw.githubusercontent.com/strukturag/libheif/3a6997e8c4d4df7c20dfcb2937484630e05f5570/examples/example.avif",
+        "attribution": "libheif example.avif; source and license details in THIRD_PARTY_NOTICES.md"
+      },
+      "sha256": "54a0dc31d02b6f5d9d4b66027d4787861b7af15ffd8fab8eab963d10c5411469",
+      "size": 113604,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "image/avif",
+            "kind": "image",
+            "issueCodes": [],
+            "metadata": {
+              "status": "codec-unavailable",
+              "reasonCode": "libheif-worker-unavailable",
+              "properties": {}
+            },
+            "preview": {
+              "status": "codec-unavailable",
+              "reasonCode": "libheif-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "heic-libheif-normal",
+      "path": "sources/heic/libheif-example.heic",
+      "format": "heic",
+      "case": "normal",
+      "source": {
+        "origin": "redistributable",
+        "license": "MIT (libheif examples/COPYING)",
+        "sourceUrl": "https://raw.githubusercontent.com/strukturag/libheif/b97d0c2b2353c8c132f334729fc75e2d47d3763d/examples/example.heic",
+        "attribution": "libheif example.heic; source and license details in THIRD_PARTY_NOTICES.md"
+      },
+      "sha256": "7f8b363e4936c0666a25f64f3a92fda10bd8e5453be4592530b65a55dd98f3f2",
+      "size": 718114,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "image/heic",
+            "kind": "image",
+            "issueCodes": [],
+            "metadata": {
+              "status": "codec-unavailable",
+              "reasonCode": "libheif-worker-unavailable",
+              "properties": {}
+            },
+            "preview": {
+              "status": "codec-unavailable",
+              "reasonCode": "libheif-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     }
   ]
 }
