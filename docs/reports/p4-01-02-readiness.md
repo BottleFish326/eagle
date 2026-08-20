@@ -76,3 +76,16 @@ Schema 使用 Draft 2020-12 严格编译；YAML 示例通过。负例覆盖非 U
 - 未把阶段 4 状态改为 In progress。
 
 以上实现等待阶段 3 退出评审后开始。
+
+## 6. 原型替换顺序
+
+阶段 0 原型只能作为行为夹具，P4 实现不得在其接口上逐步放宽权限。阶段切换后先按以下顺序消除原型语义，再增加搜索和媒体能力：
+
+1. 删除设置页的任意绝对根文本框和 `settings.roots` 持久化。旧原型数据不得自动转换为批准；插件只能发现机器级 manifest，并对每个当前 root 显示路径后要求用户确认，Vault 数据只保存 root ID、path fingerprint 和 enabled。
+2. 替换当前 `Map<id, firstLocation>` 行为。索引必须先保存 `id -> candidates[]`；同一 UUID 出现两个及以上候选时全部标为 ambiguous，任何候选都不得渲染，不能保留遍历到的第一项作为成功结果。
+3. 在读取 YAML 前先执行 `lstat`、普通文件/非符号链接和 4 MiB 上限；使用拒绝重复 key、自定义 tag、循环/过量 alias 和过深结构的安全解析器。当前无上限 `readFile`/普通 `parse` 不能进入正式 Phase A。
+4. 每次渲染重新核对 manifest/approval 交集、realpath、相邻 Sidecar ID 和文件版本。扩展名 MIME 白名单只属于原型，正式识别复用 P3 registry 与 capability 结果。
+5. 小图先 `stat` 再按 32 MiB 限额有界读取，并受 4 并发/128 MiB Blob 总预算控制；当前“完整读取后再检查 25 MiB”不构成资源边界。manifest、approval、source 或 render child 生命周期变化都必须撤销 object URL。
+6. 上述安全替换通过后，才接入 watcher、Phase B 搜索、desktop control IPC 和 Range media lease。任何中间切片都保持 desktop-offline 可解释降级，不把 prototype root path 或首项 UUID 结果作为回退。
+
+本节只记录现有代码审计与迁移门禁，不表示阶段 4 已开始。
