@@ -40,6 +40,13 @@ import {
   type VaultReferenceFailure,
 } from "./obsidian-vaults";
 import { RootManager } from "./RootManager";
+import { SavedFilterManager } from "./SavedFilterManager";
+import type {
+  SavedFilter,
+  SavedFilterCatalog,
+  SavedFilterCommandError,
+  SavedFilterInput,
+} from "./saved-filters";
 import type { ReconciliationReport, RelinkCandidate } from "./reconciliation";
 import { SettingsManager } from "./SettingsManager";
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
@@ -89,6 +96,19 @@ interface Notice {
   message: string;
 }
 
+const EMPTY_SAVED_FILTER_CATALOG: SavedFilterCatalog = {
+  fileVersion: {
+    exists: false,
+    size: 0,
+    modifiedUnixMs: null,
+    sha256: null,
+  },
+  validFilters: [],
+  unavailableFilters: [],
+  invalidEntries: [],
+  fileIssues: [],
+};
+
 export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const search = useRef<HTMLInputElement>(null);
   const activeScanRoots = useRef<Set<string>>(new Set());
@@ -120,6 +140,15 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   >({});
   const [relinkBusy, setRelinkBusy] = useState<string>();
   const [rootManagerOpen, setRootManagerOpen] = useState(false);
+  const [savedFilterManagerOpen, setSavedFilterManagerOpen] = useState(false);
+  const [savedFilters, setSavedFilters] = useState<SavedFilterCatalog>(
+    EMPTY_SAVED_FILTER_CATALOG,
+  );
+  const [activeSavedFilter, setActiveSavedFilter] = useState<{
+    id: string;
+    expression: string;
+  }>();
+  const [savedFilterBusy, setSavedFilterBusy] = useState(false);
   const [vaultManagerOpen, setVaultManagerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [rootBusy, setRootBusy] = useState(false);
@@ -320,43 +349,56 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       api.listObsidianVaults(),
       api.getRuntimeRecoveryStatus(),
       api.listMetadataTransactions(),
+      api
+        .listSavedFilters()
+        .then((value) => ({ value, error: undefined }))
+        .catch((error: unknown) => ({ value: undefined, error })),
     ])
-      .then(([config, nextRoots, nextVaults, recovery, transactions]) => {
-        if (!active) return;
-        const preferredVault = nextVaults.find(
-          (vault) =>
-            vault.id === config.ui.activeVaultId &&
-            vault.enabled &&
-            vault.accessStatus === "available",
-        );
-        const fallbackVault = nextVaults.find(
-          (vault) => vault.enabled && vault.accessStatus === "available",
-        );
-        setApplicationConfig(config);
-        setExpression(config.ui.query);
-        setTagFilters(config.ui.tagFilters);
-        setActiveVaultId(preferredVault?.id ?? fallbackVault?.id);
-        setRoots(nextRoots);
-        setVaults(nextVaults);
-        setRecoveryStatus(recovery);
-        setMetadataTransactions(transactions);
-        const recoverableCount = transactions.filter(
-          (transaction) =>
-            transaction.state === "active" || transaction.state === "conflict",
-        ).length;
-        if (recoverableCount > 0) {
-          setNotice({
-            tone: "info",
-            message: `检测到 ${recoverableCount} 个待处理的批量事务，请在“设置与恢复”中选择继续或安全恢复。`,
-          });
-        }
-        setPreferencesReady(true);
-        setBooting(false);
-        for (const root of nextRoots) {
-          if (root.enabled && root.accessStatus === "available")
-            void runScan(root);
-        }
-      })
+      .then(
+        ([config, nextRoots, nextVaults, recovery, transactions, filters]) => {
+          if (!active) return;
+          const preferredVault = nextVaults.find(
+            (vault) =>
+              vault.id === config.ui.activeVaultId &&
+              vault.enabled &&
+              vault.accessStatus === "available",
+          );
+          const fallbackVault = nextVaults.find(
+            (vault) => vault.enabled && vault.accessStatus === "available",
+          );
+          setApplicationConfig(config);
+          setExpression(config.ui.query);
+          setTagFilters(config.ui.tagFilters);
+          setActiveVaultId(preferredVault?.id ?? fallbackVault?.id);
+          setRoots(nextRoots);
+          setVaults(nextVaults);
+          setRecoveryStatus(recovery);
+          setMetadataTransactions(transactions);
+          if (filters.value !== undefined) setSavedFilters(filters.value);
+          const recoverableCount = transactions.filter(
+            (transaction) =>
+              transaction.state === "active" ||
+              transaction.state === "conflict",
+          ).length;
+          if (recoverableCount > 0) {
+            setNotice({
+              tone: "info",
+              message: `检测到 ${recoverableCount} 个待处理的批量事务，请在“设置与恢复”中选择继续或安全恢复。`,
+            });
+          } else if (filters.error !== undefined) {
+            setNotice({
+              tone: "error",
+              message: `保存过滤器读取失败，素材库仍可正常使用：${errorMessage(filters.error)}`,
+            });
+          }
+          setPreferencesReady(true);
+          setBooting(false);
+          for (const root of nextRoots) {
+            if (root.enabled && root.accessStatus === "available")
+              void runScan(root);
+          }
+        },
+      )
       .catch((error: unknown) => {
         if (!active) return;
         setBooting(false);
@@ -501,12 +543,24 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
     let active = true;
     const timer = window.setTimeout(() => {
       setQueryPending(true);
-      void api
-        .queryAssets({ expression: effectiveQuery })
+      const savedExecution =
+        activeSavedFilter !== undefined &&
+        activeSavedFilter.expression === effectiveQuery
+          ? api.executeSavedFilter(activeSavedFilter.id)
+          : undefined;
+      if (
+        activeSavedFilter !== undefined &&
+        activeSavedFilter.expression !== effectiveQuery
+      ) {
+        setActiveSavedFilter(undefined);
+      }
+      void (savedExecution ?? api.queryAssets({ expression: effectiveQuery }))
         .then((result) => {
           if (!active) return;
+          const keys =
+            "orderedKeys" in result ? result.orderedKeys : result.keys;
           setQueryView(
-            settleSuccessfulQuery(result.keys.filter((key) => assets.has(key))),
+            settleSuccessfulQuery(keys.filter((key) => assets.has(key))),
           );
         })
         .catch((error: unknown) => {
@@ -521,7 +575,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [api, assets, effectiveQuery]);
+  }, [activeSavedFilter, api, assets, effectiveQuery]);
 
   const allAssets = useMemo(() => [...assets.values()], [assets]);
   const visibleAssets = useMemo(
@@ -656,12 +710,13 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         if (settingsOpen) setSettingsOpen(false);
         else if (vaultManagerOpen) setVaultManagerOpen(false);
         else if (rootManagerOpen) setRootManagerOpen(false);
+        else if (savedFilterManagerOpen) setSavedFilterManagerOpen(false);
         else if (!editing) setSelected(new Set());
       }
     };
     window.addEventListener("keydown", handleGlobalKey);
     return () => window.removeEventListener("keydown", handleGlobalKey);
-  }, [rootManagerOpen, settingsOpen, vaultManagerOpen]);
+  }, [rootManagerOpen, savedFilterManagerOpen, settingsOpen, vaultManagerOpen]);
 
   const selectAsset = (key: string, intent: AssetSelectionIntent) => {
     setSelected((current) => {
@@ -945,6 +1000,109 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
           message: `素材位置状态刷新失败：${errorMessage(error)}`,
         }),
       );
+  };
+
+  const refreshSavedFilters = async () => {
+    try {
+      setSavedFilters(await api.listSavedFilters());
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `保存过滤器读取失败：${errorMessage(error)}`,
+      });
+      throw error;
+    }
+  };
+
+  const openSavedFilterManager = () => {
+    setSavedFilterManagerOpen(true);
+    void refreshSavedFilters().catch(() => undefined);
+  };
+
+  const runSavedFilterMutation = async (
+    action: () => Promise<unknown>,
+    successMessage: string,
+  ) => {
+    setSavedFilterBusy(true);
+    try {
+      await action();
+      await refreshSavedFilters();
+      setNotice({ tone: "info", message: successMessage });
+    } catch (error) {
+      if (savedFilterErrorKind(error) === "external-change") {
+        await refreshSavedFilters().catch(() => undefined);
+      }
+      setNotice({
+        tone: "error",
+        message: `保存过滤器操作失败：${errorMessage(error)}`,
+      });
+      throw error;
+    } finally {
+      setSavedFilterBusy(false);
+    }
+  };
+
+  const createSavedFilter = async (input: SavedFilterInput) =>
+    runSavedFilterMutation(
+      () => api.createSavedFilter(savedFilters.fileVersion, input),
+      `已保存过滤器“${input.name}”`,
+    );
+
+  const updateSavedFilter = async (
+    filter: SavedFilter,
+    input: SavedFilterInput,
+  ) =>
+    runSavedFilterMutation(
+      () => api.updateSavedFilter(savedFilters.fileVersion, filter.id, input),
+      `已从当前视图更新“${filter.name}”`,
+    );
+
+  const renameSavedFilter = async (filter: SavedFilter, name: string) =>
+    runSavedFilterMutation(
+      () =>
+        api.renameSavedFilter(savedFilters.fileVersion, filter.id, name.trim()),
+      `已将过滤器重命名为“${name.trim()}”`,
+    );
+
+  const deleteSavedFilter = async (filter: SavedFilter) =>
+    runSavedFilterMutation(
+      () => api.deleteSavedFilter(savedFilters.fileVersion, filter.id),
+      `已删除过滤器“${filter.name}”`,
+    ).then(() => {
+      if (activeSavedFilter?.id === filter.id) setActiveSavedFilter(undefined);
+    });
+
+  const activateSavedFilter = async (filter: SavedFilter) => {
+    setSavedFilterBusy(true);
+    try {
+      const execution = await api.executeSavedFilter(filter.id);
+      setTagFilters({});
+      setExpression(execution.expression);
+      setActiveSavedFilter({
+        id: filter.id,
+        expression: execution.expression,
+      });
+      setQueryView(
+        settleSuccessfulQuery(
+          execution.orderedKeys.filter((key) => assets.has(key)),
+        ),
+      );
+      setNotice({
+        tone: execution.missingRootIds.length === 0 ? "info" : "error",
+        message:
+          execution.missingRootIds.length === 0
+            ? `已应用“${filter.name}”，从当前文件匹配 ${execution.matchedAssets} 项`
+            : `已应用可用范围；${execution.missingRootIds.length} 个素材位置当前不可用`,
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: `保存过滤器执行失败：${errorMessage(error)}`,
+      });
+      throw error;
+    } finally {
+      setSavedFilterBusy(false);
+    }
   };
 
   const openVaultManager = () => {
@@ -1270,6 +1428,26 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         </div>
 
         <div className="topbar-actions">
+          <button
+            className="library-button saved-filter-button"
+            onClick={openSavedFilterManager}
+            type="button"
+          >
+            <Icon name="search" size={16} />
+            <span>
+              {activeSavedFilter
+                ? (savedFilters.validFilters
+                    .concat(
+                      savedFilters.unavailableFilters.map(
+                        (entry) => entry.filter,
+                      ),
+                    )
+                    .find((filter) => filter.id === activeSavedFilter.id)
+                    ?.name ?? "保存过滤器")
+                : "保存过滤器"}
+            </span>
+            <Icon name="chevron" size={13} />
+          </button>
           <button
             className="library-button vault-button"
             onClick={openVaultManager}
@@ -1601,6 +1779,21 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         roots={roots}
         scanningRootIds={new Set(activeScans.map(([rootId]) => rootId))}
       />
+      <SavedFilterManager
+        activeFilterId={activeSavedFilter?.id}
+        busy={savedFilterBusy}
+        catalog={savedFilters}
+        currentQuery={effectiveQuery}
+        onActivate={activateSavedFilter}
+        onClose={() => setSavedFilterManagerOpen(false)}
+        onCreate={createSavedFilter}
+        onDelete={deleteSavedFilter}
+        onRefresh={refreshSavedFilters}
+        onRename={renameSavedFilter}
+        onUpdate={updateSavedFilter}
+        open={savedFilterManagerOpen}
+        roots={roots}
+      />
       <VaultManager
         activeVaultId={activeVaultId}
         busy={vaultBusy}
@@ -1780,4 +1973,13 @@ function errorMessage(error: unknown): string {
     return String((error as { message: unknown }).message);
   }
   return "未知错误";
+}
+
+function savedFilterErrorKind(
+  error: unknown,
+): SavedFilterCommandError["kind"] | undefined {
+  if (typeof error !== "object" || error === null || !("kind" in error)) {
+    return undefined;
+  }
+  return (error as { kind?: SavedFilterCommandError["kind"] }).kind;
 }

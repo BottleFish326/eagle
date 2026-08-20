@@ -39,4 +39,32 @@ describe("demo dataset selection", () => {
     expect(trace.steps.some((step) => step.code === "id-matched")).toBe(true);
     expect(JSON.stringify(trace)).not.toContain("/Users/demo");
   });
+
+  it("models saved filters as versioned definitions with ephemeral results", async () => {
+    const api = createDemoDesktopApi();
+    const initial = await api.listSavedFilters();
+    const created = await api.createSavedFilter(initial.fileVersion, {
+      name: "图片",
+      query: "type:image",
+      scope: { kind: "all-enabled-roots" },
+      sort: { field: "file-name", direction: "ascending" },
+    });
+    const filter = created.filter;
+    expect(filter).not.toBeNull();
+    if (filter === null) return;
+
+    const execution = await api.executeSavedFilter(filter.id);
+    const listed = await api.listSavedFilters();
+
+    expect(execution.matchedAssets).toBeGreaterThan(0);
+    expect(execution.orderedKeys).toEqual([...execution.orderedKeys].sort());
+    expect(JSON.stringify(listed)).not.toMatch(
+      /orderedKeys|assetKeys|records/u,
+    );
+    await expect(
+      api.deleteSavedFilter(initial.fileVersion, filter.id),
+    ).rejects.toMatchObject({ kind: "external-change" });
+    await api.deleteSavedFilter(listed.fileVersion, filter.id);
+    expect((await api.listSavedFilters()).validFilters).toEqual([]);
+  });
 });
