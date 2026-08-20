@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "gitCommit": "2bf0de2bb6efa905f0062367d7191725f9253ce8",
+  "workflow": {
+    "runId": "32412621089",
+    "runAttempt": "1",
+    "workflowRef": "BottleFish326/eagle/.github/workflows/ci.yml@refs/heads/main",
+    "repository": "BottleFish326/eagle",
+    "runUrl": "https://github.com/BottleFish326/eagle/actions/runs/32412621089"
+  },
+  "manifestSha256": "20d0f1f61a5bfb4f1306a634444f41e3aeeaef8c5410d3d379c60802f109dcbb",
+  "fixtureCount": 43,
+  "adversarialFixtureCount": 31,
+  "profiles": [
+    {
+      "profile": "core-only",
+      "platforms": [
+        {
+          "platform": "Linux",
+          "architecture": null,
+          "formatEvidenceSha256": "3a1c5539e5affb0660b686c8440febf81b197c4f16125d7ab817fc2b89bf72a9",
+          "resourceEvidenceSha256": "8e8a45104926168a137f47075d59b2f9f07c216adcee8413693258d36c140f48",
+          "maxRssKiB": 8036,
+          "rssSampleCount": 3
+        },
+        {
+          "platform": "macOS",
+          "architecture": null,
+          "formatEvidenceSha256": "5d8d057855bc4c7e32c754d32d0057030ebe799193b3a7ea1a5b8604423be2b6",
+          "resourceEvidenceSha256": "fddef3daa4ccf9b2f13a6985f831fe163be4ff5f95a55102e46eb092b575a3ca",
+          "maxRssKiB": 8880,
+          "rssSampleCount": 11
+        },
+        {
+          "platform": "Windows",
+          "architecture": null,
+          "formatEvidenceSha256": "7690bf806e53a2686781b17543092ee56145c4a5341994327d330df1f3f88ff9",
+          "resourceEvidenceSha256": "70af919a062ca75f33aa9d50c2333e30e504d2612ee59786457727f4704327e7",
+          "maxRssKiB": 6868,
+          "rssSampleCount": 15
+        }
+      ]
+    },
+    {
+      "profile": "bundled-codecs",
+      "platforms": [
+        {
+          "platform": "Linux",
+          "architecture": "X64",
+          "formatEvidenceSha256": "02d897382af66d0e0d25dc025b003d3b301ab8b9780c4cb16eb51c5f272437c8",
+          "resourceEvidenceSha256": "f161b2873a83abe7fcc2c9fb3a34d9ab4e160fa7e8c66440559b79151f10e3d1",
+          "maxRssKiB": 25904,
+          "rssSampleCount": 87
+        },
+        {
+          "platform": "macOS",
+          "architecture": "ARM64",
+          "formatEvidenceSha256": "989d8fa9523ce2d0a11e89ae1b305122455fe85851180960a085ff37590bf633",
+          "resourceEvidenceSha256": "4fd1a1ce55ee7095c9a9f79ab3d28cc6f0bfb559c43be9b09068ef142dc35605",
+          "maxRssKiB": 21360,
+          "rssSampleCount": 196
+        },
+        {
+          "platform": "Windows",
+          "architecture": "X64",
+          "formatEvidenceSha256": "1d138c4bd2f25de8085f7b3bb1cf39ffeddad24acb0c71dc510fcc5828553649",
+          "resourceEvidenceSha256": "16891005ccd1ffe46fef4dc0a245e76c5de1f1f815d1c1ddc4b92595c37f3611",
+          "maxRssKiB": 22436,
+          "rssSampleCount": 53
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "artifactName": "p3-a01-bundled-codecs-Linux-X64-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a01-bundled-codecs.json",
+      "sha256": "02d897382af66d0e0d25dc025b003d3b301ab8b9780c4cb16eb51c5f272437c8"
+    },
+    {
+      "artifactName": "p3-a01-bundled-codecs-macOS-ARM64-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a01-bundled-codecs.json",
+      "sha256": "989d8fa9523ce2d0a11e89ae1b305122455fe85851180960a085ff37590bf633"
+    },
+    {
+      "artifactName": "p3-a01-bundled-codecs-Windows-X64-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a01-bundled-codecs.json",
+      "sha256": "1d138c4bd2f25de8085f7b3bb1cf39ffeddad24acb0c71dc510fcc5828553649"
+    },
+    {
+      "artifactName": "p3-a01-core-only-Linux-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a01-core-only.json",
+      "sha256": "3a1c5539e5affb0660b686c8440febf81b197c4f16125d7ab817fc2b89bf72a9"
+    },
+    {
+      "artifactName": "p3-a01-core-only-macOS-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a01-core-only.json",
+      "sha256": "5d8d057855bc4c7e32c754d32d0057030ebe799193b3a7ea1a5b8604423be2b6"
+    },
+    {
+      "artifactName": "p3-a01-core-only-Windows-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a01-core-only.json",
+      "sha256": "7690bf806e53a2686781b17543092ee56145c4a5341994327d330df1f3f88ff9"
+    },
+    {
+      "artifactName": "p3-a02-bundled-codecs-Linux-X64-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a02-bundled-codecs-resources.json",
+      "sha256": "f161b2873a83abe7fcc2c9fb3a34d9ab4e160fa7e8c66440559b79151f10e3d1"
+    },
+    {
+      "artifactName": "p3-a02-bundled-codecs-macOS-ARM64-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a02-bundled-codecs-resources.json",
+      "sha256": "4fd1a1ce55ee7095c9a9f79ab3d28cc6f0bfb559c43be9b09068ef142dc35605"
+    },
+    {
+      "artifactName": "p3-a02-bundled-codecs-Windows-X64-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a02-bundled-codecs-resources.json",
+      "sha256": "16891005ccd1ffe46fef4dc0a245e76c5de1f1f815d1c1ddc4b92595c37f3611"
+    },
+    {
+      "artifactName": "p3-a02-core-only-Linux-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a02-core-only-resources.json",
+      "sha256": "8e8a45104926168a137f47075d59b2f9f07c216adcee8413693258d36c140f48"
+    },
+    {
+      "artifactName": "p3-a02-core-only-macOS-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a02-core-only-resources.json",
+      "sha256": "fddef3daa4ccf9b2f13a6985f831fe163be4ff5f95a55102e46eb092b575a3ca"
+    },
+    {
+      "artifactName": "p3-a02-core-only-Windows-2bf0de2bb6efa905f0062367d7191725f9253ce8-attempt-1",
+      "fileName": "p3-a02-core-only-resources.json",
+      "sha256": "70af919a062ca75f33aa9d50c2333e30e504d2612ee59786457727f4704327e7"
+    }
+  ],
+  "failures": []
+}
