@@ -73,6 +73,14 @@ test("routes complete hosted inputs through external verification", () => {
   const report = buildP2ExitStatus(input);
   assert.equal(report.stage, "external-gates-pending");
   assert.equal(report.nextAction.command, "npm run verify:p2-external");
+
+  const dirty = structuredClone(input);
+  dirty.git.cleanTracked = false;
+  dirty.git.cleanAll = false;
+  const dirtyReport = buildP2ExitStatus(dirty);
+  assert.equal(dirtyReport.stage, "candidate-dirty");
+  assert.equal(dirtyReport.nextAction.kind, "commit-external-inputs");
+  assert.equal(dirtyReport.nextAction.command, "git status --short");
 });
 
 test("routes accepted external evidence through local faults and a clean final candidate", () => {

@@ -156,6 +156,14 @@ function decide(inputs) {
       "npm run verify:p2-external",
       "Rebuild external evidence only from the complete original inputs.",
     );
+  if (externalGates.state === "ready" && git.cleanTracked !== true)
+    return decision(
+      "candidate-dirty",
+      [],
+      "commit-external-inputs",
+      "git status --short",
+      "Inspect and commit the accepted P2-A11/P2-A12 inputs before generating their immutable external receipt.",
+    );
   if (externalGates.state === "ready")
     return decision(
       "external-gates-pending",
