@@ -8,6 +8,7 @@ version.workspace = true
 [dependencies]
 asset-core = { path = "../asset-core" }
 asset-media = { path = "../media" }
+asset-pdf = { path = "../pdf" }
 asset-svg = { path = "../svg" }
 metadata = { path = "../metadata" }
 globset.workspace = true

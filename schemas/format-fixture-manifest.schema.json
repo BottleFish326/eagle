@@ -110,7 +110,8 @@
             "hostile-reference",
             "script-or-action",
             "unknown-codec",
-            "encrypted"
+            "encrypted",
+            "compressed-structure"
           ]
         },
         "source": {
@@ -356,12 +357,7 @@
             "required": ["status"]
           },
           "then": {
-            "required": [
-              "referencePath",
-              "referenceSha256",
-              "width",
-              "height"
-            ],
+            "required": ["referencePath", "referenceSha256", "width", "height"],
             "properties": {
               "referencePath": true,
               "referenceSha256": true,

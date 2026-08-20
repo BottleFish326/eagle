@@ -11,6 +11,7 @@ use asset_core::{
 use asset_media::{
     AudioContainer, MediaInspectError, VideoContainer, inspect_audio_file, inspect_video_file,
 };
+use asset_pdf::{PdfInspectError, inspect_pdf_file};
 use asset_svg::{SvgError, inspect_svg_file};
 use exif::{In, Tag, Value};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
@@ -563,6 +564,41 @@ fn parse_asset(
             ),
             Err(MediaInspectError::UnsupportedFeature) => {}
         }
+    } else if asset.mime == "application/pdf" {
+        let remaining = options.file_parse_timeout.saturating_sub(started.elapsed());
+        match inspect_pdf_file(&canonical, remaining) {
+            Ok(inspection) => {
+                asset.dimensions = Some(AssetDimensions {
+                    width: inspection.width,
+                    height: inspection.height,
+                });
+                asset.media = Some(MediaProperties {
+                    page_count: Some(inspection.page_count),
+                    ..MediaProperties::default()
+                });
+                if inspection.has_unsafe_content {
+                    asset.issues.push(AssetIssue::UnsafeEmbeddedContent(
+                        "PDF actions, scripts, attachments, and external references are not executed"
+                            .into(),
+                    ));
+                }
+            }
+            Err(PdfInspectError::Unreadable) => asset.issues.push(AssetIssue::UnreadableFile(
+                "PDF enrichment could not reread the source".into(),
+            )),
+            Err(PdfInspectError::SourceChanged) => {
+                asset.issues.push(AssetIssue::InvalidNativeMetadata(
+                    "PDF source changed during structure inspection".into(),
+                ));
+            }
+            Err(PdfInspectError::InvalidContent) => asset.issues.push(
+                AssetIssue::InvalidNativeMetadata("PDF structure is malformed".into()),
+            ),
+            Err(PdfInspectError::ResourceLimited) => asset.issues.push(
+                AssetIssue::ResourceLimited("PDF structure inspection limit reached".into()),
+            ),
+            Err(PdfInspectError::UnsupportedFeature) => {}
+        }
     }
 
     if parse_deadline_exceeded(&mut asset, started, options.file_parse_timeout) {
@@ -930,7 +966,7 @@ mod tests {
             ),
             (
                 "document.pdf",
-                b"%PDF-1.7",
+                include_bytes!("../../../fixtures/formats/sources/pdf/encrypted.pdf"),
                 "application/pdf",
                 AssetKind::Pdf,
             ),
@@ -1196,6 +1232,143 @@ mod tests {
         for (path, expected) in before {
             assert_eq!(
                 fs::read(&path).expect("reread audio fixture"),
+                expected,
+                "{} changed",
+                path.display()
+            );
+        }
+    }
+
+    #[test]
+    fn enriches_classic_pdf_metadata_and_flags_active_content_without_executing_it() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/formats/sources/pdf");
+        let report = scan_root(&root, &ScanOptions::default()).expect("scan PDF fixtures");
+
+        let minimal = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "minimal.pdf")
+            .expect("minimal PDF fixture");
+        assert_eq!(minimal.mime, "application/pdf");
+        assert_eq!(minimal.kind, AssetKind::Pdf);
+        assert_eq!(
+            minimal.dimensions,
+            Some(AssetDimensions {
+                width: 612,
+                height: 792
+            })
+        );
+        assert_eq!(
+            minimal.media.as_ref().and_then(|media| media.page_count),
+            Some(2)
+        );
+        assert!(minimal.issues.is_empty(), "{:?}", minimal.issues);
+
+        for name in ["active-javascript.pdf", "external-uri.pdf"] {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .unwrap_or_else(|| panic!("missing active PDF fixture {name}"));
+            assert_eq!(
+                asset.media.as_ref().and_then(|media| media.page_count),
+                Some(2),
+                "{name}"
+            );
+            assert!(matches!(
+                asset.issues.as_slice(),
+                [AssetIssue::UnsafeEmbeddedContent(_)]
+            ));
+        }
+    }
+
+    #[test]
+    fn isolates_adversarial_pdf_fixtures_without_mutating_source_bytes() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/formats/sources/pdf");
+        let before = fs::read_dir(&root)
+            .expect("read PDF fixture directory")
+            .map(|entry| {
+                let path = entry.expect("PDF fixture entry").path();
+                let bytes = fs::read(&path).expect("read PDF fixture");
+                (path, bytes)
+            })
+            .collect::<Vec<_>>();
+        let report = scan_root(&root, &ScanOptions::default()).expect("scan PDF fixtures");
+        assert_eq!(report.assets.len(), before.len());
+
+        let truncated = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "truncated.pdf")
+            .expect("truncated PDF fixture");
+        assert!(matches!(
+            truncated.issues.as_slice(),
+            [AssetIssue::InvalidNativeMetadata(_)]
+        ));
+        for name in ["oversized-page-count.pdf", "oversized-page-dimensions.pdf"] {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .unwrap_or_else(|| panic!("missing resource-limited PDF fixture {name}"));
+            assert!(
+                matches!(asset.issues.as_slice(), [AssetIssue::ResourceLimited(_)]),
+                "{name}: {:?}",
+                asset.issues
+            );
+        }
+        for name in ["encrypted.pdf", "object-stream.pdf"] {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .unwrap_or_else(|| panic!("missing isolated-worker PDF fixture {name}"));
+            assert!(asset.dimensions.is_none(), "{name}");
+            assert!(asset.media.is_none(), "{name}");
+            assert!(asset.issues.is_empty(), "{name}: {:?}", asset.issues);
+        }
+
+        let disguised_png = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "png-disguised-as-pdf.pdf")
+            .expect("disguised PNG fixture");
+        assert_eq!(disguised_png.mime, "image/png");
+        assert_eq!(
+            disguised_png.dimensions,
+            Some(AssetDimensions {
+                width: 16,
+                height: 16
+            })
+        );
+        assert!(matches!(
+            disguised_png.issues.as_slice(),
+            [AssetIssue::MimeMismatch(_)]
+        ));
+
+        let disguised_pdf = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "pdf-disguised-as-png.png")
+            .expect("disguised PDF fixture");
+        assert_eq!(disguised_pdf.mime, "application/pdf");
+        assert_eq!(
+            disguised_pdf
+                .media
+                .as_ref()
+                .and_then(|media| media.page_count),
+            Some(2)
+        );
+        assert!(matches!(
+            disguised_pdf.issues.as_slice(),
+            [AssetIssue::MimeMismatch(_)]
+        ));
+
+        for (path, expected) in before {
+            assert_eq!(
+                fs::read(&path).expect("reread PDF fixture"),
                 expected,
                 "{} changed",
                 path.display()

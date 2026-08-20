@@ -10,6 +10,7 @@ members = [
   "crates/link-resolver",
   "crates/media",
   "crates/metadata",
+  "crates/pdf",
   "crates/preview",
   "crates/resource-control",
   "crates/svg",
@@ -36,6 +37,7 @@ clap = { version = "4", features = ["derive"] }
 globset = { version = "=0.4.19", default-features = false }
 imagesize = { version = "0.15.0", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 image = { version = "=0.25.9", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
+lopdf = { version = "=0.42.0", default-features = false }
 kamadak-exif = "0.6.1"
 notify = "8"
 resvg = { version = "=0.48.1", default-features = false }

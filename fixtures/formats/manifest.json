@@ -1138,11 +1138,19 @@
                 "codec": "mp3"
               }
             },
-            "preview": { "status": "unsupported-feature", "reasonCode": "no-embedded-cover" }
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "no-embedded-cover"
+            }
           }
         }
       ],
-      "budgets": { "scanMaxMs": 100, "previewMaxMs": 250, "maxRssDeltaBytes": 16777216, "maxPreviewBytes": 1048576 }
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     },
     {
       "id": "audio-mp3-cover",
@@ -1180,7 +1188,12 @@
           }
         }
       ],
-      "budgets": { "scanMaxMs": 100, "previewMaxMs": 250, "maxRssDeltaBytes": 16777216, "maxPreviewBytes": 1048576 }
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     },
     {
       "id": "audio-wav-normal",
@@ -1209,11 +1222,19 @@
                 "codec": "pcm"
               }
             },
-            "preview": { "status": "unsupported-feature", "reasonCode": "audio-card-only" }
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "audio-card-only"
+            }
           }
         }
       ],
-      "budgets": { "scanMaxMs": 100, "previewMaxMs": 250, "maxRssDeltaBytes": 16777216, "maxPreviewBytes": 1048576 }
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     },
     {
       "id": "audio-flac-normal",
@@ -1242,11 +1263,19 @@
                 "codec": "flac"
               }
             },
-            "preview": { "status": "unsupported-feature", "reasonCode": "no-embedded-cover" }
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "no-embedded-cover"
+            }
           }
         }
       ],
-      "budgets": { "scanMaxMs": 100, "previewMaxMs": 250, "maxRssDeltaBytes": 16777216, "maxPreviewBytes": 1048576 }
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     },
     {
       "id": "audio-flac-cover",
@@ -1285,7 +1314,12 @@
           }
         }
       ],
-      "budgets": { "scanMaxMs": 100, "previewMaxMs": 250, "maxRssDeltaBytes": 16777216, "maxPreviewBytes": 1048576 }
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     },
     {
       "id": "audio-mp3-truncated",
@@ -1304,12 +1338,24 @@
             "mime": "audio/mpeg",
             "kind": "audio",
             "issueCodes": ["invalid-native-metadata"],
-            "metadata": { "status": "invalid-content", "reasonCode": "invalid-audio-metadata", "properties": {} },
-            "preview": { "status": "invalid-content", "reasonCode": "invalid-audio-metadata" }
+            "metadata": {
+              "status": "invalid-content",
+              "reasonCode": "invalid-audio-metadata",
+              "properties": {}
+            },
+            "preview": {
+              "status": "invalid-content",
+              "reasonCode": "invalid-audio-metadata"
+            }
           }
         }
       ],
-      "budgets": { "scanMaxMs": 100, "previewMaxMs": 250, "maxRssDeltaBytes": 16777216, "maxPreviewBytes": 1048576 }
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     },
     {
       "id": "audio-png-extension-mismatch",
@@ -1328,7 +1374,10 @@
             "mime": "image/png",
             "kind": "image",
             "issueCodes": ["mime-mismatch"],
-            "metadata": { "status": "available", "properties": { "width": 16, "height": 16 } },
+            "metadata": {
+              "status": "available",
+              "properties": { "width": 16, "height": 16 }
+            },
             "preview": {
               "status": "available",
               "referencePath": "references/svg/minimal.png",
@@ -1339,7 +1388,12 @@
           }
         }
       ],
-      "budgets": { "scanMaxMs": 100, "previewMaxMs": 250, "maxRssDeltaBytes": 16777216, "maxPreviewBytes": 1048576 }
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     },
     {
       "id": "audio-mp3-extension-mismatch",
@@ -1360,13 +1414,26 @@
             "issueCodes": ["mime-mismatch"],
             "metadata": {
               "status": "available",
-              "properties": { "durationMs": 521, "sampleRateHz": 44100, "channelCount": 2, "codec": "mp3" }
+              "properties": {
+                "durationMs": 521,
+                "sampleRateHz": 44100,
+                "channelCount": 2,
+                "codec": "mp3"
+              }
             },
-            "preview": { "status": "unsupported-feature", "reasonCode": "no-embedded-cover" }
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "no-embedded-cover"
+            }
           }
         }
       ],
-      "budgets": { "scanMaxMs": 100, "previewMaxMs": 250, "maxRssDeltaBytes": 16777216, "maxPreviewBytes": 1048576 }
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     },
     {
       "id": "audio-wav-unknown-codec",
@@ -1385,12 +1452,24 @@
             "mime": "audio/wav",
             "kind": "audio",
             "issueCodes": [],
-            "metadata": { "status": "unsupported-feature", "reasonCode": "unknown-audio-codec", "properties": {} },
-            "preview": { "status": "unsupported-feature", "reasonCode": "audio-card-only" }
+            "metadata": {
+              "status": "unsupported-feature",
+              "reasonCode": "unknown-audio-codec",
+              "properties": {}
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "audio-card-only"
+            }
           }
         }
       ],
-      "budgets": { "scanMaxMs": 100, "previewMaxMs": 250, "maxRssDeltaBytes": 16777216, "maxPreviewBytes": 1048576 }
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     },
     {
       "id": "audio-mp3-oversized-cover",
@@ -1409,12 +1488,382 @@
             "mime": "audio/mpeg",
             "kind": "audio",
             "issueCodes": ["resource-limited"],
-            "metadata": { "status": "resource-limited", "reasonCode": "audio-metadata-limit", "properties": {} },
-            "preview": { "status": "resource-limited", "reasonCode": "audio-cover-limit" }
+            "metadata": {
+              "status": "resource-limited",
+              "reasonCode": "audio-metadata-limit",
+              "properties": {}
+            },
+            "preview": {
+              "status": "resource-limited",
+              "reasonCode": "audio-cover-limit"
+            }
           }
         }
       ],
-      "budgets": { "scanMaxMs": 100, "previewMaxMs": 250, "maxRssDeltaBytes": 16777216, "maxPreviewBytes": 1048576 }
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "pdf-minimal-core",
+      "path": "sources/pdf/minimal.pdf",
+      "format": "pdf",
+      "case": "normal",
+      "source": { "origin": "generated-in-repository", "license": "MIT" },
+      "sha256": "c196c38ef7375019a3f80649c53a1733356b009b6c1a4445f064d53f0b688210",
+      "size": 511,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "application/pdf",
+            "kind": "pdf",
+            "issueCodes": [],
+            "metadata": {
+              "status": "available",
+              "properties": { "pageCount": 2, "width": 612, "height": 792 }
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "pdfium-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "pdf-javascript-blocked",
+      "path": "sources/pdf/active-javascript.pdf",
+      "format": "pdf",
+      "case": "script-or-action",
+      "source": { "origin": "generated-in-repository", "license": "MIT" },
+      "sha256": "aac6263b375ce9feea5c5eb6f3874d554e10c5b3f0733be22ebf95037e7acdb1",
+      "size": 605,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "application/pdf",
+            "kind": "pdf",
+            "issueCodes": ["unsafe-embedded-content"],
+            "metadata": {
+              "status": "available",
+              "properties": { "pageCount": 2, "width": 612, "height": 792 }
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "pdfium-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "pdf-external-reference-blocked",
+      "path": "sources/pdf/external-uri.pdf",
+      "format": "pdf",
+      "case": "hostile-reference",
+      "source": { "origin": "generated-in-repository", "license": "MIT" },
+      "sha256": "d29f65b3bcb5c863818ad45f874513a2c553d742116d66b16b2f8f3d5ff9c4db",
+      "size": 609,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "application/pdf",
+            "kind": "pdf",
+            "issueCodes": ["unsafe-embedded-content"],
+            "metadata": {
+              "status": "available",
+              "properties": { "pageCount": 2, "width": 612, "height": 792 }
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "pdfium-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "pdf-truncated",
+      "path": "sources/pdf/truncated.pdf",
+      "format": "pdf",
+      "case": "truncated",
+      "source": { "origin": "generated-in-repository", "license": "MIT" },
+      "sha256": "c01ffd79ddf50eeafdaecd04f580a6fc5eb58535c88fa47a425848f99d74d514",
+      "size": 327,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "application/pdf",
+            "kind": "pdf",
+            "issueCodes": ["invalid-native-metadata"],
+            "metadata": {
+              "status": "invalid-content",
+              "reasonCode": "invalid-pdf-structure",
+              "properties": {}
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "pdfium-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "pdf-png-extension-mismatch",
+      "path": "sources/pdf/png-disguised-as-pdf.pdf",
+      "format": "pdf",
+      "case": "extension-mismatch",
+      "source": { "origin": "generated-in-repository", "license": "MIT" },
+      "sha256": "ead9b2404087d65c292c155f770e0f953a6b9c5590432d33d729bebd6d8f8de0",
+      "size": 95,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "image/png",
+            "kind": "image",
+            "issueCodes": ["mime-mismatch"],
+            "metadata": {
+              "status": "available",
+              "properties": { "width": 16, "height": 16 }
+            },
+            "preview": {
+              "status": "available",
+              "referencePath": "references/svg/minimal.png",
+              "referenceSha256": "ead9b2404087d65c292c155f770e0f953a6b9c5590432d33d729bebd6d8f8de0",
+              "width": 16,
+              "height": 16
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "pdf-content-extension-mismatch",
+      "path": "sources/pdf/pdf-disguised-as-png.png",
+      "format": "png",
+      "case": "extension-mismatch",
+      "source": { "origin": "generated-in-repository", "license": "MIT" },
+      "sha256": "c196c38ef7375019a3f80649c53a1733356b009b6c1a4445f064d53f0b688210",
+      "size": 511,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "application/pdf",
+            "kind": "pdf",
+            "issueCodes": ["mime-mismatch"],
+            "metadata": {
+              "status": "available",
+              "properties": { "pageCount": 2, "width": 612, "height": 792 }
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "pdfium-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "pdf-encrypted-isolated",
+      "path": "sources/pdf/encrypted.pdf",
+      "format": "pdf",
+      "case": "encrypted",
+      "source": { "origin": "generated-in-repository", "license": "MIT" },
+      "sha256": "6e4b86956a1c39bc52afa4d67d837ad287a9b477e9af5e36c4cf91cf78d1c39c",
+      "size": 637,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "application/pdf",
+            "kind": "pdf",
+            "issueCodes": [],
+            "metadata": {
+              "status": "unsupported-feature",
+              "reasonCode": "encrypted-pdf-isolated-worker-required",
+              "properties": {}
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "pdfium-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "pdf-object-stream-isolated",
+      "path": "sources/pdf/object-stream.pdf",
+      "format": "pdf",
+      "case": "compressed-structure",
+      "source": { "origin": "generated-in-repository", "license": "MIT" },
+      "sha256": "f515a085b89a39eff03334eaad867f8a0f756a7f6ce341b9dee2b5a6729a7fa9",
+      "size": 608,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "application/pdf",
+            "kind": "pdf",
+            "issueCodes": [],
+            "metadata": {
+              "status": "unsupported-feature",
+              "reasonCode": "compressed-pdf-isolated-worker-required",
+              "properties": {}
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "pdfium-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "pdf-oversized-page-count",
+      "path": "sources/pdf/oversized-page-count.pdf",
+      "format": "pdf",
+      "case": "oversized-declaration",
+      "source": { "origin": "generated-in-repository", "license": "MIT" },
+      "sha256": "d0d9349df31cf4b948e0a055359e118205af603c4c396b1ad0d825889780f85b",
+      "size": 516,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "application/pdf",
+            "kind": "pdf",
+            "issueCodes": ["resource-limited"],
+            "metadata": {
+              "status": "resource-limited",
+              "reasonCode": "pdf-page-count-limit",
+              "properties": {}
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "pdfium-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "pdf-oversized-page-dimensions",
+      "path": "sources/pdf/oversized-page-dimensions.pdf",
+      "format": "pdf",
+      "case": "oversized-declaration",
+      "source": { "origin": "generated-in-repository", "license": "MIT" },
+      "sha256": "3016678e3fd5ee5f47c3207965236d3c361dd2efc082d8a18bee70ae4697c346",
+      "size": 513,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "application/pdf",
+            "kind": "pdf",
+            "issueCodes": ["resource-limited"],
+            "metadata": {
+              "status": "resource-limited",
+              "reasonCode": "pdf-page-dimension-limit",
+              "properties": {}
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "pdfium-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     }
   ]
 }
