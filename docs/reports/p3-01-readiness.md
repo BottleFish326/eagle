@@ -1,6 +1,6 @@
 # P3-01 扩展格式支持实施准备报告
 
-- 状态：Implementation in progress；P3-01A/P3-01B Completed locally，P3-01C Completed
+- 状态：Implementation in progress；P3-01A/B Completed locally，P3-01C Completed，P3-01D container metadata Completed locally
 - 日期：2026-08-19
 - 对应：P3-01、P3-A01、P3-A02
 - 决策：[ADR-026](../../specs/adr/026-capability-based-extended-format-pipeline.md)
@@ -10,12 +10,12 @@
 
 | 层 | 当前能力 | P3-01 缺口 |
 |---|---|---|
-| 素材模型 | 已有 image/video/audio/pdf/other 类型；只有图片宽高和 EXIF 结构 | 缺少可选媒体时长、页数、采样率、声道、codec、颜色空间 |
-| 扫描器 | 15 格式静态注册；64 KiB 内容签名优先、扩展候选；注册格式均保留记录和 Sidecar；SVG 有界提取宽高；AVIF/HEIC 严格限制在首个 `ftyp` box 的 major/compatible brands，固定 worker 属性写入可重建记录 | 媒体/PDF 属性仍待接入 |
+| 素材模型 | 已有 image/video/audio/pdf/other 类型与可重建 `media`；视频时长、轨道数和 codec 已接线 | 音频、PDF 的专用字段仍待提供器接入 |
+| 扫描器 | 15 格式静态注册；64 KiB 内容签名优先；SVG、AVIF/HEIC 与 MP4/MOV/WebM 属性均使用有界提供器并只写派生记录 | 音频/PDF 属性仍待接入 |
 | 缩略图 | PNG/JPEG/GIF/WebP 使用 `builtin-raster`；SVG 使用 `safe-static-svg`；固定 libheif 1.23.1 backend 已从三平台成品真实输出受限 PNG；worker 缺失仍稳定降级 | 后续视频、音频与 PDF provider 尚未关闭 |
 | 缓存 | provider ID/version 已进入每项 key 与 Schema 2 descriptor；layout 3 自动失效旧项 | 后续每个新增 provider 必须登记当前版本并增加失效测试 |
-| 查询/UI | `scan_root → AssetCatalog → type:` 四类测试已贯通；codec/provider 缺失显示中性类型卡片，文件故障显示错误卡片 | P3-01D 至 F 仍需逐格式扩展属性和真实预览 |
-| 夹具 | 已有正常、脚本、外部引用、截断 SVG；AVIF/HEIC 正常样本、两张 64px bundled 参考 PNG 及 7 个 AVIF 损坏/伪装/超限派生样本；清单语义验证器约束完整性 | 仍需补齐 SVG 超大正式资源证据、参考 PNG 三平台一致性及后续格式夹具 |
+| 查询/UI | `scan_root → AssetCatalog → type:` 四类测试已贯通；codec/provider 缺失显示中性类型卡片，文件故障显示错误卡片 | 视频帧、音频与 PDF 真实预览仍待接入 |
+| 夹具 | SVG、AVIF/HEIC 和 9 个正常/对抗视频容器夹具均具真实 SHA-256 与三平台期望 | 仍需补齐 SVG 超大正式资源证据、视频帧参考及音频/PDF 夹具 |
 
 核心结论：P3-01 第一片必须先取消“只有可解码图片才是素材”的假设，而不是先给 UI 增加扩展名图标。
 
@@ -33,7 +33,8 @@
 ## 3. 门禁状态
 
 本报告不表示 P3-01 已完成。阶段 2 最终退出收据已接受，P3-01A/P3-01B 本地门禁和
-P3-01C 托管门禁已经关闭；P3-01D 至 F、全格式期望矩阵和完整恶意夹具资源证据尚未完成。
+P3-01C 托管门禁和 P3-01D 容器属性本地门禁已经关闭；可选视频帧 worker、P3-01E/F、
+全格式期望矩阵和完整恶意夹具资源证据尚未完成。
 
 阶段门禁已结束，但设计文档、交叉编译或 codec 库能力说明仍不得计作 P3-A01/P3-A02 通过；必须由后续代码、夹具和机器证据验收。
 
@@ -81,5 +82,14 @@ P3-01B 已按独立验收报告判为 **Completed locally**：精确锁定 `resv
 正常 SVG 的宽高写入可重建 `dimensions`，静态输出由 `safe-static-svg` provider 生成透明 PNG；provider 版本进入既有缓存身份。仓库真实清单现含正常、脚本、外部引用和截断四个 SVG，以及与 provider 字节完全一致的 16 × 16 PNG 参考。
 
 P3-01C 的 core-only、worker 隔离、三平台固定 backend 与 DEB/`.app`/NSIS 成品重放已
-全部通过，详见 `p3-01c-acceptance.md`；下一动作固定为 P3-01D 视频。本报告仍不判定
-P3-A01、P3-A02 或 P3-01 通过。
+全部通过，详见 `p3-01c-acceptance.md`。
+
+## 7. P3-01D 容器属性实施结果
+
+MP4/MOV/WebM 已使用只启用 `isomp4`/`mkv` demuxer 的 Symphonia 0.6.1 提取时长、
+宽高、音视频轨道数和已知 codec。ISO BMFF/EBML 预检、32 MiB I/O、4,096 元素/seek、
+256 轨道、365 天时长、65,535 单边和扫描 deadline 均已接线；9 个确定性正常/截断/
+伪装/未知 codec/超限夹具进入清单。详情见 `p3-01d-acceptance.md`。
+
+视频帧 worker 仍作为独立可选切片等待打包/许可决策；本报告不判定 P3-A01、P3-A02
+或 P3-01 通过。

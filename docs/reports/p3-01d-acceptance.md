@@ -56,7 +56,8 @@ npm run ci
 - `asset-filesystem`：54 项测试通过，其中两项视频扫描测试同时证明内容优先识别、故障
   隔离、派生属性和源文件逐字节不变；
 - Node 清单/生成器：7 项定向测试通过，真实摘要、尺寸、平台覆盖和确定性生成均接受；
-- 干净提交 `334cecd` 上完整 `npm run ci` 通过：工具测试 93 项、Rust workspace
+- 隔离实现提交 `334cecd`（合入 main 为 `0d5627d`）上完整 `npm run ci` 通过：工具测试
+  93 项、Rust workspace
   全部测试、桌面 UI 52 项、Obsidian bridge 8 项、S 数据集、严格 Clippy/TypeScript、
   Tauri release 和 bridge production build 均接受。
 
