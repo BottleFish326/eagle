@@ -1,8 +1,8 @@
 # P3-01C AVIF/HEIC 就绪报告
 
-- 状态：In progress；core-only boundary accepted locally
+- 状态：In progress；core-only boundary accepted locally，Linux libheif backend verified
 - 日期：2026-08-20
-- 范围：P3-01C 的格式识别、真实正常夹具和 worker 缺失降级
+- 范围：P3-01C 的格式识别、真实正常夹具、worker 隔离与固定 backend
 - 非结论：不代表 P3-01C、P3-01、P3-A01 或 P3-A02 通过
 
 ## 1. 已关闭边界
@@ -25,6 +25,8 @@ brand。AVIF 优先识别 `avif/avis`，HEIC/HEIF 覆盖静态与 sequence brand
 | 扫描/Sidecar | 保留素材，继续合并 | 保留素材，继续合并 |
 | core-only 属性 | `codec-unavailable` | `codec-unavailable` |
 | core-only 预览 | `codec-unavailable`，不写 PNG 缓存 | `codec-unavailable`，不写 PNG 缓存 |
+| Linux backend 属性 | 800 × 533、1 图 | 1280 × 854、2 图 |
+| Linux backend 预览 | 64px 内 PNG | 64px 内 PNG |
 | 原素材 | 只读且摘要不变 | 只读且摘要不变 |
 
 这条降级不是文件损坏，也不会把素材从目录、Tag 或 `type:image` 查询中删除。
@@ -43,9 +45,12 @@ stdout 洪泛返回 `output-too-large`，stderr 最多 4 KiB 且素材绝对路�
 10 秒为生产硬上限，超时直接终止子进程。每次请求都会得到全新进程，前一次崩溃不会
 污染下一次调用。
 
-当前仓库中的正式 worker binary 只返回 `codec-unavailable`；测试 worker 不进入应用
-bundle，仅用于证明成功帧、二进制替换、授权根逃逸、崩溃、超时、输出洪泛、源变化、
-路径脱敏和 PNG 完整性。详细 wire contract 见
+默认 core-only worker 返回 `codec-unavailable`；显式 `embedded-libheif` feature 固定
+`libheif-rs 3.0.0` 与 libheif 1.23.1，只暴露 metadata/thumbnail 解码路径。backend 在
+解析前设置 256 MiB 总内存/单块上限、像素/图像数/瓦片数/颜色配置上限，启用严格解码
+与 HDR 到 8 bit 转换，并把输出写入有界 PNG writer。测试 worker 不进入应用 bundle，
+仅用于证明成功帧、二进制替换、授权根逃逸、崩溃、超时、输出洪泛、源变化、路径脱敏
+和 PNG 完整性。详细 wire contract 见
 [格式 worker 协议](../../specs/format-worker-protocol.md)。
 
 ## 4. 本地证据
@@ -56,6 +61,8 @@ npm run verify:format-fixtures
 cargo test -p asset-filesystem -p asset-preview
 cargo test -p format-worker --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
+# GitHub-hosted Ubuntu：
+cargo test -p format-worker --all-targets --features embedded-libheif
 ```
 
 - 格式清单：6 个源文件、832,225 字节源内容、95 字节参考 PNG；
@@ -63,12 +70,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 - preview：21 项通过，其中真实 AVIF/HEIC 均稳定降级且缓存保持为空；
 - ISO BMFF：4 项专门边界测试覆盖 compatible brand、box 越界、异常长度与序列 brand。
 - format-worker：3 项协议单元测试与 4 项真实子进程集成测试通过。
+- GitHub run `32380265377` 的 `Fixed libheif worker backend` job：6 项 feature 单元测试
+  与 1 项真实 backend 集成测试通过；固定 AVIF/HEIC 均完成属性与受限 PNG 解码。
 
 ## 5. 未关闭范围与下一动作
 
-P3-01C 仍缺少固定版本、decoder-only、三平台随应用打包的 libheif backend。现有
-worker 边界接下来必须接入主图宽高/方向/Alpha 等属性和受限 PNG 输出，实际启用
-libheif security limits 与 256 MiB 分配上限，并为损坏、截断、伪装、超大声明、未知
-codec 和资源超限补齐固定夹具与三平台证据。
+P3-01C 仍缺少 macOS/Windows backend 构建、三平台随应用打包、worker 摘要清单和桌面
+preview/扫描属性接线。正常 backend 还没有进入 `bundled-codecs` 夹具期望，损坏、截断、
+伪装、超大声明、未知 codec 和资源超限固定夹具及三平台证据也未补齐。
 
 在这些项目完成前，P3-01C 保持 **In progress**，P3-A01/P3-A02 不判定通过。

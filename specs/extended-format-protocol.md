@@ -139,8 +139,9 @@ worker 请求只包含请求 ID、provider ID/version、已授权 canonical path
 实施状态（2026-08-20）：In progress。首个 `ftyp` box 的边界、major/compatible
 brand、标准/扩展/开放长度和 HEIF sequence brand 已由无分配分类器覆盖；固定的官方
 libheif AVIF/HEIC 样本验证扫描可见与 `codec-unavailable` 无缓存降级；一请求一进程
-worker 的摘要绑定、授权根、超时、崩溃、输出洪泛、源变化和诊断脱敏已通过。三平台
-decoder-only libheif backend、属性/PNG 响应和恶意/超限 codec 夹具尚未完成。
+worker 的摘要绑定、授权根、超时、崩溃、输出洪泛、源变化和诊断脱敏已通过。固定
+libheif 1.23.1 backend 已在 Linux 托管门禁返回精确属性与受限 PNG；桌面接线、
+macOS/Windows 随包和恶意/超限 codec 夹具尚未完成。
 
 ### P3-01D：视频
 

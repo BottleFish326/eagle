@@ -85,6 +85,8 @@ worker 对素材只读，输出仅回到 stdout；PNG 最终写入应用拥有�
 硬超时、stdout 洪泛、源变化、逃逸符号链接替换、逐请求资源上限、stderr 路径脱敏及
 PNG 完整性。
 
-协议边界通过不表示 codec 可用。正式 binary 当前明确返回 `codec-unavailable`；只有
-固定 libheif backend、三平台随包 binary/依赖、security limits 和恶意/资源夹具全部
-通过后，P3-01C 才能开放 `bundled-codecs` capability。
+协议边界通过不表示发行包 codec 可用。默认 core-only binary 明确返回
+`codec-unavailable`；`embedded-libheif` feature 固定 libheif 1.23.1、严格解码、
+security limits、单线程 libheif 调度和有界 PNG，已在 Linux 托管门禁解码正常
+AVIF/HEIC。只有桌面接线、三平台随包 binary/依赖和恶意/资源夹具全部通过后，
+P3-01C 才能开放 `bundled-codecs` capability。
