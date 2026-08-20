@@ -1,9 +1,9 @@
-# P3-01C AVIF/HEIC 就绪报告
+# P3-01C AVIF/HEIC 详细验收报告
 
-- 状态：In progress；core-only boundary accepted locally，three-platform fixed libheif jobs verified，application bundles pending
+- 状态：Completed；最终结论见 `p3-01c-acceptance.md`
 - 日期：2026-08-21
 - 范围：P3-01C 的格式识别、真实正常夹具、worker 隔离与固定 backend
-- 非结论：不代表 P3-01C、P3-01、P3-A01 或 P3-A02 通过
+- 非结论：不代表 P3-01、P3-A01 或 P3-A02 通过
 
 ## 1. 已关闭边界
 
@@ -131,12 +131,16 @@ cargo test -p format-worker --all-targets --features embedded-libheif
 - GitHub run `32380847491` 全部成功；其 `Fixed libheif worker backend` job：6 项 feature 单元测试
   与 1 项真实 backend 集成测试通过；固定 AVIF/HEIC 均完成属性与受限 PNG 解码。
 
-## 5. 未关闭范围与下一动作
+## 5. 最终成品门禁
 
-P3-01C 仍缺少三平台随应用打包。下一轮 CI 将从已验证 worker artifact 构建 `deb`、
-`.app` 和 NSIS，再从成品中提取资源，由生产 runtime loader 执行同一正常与对抗集合。
-扫描属性接线已本地实现，但还要用真实应用 bundle 关闭端到端扫描门禁。正常 AVIF/HEIC
-的 `bundled-codecs` 精确参考 PNG 已固定，但仍待 Linux/macOS/Windows 输出逐字节一致性
-确认；对抗夹具已取得同一提交的三平台 backend 证据，随包后的再次重放仍未完成。
+GitHub run `32397240917` 在提交 `97bdb56408ec78eca1f84517b371b8ae2ef3d6d2` 上全部
+成功。三平台固定 backend、正常参考 PNG 与对抗集合先形成摘要绑定的 worker artifact；
+随后分别构建 Linux DEB、macOS `.app` 和 Windows NSIS，从成品中重新提取 worker，
+再由生产 runtime loader 重放同一集合。三个成品 job 与全仓质量/路径 job 共 11 项全部
+`success`，P3-01C 判定为 **Completed**。
 
-在这些项目完成前，P3-01C 保持 **In progress**，P3-A01/P3-A02 不判定通过。
+独立下载复核证明 Linux DEB 与 macOS `.app` 内 worker/manifest 和上游 worker artifact
+逐字节相同，三平台清单摘要均与 worker 实物相符；Windows 成品由托管 job 在归档前
+使用 7-Zip 提取并重放。artifact 摘要与复核细节见 `p3-01c-acceptance.md`。
+
+P3-A01/P3-A02 仍不判定通过；下一动作固定为 P3-01D 视频。

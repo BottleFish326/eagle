@@ -136,7 +136,7 @@ worker 请求只包含请求 ID、provider ID/version、已授权 canonical path
 - ISO BMFF brand 识别与通用卡片先通过；
 - 三平台 worker 打包完成后开放属性/缩略图 capability。
 
-实施状态（2026-08-21）：In progress。首个 `ftyp` box 的边界、major/compatible
+实施状态（2026-08-21）：**Completed**。首个 `ftyp` box 的边界、major/compatible
 brand、标准/扩展/开放长度和 HEIF sequence brand 已由无分配分类器覆盖；固定的官方
 libheif AVIF/HEIC 样本验证扫描可见与 `codec-unavailable` 无缓存降级；一请求一进程
 worker 的摘要绑定、授权根、超时、崩溃、输出洪泛、源变化和诊断脱敏已通过。固定
@@ -145,7 +145,9 @@ libheif 1.23.1 backend 已在 Linux/macOS 托管 jobs 返回精确属性与受�
 固定依赖 run 已通过 Linux/macOS/Windows；Windows 暴露的 manifest 安装目录与
 `vcpkg-rs` 经典目录不兼容已经由固定 baseline 的经典安装布局关闭。7 个确定性 AVIF
 损坏、截断、双向扩展伪装、未知 codec、超大声明和输出预算夹具已进入清单，并由三平台
-backend 重放；正常参考 PNG 的跨平台逐字节确认和三平台应用 bundle 尚未完成。
+backend 重放；run `32397240917` 又从 Linux DEB、macOS `.app` 与 Windows NSIS 成品中
+提取 worker，并由生产 runtime loader 重放相同正常/对抗集合。三平台正常参考 PNG 均与
+固定 SHA-256 逐字节一致。此结论只关闭 P3-01C；P3-A01/P3-A02 仍未通过。
 
 ### P3-01D：视频
 
