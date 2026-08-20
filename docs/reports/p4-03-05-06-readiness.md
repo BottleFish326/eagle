@@ -99,3 +99,15 @@ Obsidian 选择器的在线/离线查询一致性、稳定顺序、多选引用�
 - 未把阶段 4 状态改为 In progress。
 
 以上实现等待阶段 3 退出评审后开始。
+
+## 7. 原型引用代码迁移门禁
+
+阶段 0 的 `reference.ts` 和 Markdown postprocessor 只验证了基础渲染路径，不能直接充当正式选择器或反向索引：
+
+1. 正式 `material://` destination parser 必须只接受精确小写、连字符形式的 UUIDv7。当前 `parseMaterialUri` 接受大写和其他 UUID version 后再小写化的兼容行为只能留在原型测试，P4-A08 安全语料必须证明这些变体不会进入 backlink index。
+2. 反向索引必须扫描固定版本 Markdown AST 的 image node 和 source position。当前渲染后遍历 DOM `<img>` 的 postprocessor 不能区分代码块、转义字面量、HTML 注释，也不能提供可靠 offset，禁止复用为 backlink 真相源。
+3. `materialMarkdown` 的 alias 生成器必须按协议先 NFC、移除 CR/LF/control，再转义反斜杠和方括号，并为空值提供固定 fallback。当前只替换 `[`/`]` 的实现不得用于批量插入。
+4. 搜索插入命令应从独立 provider handle 和 `InsertionTargetToken` 开始实现；不得从当前 Markdown 渲染元素、插件 root path 或 DOM URL 反推出素材/笔记路径。
+5. 初次 AST 扫描、Vault create/modify/delete/rename 与 MetadataCache changed/deleted 必须一起纳入测试。当前原型没有事件注册，手工 rebuild 不能作为移动恢复或 backlink 一致性证据。
+
+本节只记录原型替换要求，不表示阶段 4 已开始。
