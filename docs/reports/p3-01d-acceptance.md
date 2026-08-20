@@ -56,8 +56,9 @@ npm run ci
 - `asset-filesystem`：54 项测试通过，其中两项视频扫描测试同时证明内容优先识别、故障
   隔离、派生属性和源文件逐字节不变；
 - Node 清单/生成器：7 项定向测试通过，真实摘要、尺寸、平台覆盖和确定性生成均接受；
-- 严格 Clippy 与 TypeScript 契约检查通过；完整 `npm run ci` 的 P2 历史证据测试要求干净
-  工作树，因此在本提交后从干净提交重放并记录最终结果。
+- 干净提交 `334cecd` 上完整 `npm run ci` 通过：工具测试 93 项、Rust workspace
+  全部测试、桌面 UI 52 项、Obsidian bridge 8 项、S 数据集、严格 Clippy/TypeScript、
+  Tauri release 和 bridge production build 均接受。
 
 ## 5. 未关闭范围
 
@@ -66,5 +67,5 @@ npm run ci
 - P3-01F 的 PDF 属性与首页预览；
 - 全格式 P3-A01 一致性和 P3-A02 超大/损坏/恶意集合正式门禁。
 
-下一动作是先在干净提交重放全仓门禁，再单独实现并验收可选视频帧 worker。P3-A01、
-P3-A02 与 P3-01 保持未通过。
+下一动作是单独完成视频帧 worker 的打包/许可决策并验收。P3-A01、P3-A02 与 P3-01
+保持未通过。
