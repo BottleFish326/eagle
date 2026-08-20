@@ -1,7 +1,10 @@
 use std::path::Path;
 use std::process::ExitCode;
 
-use format_worker::{WorkerClient, digest_file_sha256, open_libheif_worker_bundle};
+use format_worker::{
+    WorkerClient, WorkerErrorCode, WorkerOperation, WorkerRunError, digest_file_sha256,
+    open_libheif_worker_bundle,
+};
 use uuid::Uuid;
 
 fn main() -> ExitCode {
@@ -73,6 +76,94 @@ fn probe_fixtures(worker: &WorkerClient, root: &Path) -> Result<(), String> {
         if digest_file_sha256(&source).map_err(|error| error.to_string())? != digest {
             return Err("worker changed a fixed source fixture".into());
         }
+    }
+    for relative in ["avif/corrupted-bitstream.avif", "avif/unknown-codec.avif"] {
+        let source = root.join(relative);
+        let digest = digest_file_sha256(&source).map_err(|error| error.to_string())?;
+        let metadata = worker
+            .metadata_request(Uuid::now_v7(), &source, root)
+            .and_then(|request| worker.execute(&request, root))
+            .map_err(|error| error.to_string())?;
+        if (
+            metadata.properties.width,
+            metadata.properties.height,
+            metadata.properties.image_count,
+        ) != (800, 533, 1)
+            || metadata.png.is_some()
+            || metadata.png_dimensions.is_some()
+        {
+            return Err(format!(
+                "{relative} metadata does not match the fixed container"
+            ));
+        }
+        if digest_file_sha256(&source).map_err(|error| error.to_string())? != digest {
+            return Err(format!("worker changed adversarial fixture {relative}"));
+        }
+    }
+    for (relative, operation, expected) in [
+        (
+            "avif/corrupted-bitstream.avif",
+            WorkerOperation::Thumbnail,
+            WorkerErrorCode::InvalidContent,
+        ),
+        (
+            "avif/truncated-ftyp.avif",
+            WorkerOperation::Metadata,
+            WorkerErrorCode::InvalidContent,
+        ),
+        (
+            "avif/unknown-codec.avif",
+            WorkerOperation::Thumbnail,
+            WorkerErrorCode::CodecUnavailable,
+        ),
+        (
+            "avif/oversized-ispe.avif",
+            WorkerOperation::Metadata,
+            WorkerErrorCode::ResourceLimited,
+        ),
+    ] {
+        probe_failure(worker, root, relative, operation, expected, None)?;
+    }
+    probe_failure(
+        worker,
+        root,
+        "avif/resource-limited-output.avif",
+        WorkerOperation::Thumbnail,
+        WorkerErrorCode::ResourceLimited,
+        Some(64),
+    )?;
+    Ok(())
+}
+
+fn probe_failure(
+    worker: &WorkerClient,
+    root: &Path,
+    relative: &str,
+    operation: WorkerOperation,
+    expected: WorkerErrorCode,
+    max_output_bytes: Option<u64>,
+) -> Result<(), String> {
+    let source = root.join(relative);
+    let digest = digest_file_sha256(&source).map_err(|error| error.to_string())?;
+    let mut request = match operation {
+        WorkerOperation::Metadata => worker.metadata_request(Uuid::now_v7(), &source, root),
+        WorkerOperation::Thumbnail => worker.thumbnail_request(Uuid::now_v7(), &source, root, 64),
+    }
+    .map_err(|error| error.to_string())?;
+    if let Some(maximum) = max_output_bytes {
+        request.limits.max_output_bytes = maximum;
+    }
+    match worker.execute(&request, root) {
+        Err(WorkerRunError::Worker { code, .. }) if code == expected => {}
+        Err(error) => {
+            return Err(format!(
+                "{relative} returned {error}; expected worker error {expected:?}"
+            ));
+        }
+        Ok(_) => return Err(format!("{relative} unexpectedly succeeded")),
+    }
+    if digest_file_sha256(&source).map_err(|error| error.to_string())? != digest {
+        return Err(format!("worker changed adversarial fixture {relative}"));
     }
     Ok(())
 }

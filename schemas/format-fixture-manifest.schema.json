@@ -101,6 +101,7 @@
         "case": {
           "enum": [
             "normal",
+            "corrupted-payload",
             "truncated",
             "extension-mismatch",
             "content-mismatch",

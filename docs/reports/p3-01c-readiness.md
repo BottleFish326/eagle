@@ -1,6 +1,6 @@
 # P3-01C AVIF/HEIC 就绪报告
 
-- 状态：In progress；core-only boundary accepted locally，Linux/macOS libheif jobs verified，desktop preview/scan wiring implemented locally
+- 状态：In progress；core-only boundary accepted locally，Linux/macOS fixed libheif jobs verified，Windows packaging fix awaiting hosted proof
 - 日期：2026-08-20
 - 范围：P3-01C 的格式识别、真实正常夹具、worker 隔离与固定 backend
 - 非结论：不代表 P3-01C、P3-01、P3-A01 或 P3-A02 通过
@@ -16,6 +16,11 @@ brand。AVIF 优先识别 `avif/avis`，HEIC/HEIF 覆盖静态与 sequence brand
 `examples/COPYING` MIT 许可约束。清单记录原始 URL、长度和 SHA-256；
 `tools/import-format-fixtures.mjs` 只在内容逐字节符合固定长度与摘要时原子导入，已有
 不同内容不会被覆盖。完整许可文本见 `fixtures/formats/THIRD_PARTY_NOTICES.md`。
+
+7 个 AVIF 对抗样本由仓库生成器从固定 AVIF/PNG 逐字节派生，覆盖 bitstream 损坏、
+`ftyp` 截断、PNG 伪装 AVIF、AVIF 伪装 JPEG、未打包 JPEG item codec、65,536 像素
+宽度声明和 64 字节 PNG 输出预算。生成器固定变异 offset，拒绝非规则文件和非显式替换，
+测试同时证明原始上游样本字节不变。
 
 ## 2. 当前能力结果
 
@@ -80,6 +85,7 @@ stdout 洪泛返回 `output-too-large`，stderr 最多 4 KiB 且素材绝对路�
 
 ```bash
 npm run import:libheif-fixtures
+npm run generate:adversarial-format-fixtures
 npm run verify:format-fixtures
 cargo test -p asset-filesystem -p asset-preview
 cargo test -p format-worker --all-targets
@@ -88,8 +94,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test -p format-worker --all-targets --features embedded-libheif
 ```
 
-- 格式清单：6 个源文件、832,225 字节源内容、95 字节参考 PNG；
-- filesystem：51 项通过，其中真实 AVIF/HEIC 从内容识别且无 codec 也能扫描；
+- 格式清单：13 个源文件、1,400,364 字节源内容、285 字节引用计数；
+- filesystem：52 项通过，其中真实 AVIF/HEIC 与 7 个对抗样本均按内容识别；两类扩展
+  伪装产生 `mime-mismatch`，单文件失败不影响扁平目录；
 - preview：22 项通过，其中真实 AVIF/HEIC 均稳定降级且缓存保持为空，派生属性映射不改
   Tag/Sidecar 状态；
 - ISO BMFF：4 项专门边界测试覆盖 compatible brand、box 越界、异常长度与序列 brand。
@@ -102,18 +109,24 @@ cargo test -p format-worker --all-targets --features embedded-libheif
   均完成真实属性/PNG 解码、release bundle 生成、runtime loader 重放和 artifact 归档。
 - GitHub run `32385977748` 全部成功，重新覆盖扫描派生属性提交的全仓质量、Linux/macOS
   worker bundle 与原有三平台路径门禁。
+- GitHub run `32388115625` 的全仓质量、三平台路径及固定静态 Linux/macOS worker 通过；
+  Windows 在依赖成功构建后因 `vcpkg-rs 0.2.15` 不读取 manifest 专用安装目录而失败，
+  下游应用 bundle 被正确阻断。Windows job 已改为在同一固定 baseline 上使用经典
+  `<root>/installed` 布局，仍只安装 `libheif[aom]` 静态 triplet，尚待新 run 接受。
+- 从 `32388115625` 下载的静态 macOS bundle 已由当前 verifier 重放全部正常和对抗样本：
+  损坏/截断为 `invalid-content`，未知 codec 为 `codec-unavailable`，超大声明和 64 字节
+  输出预算为 `resource-limited`，所有源 SHA-256 保持不变。
 - GitHub run `32380847491` 全部成功；其 `Fixed libheif worker backend` job：6 项 feature 单元测试
   与 1 项真实 backend 集成测试通过；固定 AVIF/HEIC 均完成属性与受限 PNG 解码。
 
 ## 5. 未关闭范围与下一动作
 
-P3-01C 仍缺少 Windows backend 的已接受托管证据和三平台随应用打包。下一轮 CI 已增加
-Windows 真实样本 probe、Unix 动态依赖审计，以及依赖 Linux/macOS/Windows worker artifact 的 `deb`、`.app`
-和 NSIS 构建；每个构建都会从成品中提取资源，再由生产 runtime loader 执行两个真实
-样本。该门禁尚未产生已接受结果。扫描属性接线已本地实现，
-但还要用真实应用 bundle 关闭端到端扫描门禁。构建期摘要清单生成与 runtime 重放门禁
-已经实现，但尚未用随包三平台产物
-关闭端到端门禁。正常 backend 还没有进入 `bundled-codecs` 夹具期望，损坏、截断、
-伪装、超大声明、未知 codec 和资源超限固定夹具及三平台证据也未补齐。
+P3-01C 仍缺少 Windows backend 的已接受托管证据和三平台随应用打包。下一轮 CI 将重放
+Windows 正常/对抗样本、Unix 动态依赖审计，以及依赖 Linux/macOS/Windows worker
+artifact 的 `deb`、`.app` 和 NSIS 构建；每个构建都会从成品中提取资源，再由生产
+runtime loader 执行同一正常与对抗集合。扫描属性接线已本地实现，但还要用真实应用
+bundle 关闭端到端扫描门禁。正常 AVIF/HEIC 的 `bundled-codecs` 精确参考 PNG 仍待三平台
+产物一致性确认；对抗夹具已有本地清单与静态 macOS 重放，但尚未取得 Windows/Linux/macOS
+同一提交的完整托管证据。
 
 在这些项目完成前，P3-01C 保持 **In progress**，P3-A01/P3-A02 不判定通过。

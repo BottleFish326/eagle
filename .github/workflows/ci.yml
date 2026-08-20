@@ -272,6 +272,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check out fixed vcpkg baseline
+        uses: actions/checkout@v6
+        with:
+          repository: microsoft/vcpkg
+          ref: 33e5269bbfc24fb252bc48a3e624c8193afdccce
+          path: .vcpkg
+          persist-credentials: false
+
       - name: Install Node.js 24
         uses: actions/setup-node@v6
         with:
@@ -284,11 +292,12 @@ jobs:
       - name: Install fixed decoder-only vcpkg dependencies
         shell: pwsh
         run: |
-          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          $vcpkgRoot = "$env:GITHUB_WORKSPACE\.vcpkg"
+          & "$vcpkgRoot\bootstrap-vcpkg.bat" -disableMetrics
+          "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
           "VCPKGRS_TRIPLET=x64-windows-static-md" >> $env:GITHUB_ENV
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
-            --x-manifest-root="$env:GITHUB_WORKSPACE\support\vcpkg" `
-            --triplet=x64-windows-static-md `
+          & "$vcpkgRoot\vcpkg.exe" install `
+            "libheif[aom]:x64-windows-static-md" `
             --clean-after-build
 
       - name: Verify fixed libheif backend

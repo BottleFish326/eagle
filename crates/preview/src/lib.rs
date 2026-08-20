@@ -1266,6 +1266,12 @@ mod tests {
 
         for (relative, mime) in [
             ("avif/libheif-example.avif", "image/avif"),
+            ("avif/corrupted-bitstream.avif", "image/avif"),
+            ("avif/truncated-ftyp.avif", "image/avif"),
+            ("avif/avif-disguised-as-jpeg.jpg", "image/avif"),
+            ("avif/unknown-codec.avif", "image/avif"),
+            ("avif/oversized-ispe.avif", "image/avif"),
+            ("avif/resource-limited-output.avif", "image/avif"),
             ("heic/libheif-example.heic", "image/heic"),
         ] {
             let path = root.join(relative);

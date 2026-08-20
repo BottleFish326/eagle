@@ -288,10 +288,17 @@ mod tests {
     }
 
     #[test]
-    fn recognizes_the_pinned_libheif_avif_and_heic_fixtures_from_content() {
+    fn recognizes_the_pinned_and_generated_libheif_fixtures_from_content() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/formats/sources");
         for (relative, expected) in [
             ("avif/libheif-example.avif", "avif"),
+            ("avif/corrupted-bitstream.avif", "avif"),
+            ("avif/truncated-ftyp.avif", "avif"),
+            ("avif/png-disguised-as-avif.avif", "png"),
+            ("avif/avif-disguised-as-jpeg.jpg", "avif"),
+            ("avif/unknown-codec.avif", "avif"),
+            ("avif/oversized-ispe.avif", "avif"),
+            ("avif/resource-limited-output.avif", "avif"),
             ("heic/libheif-example.heic", "heic"),
         ] {
             let bytes = fs::read(root.join(relative)).expect("pinned libheif fixture");

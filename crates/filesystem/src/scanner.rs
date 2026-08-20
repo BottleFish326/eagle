@@ -912,6 +912,61 @@ mod tests {
     }
 
     #[test]
+    fn core_scan_isolates_adversarial_avif_fixtures_by_content() {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/formats/sources");
+        let report = scan_root(&root, &ScanOptions::default()).expect("scan format fixtures");
+
+        for name in [
+            "corrupted-bitstream.avif",
+            "truncated-ftyp.avif",
+            "unknown-codec.avif",
+            "oversized-ispe.avif",
+            "resource-limited-output.avif",
+        ] {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .unwrap_or_else(|| panic!("missing adversarial fixture {name}"));
+            assert_eq!(asset.mime, "image/avif", "{name}");
+            assert_eq!(asset.kind, AssetKind::Image, "{name}");
+            assert!(asset.dimensions.is_none(), "{name}");
+            assert!(asset.issues.is_empty(), "{name}: {:?}", asset.issues);
+        }
+
+        let disguised_png = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "png-disguised-as-avif.avif")
+            .expect("PNG disguised as AVIF");
+        assert_eq!(disguised_png.mime, "image/png");
+        assert_eq!(
+            disguised_png.dimensions,
+            Some(AssetDimensions {
+                width: 16,
+                height: 16,
+            })
+        );
+        assert!(matches!(
+            disguised_png.issues.as_slice(),
+            [AssetIssue::MimeMismatch(_)]
+        ));
+
+        let disguised_avif = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "avif-disguised-as-jpeg.jpg")
+            .expect("AVIF disguised as JPEG");
+        assert_eq!(disguised_avif.mime, "image/avif");
+        assert!(disguised_avif.dimensions.is_none());
+        assert!(matches!(
+            disguised_avif.issues.as_slice(),
+            [AssetIssue::MimeMismatch(_)]
+        ));
+    }
+
+    #[test]
     fn extracts_safe_svg_dimensions_and_isolates_active_content() {
         let directory = tempdir().expect("tempdir");
         fs::write(

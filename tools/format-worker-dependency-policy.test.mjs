@@ -4,7 +4,7 @@ import test from "node:test";
 
 const fixedVcpkgBaseline = "33e5269bbfc24fb252bc48a3e624c8193afdccce";
 
-test("pins the Windows worker to decoder-only libheif 1.23.1 dependencies", async () => {
+test("pins every bundled worker to decoder-only libheif 1.23.1 dependencies", async () => {
   const manifest = JSON.parse(
     await readFile("support/vcpkg/vcpkg.json", "utf8"),
   );
@@ -49,4 +49,9 @@ test("pins the Windows worker to decoder-only libheif 1.23.1 dependencies", asyn
     desktopRuntime,
     /resource_dir\(\)\?\.join\("format-workers\/libheif"\)/u,
   );
+
+  const workflow = await readFile(".github/workflows/ci.yml", "utf8");
+  assert.match(workflow, new RegExp(`ref: ${fixedVcpkgBaseline}`, "u"));
+  assert.match(workflow, /"libheif\[aom\]:x64-windows-static-md"/u);
+  assert.doesNotMatch(workflow, /VCPKG_INSTALLATION_ROOT/u);
 });

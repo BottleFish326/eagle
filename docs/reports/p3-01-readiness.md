@@ -1,6 +1,6 @@
 # P3-01 扩展格式支持实施准备报告
 
-- 状态：Implementation in progress；P3-01A/P3-01B Completed locally，P3-01C Linux backend verified
+- 状态：Implementation in progress；P3-01A/P3-01B Completed locally，P3-01C Linux/macOS fixed backend verified
 - 日期：2026-08-19
 - 对应：P3-01、P3-A01、P3-A02
 - 决策：[ADR-026](../../specs/adr/026-capability-based-extended-format-pipeline.md)
@@ -15,7 +15,7 @@
 | 缩略图 | PNG/JPEG/GIF/WebP 使用 `builtin-raster`；SVG 使用 `safe-static-svg`；固定 libheif 1.23.1 backend 已在 Linux 真实输出受限 PNG；worker 缺失仍稳定降级 | AVIF/HEIC 桌面接线、三平台随包与后续原生/复杂 provider 尚未实现 |
 | 缓存 | provider ID/version 已进入每项 key 与 Schema 2 descriptor；layout 3 自动失效旧项 | 后续每个新增 provider 必须登记当前版本并增加失效测试 |
 | 查询/UI | `scan_root → AssetCatalog → type:` 四类测试已贯通；codec/provider 缺失显示中性类型卡片，文件故障显示错误卡片 | P3-01C 至 F 仍需逐格式扩展属性和真实预览 |
-| 夹具 | 已有正常、脚本、外部引用、截断 SVG 与确定性 PNG 参考；清单语义验证器继续约束完整性 | 仍需补齐 SVG 超大正式资源证据及其余格式的损坏/伪装/超限/恶意夹具与参考预览 |
+| 夹具 | 已有正常、脚本、外部引用、截断 SVG；AVIF/HEIC 正常样本及 7 个 AVIF 损坏/伪装/超限派生样本；清单语义验证器约束完整性 | 仍需补齐 SVG 超大正式资源证据、正常 AVIF/HEIC bundled 参考预览及后续格式夹具 |
 
 核心结论：P3-01 第一片必须先取消“只有可解码图片才是素材”的假设，而不是先给 UI 增加扩展名图标。
 

@@ -6,8 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use format_worker::{
     DEFAULT_MAX_DECODE_BYTES, DEFAULT_MAX_OUTPUT_BYTES, DEFAULT_MAX_SOURCE_DIMENSION,
-    HeifProperties, LIBHEIF_PROVIDER_ID, LIBHEIF_PROVIDER_VERSION, NativePath, WorkerLimits,
-    WorkerOperation, WorkerRequest, process_libheif_request,
+    HeifProperties, LIBHEIF_PROVIDER_ID, LIBHEIF_PROVIDER_VERSION, NativePath, WorkerErrorCode,
+    WorkerLimits, WorkerOperation, WorkerRequest, process_libheif_request,
 };
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -45,6 +45,72 @@ fn fixed_libheif_reads_metadata_and_generates_bounded_pngs() {
         assert_eq!(payload.sha256, format!("{:x}", Sha256::digest(&png)));
         assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
     }
+}
+
+#[test]
+fn fixed_libheif_isolates_malformed_unknown_and_oversized_fixtures() {
+    for relative in [
+        "fixtures/formats/sources/avif/corrupted-bitstream.avif",
+        "fixtures/formats/sources/avif/unknown-codec.avif",
+    ] {
+        let path = workspace_root().join(relative);
+        let (properties, payload, png) =
+            process_libheif_request(&request(&path, WorkerOperation::Metadata))
+                .expect("container metadata remains available");
+        assert_properties(&properties, (800, 533), 1);
+        assert!(payload.is_none());
+        assert!(png.is_empty());
+    }
+
+    for (relative, operation, expected) in [
+        (
+            "fixtures/formats/sources/avif/corrupted-bitstream.avif",
+            WorkerOperation::Thumbnail,
+            WorkerErrorCode::InvalidContent,
+        ),
+        (
+            "fixtures/formats/sources/avif/truncated-ftyp.avif",
+            WorkerOperation::Metadata,
+            WorkerErrorCode::InvalidContent,
+        ),
+        (
+            "fixtures/formats/sources/avif/unknown-codec.avif",
+            WorkerOperation::Thumbnail,
+            WorkerErrorCode::CodecUnavailable,
+        ),
+        (
+            "fixtures/formats/sources/avif/oversized-ispe.avif",
+            WorkerOperation::Metadata,
+            WorkerErrorCode::ResourceLimited,
+        ),
+    ] {
+        let path = workspace_root().join(relative);
+        let digest = Sha256::digest(fs::read(&path).expect("fixture bytes"));
+        let failure = process_libheif_request(&request(&path, operation))
+            .expect_err("adversarial fixture must fail in isolation");
+        assert_eq!(failure.code, expected, "{relative}");
+        assert_eq!(
+            Sha256::digest(fs::read(&path).expect("fixture bytes after")),
+            digest,
+            "{relative}",
+        );
+    }
+}
+
+#[test]
+fn fixed_libheif_rejects_png_output_before_exceeding_the_request_budget() {
+    let path = workspace_root().join("fixtures/formats/sources/avif/resource-limited-output.avif");
+    let digest = Sha256::digest(fs::read(&path).expect("fixture bytes"));
+    let mut constrained = request(&path, WorkerOperation::Thumbnail);
+    constrained.limits.max_output_bytes = 64;
+
+    let failure = process_libheif_request(&constrained)
+        .expect_err("bounded output fixture must exceed the request budget");
+    assert_eq!(failure.code, WorkerErrorCode::ResourceLimited);
+    assert_eq!(
+        Sha256::digest(fs::read(&path).expect("fixture bytes after")),
+        digest,
+    );
 }
 
 fn request(path: &Path, operation: WorkerOperation) -> WorkerRequest {

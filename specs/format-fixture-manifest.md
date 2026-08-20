@@ -28,7 +28,7 @@ JSON Schema 负责字段和单条 expectation 的结构约束；跨 expectation 
 - `metadata.properties` 只写该格式可独立验证的字段，不用容差掩盖整数错误；
 - `issueCodes` 使用稳定 code，不比较可能包含库版本或路径的自由文本；
 - `preview.status=available` 时必须提供参考 PNG 的路径、摘要、宽和高；验证器既核对协议字段，也核对实际 PNG；
-- native codec 缺失、文件损坏、资源超限和超时必须是不同状态/原因。
+- native codec 缺失、文件损坏（含 `corrupted-payload` 与 `truncated`）、资源超限和超时必须是不同状态/原因。
 - 属性或预览状态不是 `available` 时必须给出稳定 `reasonCode`；属性集合为空，预览不得携带参考图字段。
 
 ## 4. 资源预算

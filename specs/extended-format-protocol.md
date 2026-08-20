@@ -142,7 +142,10 @@ libheif AVIF/HEIC 样本验证扫描可见与 `codec-unavailable` 无缓存降�
 worker 的摘要绑定、授权根、超时、崩溃、输出洪泛、源变化和诊断脱敏已通过。固定
 libheif 1.23.1 backend 已在 Linux/macOS 托管 jobs 返回精确属性与受限 PNG，并由构建期
 摘要清单和 runtime loader 重放 bundle；桌面 preview 授权与扫描派生属性已本地接线。
-Windows、三平台应用 bundle 和恶意/超限 codec 夹具尚未完成。
+首轮固定依赖 run 已通过 Linux/macOS，Windows 暴露 manifest 安装目录与 `vcpkg-rs`
+经典目录不兼容并已修正。7 个确定性 AVIF 损坏、截断、双向扩展伪装、未知 codec、
+超大声明和输出预算夹具已进入清单，并由静态 macOS worker 重放；Windows、三平台应用
+bundle 及同一恶意集合的三平台托管证据尚未完成。
 
 ### P3-01D：视频
 
