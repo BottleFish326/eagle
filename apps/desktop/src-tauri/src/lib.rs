@@ -35,6 +35,7 @@ use asset_transactions::{
     MetadataTransactionStore, TransactionFailureKind, TransactionRecoveryResult,
     TransactionScopeItem, TransactionSummary, TransactionTarget,
 };
+use format_worker::{WORKER_BUNDLE_MANIFEST, open_libheif_worker_bundle};
 use resource_control::{ResourceController, ResourceMode, ResourceSnapshot, WorkKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -287,6 +288,7 @@ impl From<PreviewError> for ThumbnailCommandError {
             },
             PreviewError::InvalidConcurrency(_)
             | PreviewError::InvalidCachePolicy(_)
+            | PreviewError::InvalidWorkerIdentity
             | PreviewError::PoisonedLock(_)
             | PreviewError::Resource(_) => Self::Internal {
                 message: error.to_string(),
@@ -1254,6 +1256,7 @@ const fn cache_error_category(error: &PreviewError) -> &'static str {
         PreviewError::CacheMetadata { .. } => "metadata",
         PreviewError::InvalidCacheKey(_) => "invalid-key",
         PreviewError::MissingCacheEntry(_) => "missing-entry",
+        PreviewError::InvalidWorkerIdentity => "invalid-worker-identity",
         PreviewError::PoisonedLock(_) => "poisoned-lock",
         PreviewError::Resource(_) => "resource-control",
     }
@@ -2066,6 +2069,7 @@ fn query_assets(
 async fn request_thumbnail(
     input: ThumbnailRequest,
     catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    roots: State<'_, Mutex<LibraryRootManager>>,
     previews: State<'_, Arc<ThumbnailService>>,
 ) -> Result<ThumbnailOutcome, ThumbnailCommandError> {
     let record = catalog
@@ -2078,13 +2082,26 @@ async fn request_thumbnail(
         .ok_or_else(|| ThumbnailCommandError::AssetNotFound {
             asset_key: input.asset_key.clone(),
         })?;
+    let authorized_root = record.root_id.and_then(|root_id| {
+        roots.lock().ok()?.roots().into_iter().find_map(|status| {
+            (status.root.id == root_id
+                && status.root.enabled
+                && status.access_status == RootAccessStatus::Available)
+                .then_some(status.root.path)
+        })
+    });
     let previews = Arc::clone(previews.inner());
-    tauri::async_runtime::spawn_blocking(move || previews.request(&record, input.max_edge))
-        .await
-        .map_err(|error| ThumbnailCommandError::Internal {
-            message: format!("thumbnail task failed: {error}"),
-        })?
-        .map_err(Into::into)
+    tauri::async_runtime::spawn_blocking(move || {
+        authorized_root.as_ref().map_or_else(
+            || previews.request(&record, input.max_edge),
+            |root| previews.request_with_authorized_root(&record, input.max_edge, root),
+        )
+    })
+    .await
+    .map_err(|error| ThumbnailCommandError::Internal {
+        message: format!("thumbnail task failed: {error}"),
+    })?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -2431,15 +2448,54 @@ pub fn run() {
                 config_directory.join("metadata-transactions-v1"),
             )?));
             app.manage(Arc::new(MetadataConflictStore::default()));
+            let diagnostics = Arc::new(DiagnosticService::new(log_directory.join("diagnostics")));
             let resources = ResourceController::with_defaults();
-            let previews = Arc::new(ThumbnailService::open_with_resources(
-                &cache_directory,
-                resources.clone(),
-            )?);
+            let worker_bundle = app.path().resource_dir()?.join("format-workers/libheif");
+            let worker_manifest = worker_bundle.join(WORKER_BUNDLE_MANIFEST);
+            let worker = match std::fs::symlink_metadata(&worker_manifest) {
+                Ok(_) => match open_libheif_worker_bundle(&worker_bundle) {
+                    Ok(worker) => {
+                        record_diagnostic(
+                            &diagnostics,
+                            DiagnosticLevel::Info,
+                            "preview",
+                            "libheif-worker-ready",
+                            [("providerVersion", worker.provider_version().to_owned())],
+                        );
+                        Some(worker)
+                    }
+                    Err(error) => {
+                        record_diagnostic(
+                            &diagnostics,
+                            DiagnosticLevel::Warning,
+                            "preview",
+                            "libheif-worker-rejected",
+                            [("reason", error.to_string())],
+                        );
+                        None
+                    }
+                },
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => {
+                    record_diagnostic(
+                        &diagnostics,
+                        DiagnosticLevel::Warning,
+                        "preview",
+                        "libheif-worker-manifest-unreadable",
+                        [("reason", error.to_string())],
+                    );
+                    None
+                }
+            };
+            let mut previews =
+                ThumbnailService::open_with_resources(&cache_directory, resources.clone())?;
+            if let Some(worker) = worker {
+                previews = previews.with_libheif_worker(worker)?;
+            }
+            let previews = Arc::new(previews);
             let cache_startup = previews.startup_report();
             app.manage(previews);
             app.manage(resources);
-            let diagnostics = Arc::new(DiagnosticService::new(log_directory.join("diagnostics")));
             record_diagnostic(
                 &diagnostics,
                 DiagnosticLevel::Info,

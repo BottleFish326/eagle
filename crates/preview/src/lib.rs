@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use asset_core::{AssetKind, AssetRecord};
 use asset_svg::{SVG_PROVIDER_ID, SVG_PROVIDER_VERSION};
+use format_worker::{LIBHEIF_PROVIDER_ID, LIBHEIF_PROVIDER_VERSION, WorkerClient};
 use resource_control::{ResourceController, ResourceError, ResourceLimits, WorkKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -201,6 +202,8 @@ pub enum PreviewError {
     MissingCacheEntry(String),
     #[error("shared state lock is poisoned: {0}")]
     PoisonedLock(&'static str),
+    #[error("format worker identity is not the pinned libheif provider")]
+    InvalidWorkerIdentity,
     #[error("thumbnail resource control error: {0}")]
     Resource(#[from] ResourceError),
 }
@@ -210,6 +213,7 @@ pub struct ThumbnailService {
     cache: ThumbnailCache,
     resources: ResourceController,
     startup: CacheStartupReport,
+    libheif_worker: Option<WorkerClient>,
 }
 
 impl ThumbnailService {
@@ -285,7 +289,23 @@ impl ThumbnailService {
             cache,
             resources,
             startup,
+            libheif_worker: None,
         })
+    }
+
+    /// Enables the pinned libheif worker for requests that also provide an authorized root.
+    ///
+    /// # Errors
+    ///
+    /// Rejects any worker whose provider identity does not match the build-pinned backend.
+    pub fn with_libheif_worker(mut self, worker: WorkerClient) -> Result<Self, PreviewError> {
+        if worker.provider_id() != LIBHEIF_PROVIDER_ID
+            || worker.provider_version() != LIBHEIF_PROVIDER_VERSION
+        {
+            return Err(PreviewError::InvalidWorkerIdentity);
+        }
+        self.libheif_worker = Some(worker);
+        Ok(self)
     }
 
     /// Lazily returns or generates a thumbnail for one scanned asset.
@@ -301,6 +321,32 @@ impl ThumbnailService {
         record: &AssetRecord,
         max_edge: u32,
     ) -> Result<ThumbnailOutcome, PreviewError> {
+        self.request_internal(record, max_edge, None)
+    }
+
+    /// Generates a thumbnail with one library root explicitly authorizing worker access.
+    ///
+    /// The root is used only by the isolated optional-format worker. Built-in providers retain
+    /// their existing behavior. Source containment is canonicalized again by the worker client.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PreviewError`] for invalid sizing, unsafe cache state, or cache I/O.
+    pub fn request_with_authorized_root(
+        &self,
+        record: &AssetRecord,
+        max_edge: u32,
+        authorized_root: &Path,
+    ) -> Result<ThumbnailOutcome, PreviewError> {
+        self.request_internal(record, max_edge, Some(authorized_root))
+    }
+
+    fn request_internal(
+        &self,
+        record: &AssetRecord,
+        max_edge: u32,
+        authorized_root: Option<&Path>,
+    ) -> Result<ThumbnailOutcome, PreviewError> {
         if !(MIN_THUMBNAIL_EDGE..=MAX_THUMBNAIL_EDGE).contains(&max_edge) {
             return Err(PreviewError::InvalidMaxEdge(max_edge));
         }
@@ -312,7 +358,8 @@ impl ThumbnailService {
                 "asset is missing or cannot be read".into(),
             ));
         };
-        let provider = match preview_provider(record) {
+        let worker = self.libheif_worker.as_ref().zip(authorized_root);
+        let provider = match preview_provider(record, worker.is_some()) {
             Ok(provider) => provider,
             Err((reason, message)) => return Ok(placeholder(record, reason, message.into())),
         };
@@ -361,7 +408,7 @@ impl ThumbnailService {
             ));
         }
 
-        let decoded = match decode_thumbnail(&record.path, max_edge, provider) {
+        let decoded = match decode_thumbnail(&record.path, max_edge, provider, worker) {
             Ok(decoded) => decoded,
             Err(failure) => return Ok(placeholder(record, failure.reason, failure.message)),
         };
@@ -541,12 +588,19 @@ fn ready(
 
 fn preview_provider(
     record: &AssetRecord,
+    libheif_available: bool,
 ) -> Result<PreviewProviderIdentity, (ThumbnailPlaceholderReason, &'static str)> {
     match record.mime.as_str() {
         "image/png" | "image/jpeg" | "image/gif" | "image/webp" => Ok(BUILTIN_RASTER_PROVIDER),
+        "image/avif" | "image/heic" | "image/heif" if libheif_available => {
+            Ok(PreviewProviderIdentity {
+                id: LIBHEIF_PROVIDER_ID,
+                version: LIBHEIF_PROVIDER_VERSION,
+            })
+        }
         "image/avif" | "image/heic" | "image/heif" => Err((
             ThumbnailPlaceholderReason::CodecUnavailable,
-            "the optional image codec is not installed in this build",
+            "the pinned optional image worker is unavailable",
         )),
         "image/svg+xml" => Ok(SAFE_SVG_PROVIDER),
         "video/mp4" | "video/quicktime" | "video/webm" | "audio/mpeg" | "audio/wav"
@@ -568,6 +622,7 @@ fn preview_provider(
 pub(crate) fn is_current_preview_provider(id: &str, version: &str) -> bool {
     (id == BUILTIN_RASTER_PROVIDER.id && version == BUILTIN_RASTER_PROVIDER.version)
         || (id == SAFE_SVG_PROVIDER.id && version == SAFE_SVG_PROVIDER.version)
+        || (id == LIBHEIF_PROVIDER_ID && version == LIBHEIF_PROVIDER_VERSION)
 }
 
 fn placeholder(

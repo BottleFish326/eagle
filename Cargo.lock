@@ -214,6 +214,7 @@ version = "0.1.0"
 dependencies = [
  "asset-core",
  "asset-svg",
+ "format-worker",
  "image",
  "metadata",
  "resource-control",
@@ -2319,6 +2320,7 @@ dependencies = [
  "asset-link-resolver",
  "asset-preview",
  "asset-transactions",
+ "format-worker",
  "metadata",
  "resource-control",
  "serde",

@@ -3,6 +3,7 @@ use std::io::{BufReader, Cursor};
 use std::path::Path;
 
 use asset_svg::{SVG_PROVIDER_ID, SvgError, render_svg_file};
+use format_worker::{WorkerClient, WorkerErrorCode, WorkerRunError};
 use image::imageops::FilterType;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
 
@@ -26,7 +27,11 @@ pub(crate) fn decode_thumbnail(
     path: &Path,
     max_edge: u32,
     provider: PreviewProviderIdentity,
+    worker: Option<(&WorkerClient, &Path)>,
 ) -> Result<DecodedThumbnail, DecodeFailure> {
+    if let Some((worker, authorized_root)) = worker {
+        return decode_worker_thumbnail(path, max_edge, worker, authorized_root);
+    }
     if provider.id == SVG_PROVIDER_ID {
         return decode_svg(path, max_edge);
     }
@@ -80,6 +85,70 @@ pub(crate) fn decode_thumbnail(
         width,
         height,
     })
+}
+
+fn decode_worker_thumbnail(
+    path: &Path,
+    max_edge: u32,
+    worker: &WorkerClient,
+    authorized_root: &Path,
+) -> Result<DecodedThumbnail, DecodeFailure> {
+    let request = worker
+        .thumbnail_request(uuid::Uuid::now_v7(), path, authorized_root, max_edge)
+        .map_err(|error| worker_failure(&error))?;
+    let success = worker
+        .execute(&request, authorized_root)
+        .map_err(|error| worker_failure(&error))?;
+    let bytes = success.png.ok_or_else(|| DecodeFailure {
+        reason: ThumbnailPlaceholderReason::DecodeFailed,
+        message: "format worker returned no thumbnail payload".into(),
+    })?;
+    let (width, height) = success.png_dimensions.ok_or_else(|| DecodeFailure {
+        reason: ThumbnailPlaceholderReason::DecodeFailed,
+        message: "format worker returned no thumbnail dimensions".into(),
+    })?;
+    Ok(DecodedThumbnail {
+        bytes,
+        width,
+        height,
+    })
+}
+
+fn worker_failure(error: &WorkerRunError) -> DecodeFailure {
+    let reason = match error {
+        WorkerRunError::Worker { code, .. } => match code {
+            WorkerErrorCode::CodecUnavailable => ThumbnailPlaceholderReason::CodecUnavailable,
+            WorkerErrorCode::UnsupportedFeature => ThumbnailPlaceholderReason::PreviewUnavailable,
+            WorkerErrorCode::InvalidContent => ThumbnailPlaceholderReason::InvalidContent,
+            WorkerErrorCode::ResourceLimited => ThumbnailPlaceholderReason::ResourceLimited,
+            WorkerErrorCode::TimedOut => ThumbnailPlaceholderReason::TimedOut,
+            WorkerErrorCode::SourceChanged => ThumbnailPlaceholderReason::SourceChanged,
+            WorkerErrorCode::Unreadable => ThumbnailPlaceholderReason::Unreadable,
+            WorkerErrorCode::DecodeFailed | WorkerErrorCode::Internal => {
+                ThumbnailPlaceholderReason::DecodeFailed
+            }
+        },
+        WorkerRunError::TimedOut { .. } => ThumbnailPlaceholderReason::TimedOut,
+        WorkerRunError::OutputTooLarge | WorkerRunError::ResourceLimitViolation => {
+            ThumbnailPlaceholderReason::ResourceLimited
+        }
+        WorkerRunError::SourceChanged => ThumbnailPlaceholderReason::SourceChanged,
+        WorkerRunError::InvalidSource | WorkerRunError::SourceOutsideRoot => {
+            ThumbnailPlaceholderReason::Unreadable
+        }
+        WorkerRunError::InvalidConfiguration(_)
+        | WorkerRunError::ExecutableChanged
+        | WorkerRunError::Io(_)
+        | WorkerRunError::Protocol(_)
+        | WorkerRunError::Crashed { .. }
+        | WorkerRunError::IdentityMismatch
+        | WorkerRunError::InvalidPng
+        | WorkerRunError::ThreadPanicked => ThumbnailPlaceholderReason::DecodeFailed,
+    };
+    DecodeFailure {
+        reason,
+        message: error.to_string(),
+    }
 }
 
 fn decode_svg(path: &Path, max_edge: u32) -> Result<DecodedThumbnail, DecodeFailure> {

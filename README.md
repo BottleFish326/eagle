@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段 0、阶段 1 与阶段 2 已通过验收。阶段 2 的 P2-01 至 P2-08、P2-A11 100,000 素材连续 8 小时正式验收、P2-A12 GitHub-hosted macOS/Linux/Windows 原生矩阵、统一外部门禁、本地故障、数据安全和最终退出重放全部通过。阶段 3 的 P3-01A 与 P3-01B 已在本地完成：注册格式不会因 codec/provider 缺失而消失，通用类型卡片与后端类型查询已贯通；SVG 具有有界、无外部资源的确定性静态 PNG provider，活动内容和外部引用被隔离。P3-01C 正在实施：严格 ISO BMFF brand 识别、真实 AVIF/HEIC 夹具、`codec-unavailable` 降级及单请求有界 worker 协议已经通过；固定 libheif 1.23.1 backend 已通过 Linux 托管真实解码，macOS/Windows、应用接线与随包门禁仍待完成。SSH origin、`main` 与托管 CI 已就绪。开发阶段、交付物和验收规范见：
+阶段 0、阶段 1 与阶段 2 已通过验收。阶段 2 的 P2-01 至 P2-08、P2-A11 100,000 素材连续 8 小时正式验收、P2-A12 GitHub-hosted macOS/Linux/Windows 原生矩阵、统一外部门禁、本地故障、数据安全和最终退出重放全部通过。阶段 3 的 P3-01A 与 P3-01B 已在本地完成：注册格式不会因 codec/provider 缺失而消失，通用类型卡片与后端类型查询已贯通；SVG 具有有界、无外部资源的确定性静态 PNG provider，活动内容和外部引用被隔离。P3-01C 正在实施：严格 ISO BMFF brand 识别、真实 AVIF/HEIC 夹具、`codec-unavailable` 降级及单请求有界 worker 协议已经通过；固定 libheif 1.23.1 backend 已通过 Linux 托管真实解码，桌面 preview 已接入固定摘要清单与 Library Root 授权边界，macOS/Windows、三平台随包和扫描属性仍待完成。SSH origin、`main` 与托管 CI 已就绪。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)

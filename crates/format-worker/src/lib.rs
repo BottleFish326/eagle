@@ -1,3 +1,4 @@
+mod bundle;
 mod client;
 #[cfg(feature = "libheif-backend")]
 mod heif_backend;
@@ -15,3 +16,7 @@ pub use protocol::{
 
 pub const LIBHEIF_PROVIDER_ID: &str = "bundled-libheif";
 pub const LIBHEIF_PROVIDER_VERSION: &str = "libheif-1.23.1-r1";
+pub use bundle::{
+    WORKER_BUNDLE_MANIFEST, WORKER_BUNDLE_SCHEMA, WorkerBundleError, WorkerBundleManifest,
+    open_libheif_worker_bundle,
+};

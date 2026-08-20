@@ -65,6 +65,7 @@ pub struct WorkerClient {
 pub struct WorkerSuccess {
     pub properties: HeifProperties,
     pub png: Option<Vec<u8>>,
+    pub png_dimensions: Option<(u32, u32)>,
 }
 
 #[derive(Debug, Error)]
@@ -108,6 +109,16 @@ pub enum WorkerRunError {
 }
 
 impl WorkerClient {
+    #[must_use]
+    pub fn provider_id(&self) -> &str {
+        &self.spec.provider_id
+    }
+
+    #[must_use]
+    pub fn provider_version(&self) -> &str {
+        &self.spec.provider_version
+    }
+
     /// Opens a client bound to one exact worker binary and provider version.
     ///
     /// # Errors
@@ -341,6 +352,7 @@ impl WorkerClient {
                 Ok(WorkerSuccess {
                     properties,
                     png: (!png.is_empty()).then_some(png),
+                    png_dimensions: payload.map(|payload| (payload.width, payload.height)),
                 })
             }
             WorkerOutcome::Error { code, message } => Err(WorkerRunError::Worker {
