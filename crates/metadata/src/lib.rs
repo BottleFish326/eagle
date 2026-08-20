@@ -478,6 +478,7 @@ fn persistence_paths(parent: &Path, path: &Path) -> Result<(PathBuf, PathBuf), S
 }
 
 #[cfg(not(windows))]
+#[allow(clippy::unnecessary_wraps)]
 fn persistence_paths(parent: &Path, path: &Path) -> Result<(PathBuf, PathBuf), SidecarError> {
     Ok((parent.to_path_buf(), path.to_path_buf()))
 }
