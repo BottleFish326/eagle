@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "failures": [],
+  "gitCommit": "581a6615c06e7f94d0771647e87d523f52c2b2ff",
+  "executedAt": "2026-08-20T12:30:39.885Z",
+  "repositoryClean": true,
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "nodeVersion": "v24.19.0",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)"
+  },
+  "build": {
+    "command": "cargo build --locked --release -p transaction-fault -p cache-fault",
+    "binaries": {
+      "transactionFault": "8a8c82b2291056440458e1394b787c13c67c295fcde5335fdc1b2c1f7a5801b1",
+      "cacheFault": "23d34c1adcc937c0a98ba13f963e47039b65968f2612d1ef15e0294b653d0132"
+    }
+  },
+  "p2A04": {
+    "count": 1000,
+    "abortAfterApplied": 317,
+    "abort": {
+      "status": null,
+      "signal": "SIGABRT",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "recover": {
+      "status": 0,
+      "signal": null,
+      "stdoutSha256": "23cf96ada300369df2e4e7057d8029c092c9bc39c040426415b06dadf4e49d4e",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "transactionId": "01a01f26-c2c7-7563-89de-507c2779a955",
+    "discoveredState": "active",
+    "appliedAtDiscovery": 317,
+    "recoveredCount": 1000
+  },
+  "p2A10": {
+    "cases": [
+      {
+        "faultPoint": "after-cache-rename",
+        "seed": {
+          "status": 0,
+          "signal": null,
+          "stdoutSha256": "42e37fd6b1566ca147e02c8a9372fc55dbe4d2489ca8270b89bf5babab65ea37",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "abort": {
+          "status": null,
+          "signal": "SIGABRT",
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "recover": {
+          "status": 0,
+          "signal": null,
+          "stdoutSha256": "eec0528b8daf99d36c355711c92752ca843666ce579f96ba8ef3c6f24a27729f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "seedVerified": true,
+        "recoveryVerified": true
+      },
+      {
+        "faultPoint": "after-cache-recreate",
+        "seed": {
+          "status": 0,
+          "signal": null,
+          "stdoutSha256": "42e37fd6b1566ca147e02c8a9372fc55dbe4d2489ca8270b89bf5babab65ea37",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "abort": {
+          "status": null,
+          "signal": "SIGABRT",
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "recover": {
+          "status": 0,
+          "signal": null,
+          "stdoutSha256": "eec0528b8daf99d36c355711c92752ca843666ce579f96ba8ef3c6f24a27729f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "seedVerified": true,
+        "recoveryVerified": true
+      }
+    ]
+  },
+  "temporaryWorkspacesRemoved": true
+}

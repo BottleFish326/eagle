@@ -77,7 +77,7 @@ macOS ARM64 共 10 项通过：
 | P2-A09 符号链接循环和重叠根 | Pass locally | 不跟随链接、无重复计数、有明确问题；三种根重叠明确拒绝 |
 | P2-A12 三平台路径兼容 | Pass | GitHub-hosted macOS ARM64 10 项、Linux X64 12 项、Windows X64 9 项全部通过；同一 run/attempt/commit 的逐平台源证据、矩阵汇总和完整质量门禁均为 success |
 
-P2-08 与 P2-A12 已通过。阶段 2 仍不能标为 Accepted：Windows 长路径修复后的 P2-A11 重新验证、统一外部门禁、本地故障收据、数据安全审计和最终退出收据尚未完成。
+P2-08 与 P2-A12 已通过。A11/A12 统一外部门禁与 A04/A10 本地故障门禁也已通过；阶段 2 仍不能标为 Accepted，因为缺陷 reviewed、数据安全审计和最终退出收据尚未完成。
 
 ## 4. 跨目标检查
 
@@ -104,7 +104,7 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 - S 数据集：1,000 素材、200 Sidecar、999 个有效尺寸、1 个损坏图片隔离、0 个扫描问题，56 毫秒，原始素材摘要不变；
 - Tauri release、桌面 Vite 与 Obsidian Bridge production build：通过。
 
-## 6. 正式托管证据与后续动作
+## 6. 正式托管证据与外部门禁
 
 - GitHub Actions 运行：[32332405466](https://github.com/BottleFish326/eagle/actions/runs/32332405466)，attempt 1，事件 `workflow_dispatch`；
 - 受测提交：`9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751`；运行时间 `2026-08-20T04:35:01Z` 至 `2026-08-20T04:44:27Z`；
@@ -112,4 +112,4 @@ cargo clippy --locked -p asset-filesystem --tests --target x86_64-pc-windows-msv
 - 三个平台源 artifact 和矩阵 artifact 已由指定运行采集器重新下载、计算 SHA-256、重放并归档到 `docs/reports/evidence/p2-a12-platform-evidence/`；
 - `docs/reports/evidence/p2-a12-hosted-run.json` 为 `accepted=true`、`failures=[]`，归档提交为 `b1a3af5`。
 
-剩余动作是等待当前 P2-A11 重新验证完整结束，以新 final JSON 替换旧基线证据，再执行 `npm run verify:p2-external`。只有统一报告 `accepted=true` 后才继续本地故障、数据安全和阶段 2 最终退出门禁。
+P2-A11 final JSON 与上述托管证据已由 `npm run verify:p2-external` 全量重放；统一收据为 `accepted=true`、`failures=[]`，SHA-256 为 `ed900239c14d1dde425eeb29e85c6b43d1d43d24ee64b246e7f99e55fa0257ed`，并已提交。随后 A04/A10 本地故障门禁也已通过；剩余门禁是缺陷 reviewed、数据安全和阶段 2 最终退出收据。

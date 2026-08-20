@@ -1,6 +1,6 @@
 # 阶段 2 数据安全缺陷审计
 
-> 状态：审计链已实现；draft 预审已登记 3 项 resolved finding，正式 reviewed 收据 pending
+> 状态：审计链已实现；draft 预审已登记 4 项 resolved finding，正式 reviewed 收据 pending
 >
 > 日期：2026-08-20
 
@@ -8,7 +8,7 @@
 
 阶段 2 退出条件要求 P0/P1 数据安全缺陷为零。P0 指原始素材丢失或被修改、任意文件读取、不可恢复元数据损坏；P1 指核心链路不可用、静默错误引用或批量操作无法恢复。测试通过与“当前没有想到缺陷”不能替代显式缺陷审计。
 
-本门禁以 [`docs/defects.json`](../defects.json) 为唯一阶段缺陷登记输入。仓库中的初始状态故意为 `draft`；即使没有 open finding，draft 也不能满足退出条件。只有 A11/A12 外部门禁与 A04/A10 候选崩溃收据均完成后，逐项复核自动化结果、验收报告、失败现场和已知限制，登记所有发现，再把状态改为 `reviewed` 并写入晚于全部输入证据的 UTC 时间。当前 P2-A12 已通过；修复候选上的 P2-A11 重跑和本地故障收据尚未完成，因此登记册仍保持 `draft`。
+本门禁以 [`docs/defects.json`](../defects.json) 为唯一阶段缺陷登记输入。仓库中的初始状态故意为 `draft`；即使没有 open finding，draft 也不能满足退出条件。A11/A12 外部门禁与 A04/A10 候选崩溃收据均已完成；当前正在逐项复核自动化结果、验收报告、失败现场和已知限制，登记所有发现。复核完成后才把状态改为 `reviewed`，并写入晚于全部输入证据的 UTC 时间。
 
 ## 2. 登记规则
 
@@ -26,6 +26,7 @@
 | DEF-0001 | P1 | Resolved | Windows 传统长路径 Sidecar 原子替换失败；`ebd50ee` 改用 canonical/verbatim 父路径，正式 Windows hosted suite 通过 |
 | DEF-0002 | P3 | Resolved | Windows 长路径测试错误比较 canonical 路径与 8.3 拼写；`c0508c6` 修正判定，正式 Windows hosted suite 通过 |
 | DEF-0003 | P2 | Resolved | 采集器拒绝 `gh` 的 attempt-qualified run URL；`9ddfa4e` 严格规范化匹配 attempt 的 URL，正式证据成功归档 |
+| DEF-0004 | P1 | Resolved | 外部门禁检查器与 Schema 未覆盖生产 ResourceSnapshot 和 GitHub 秒精度时间；`b9648b3` 统一完整调度器与时间契约，真实收据及 81 项工具测试通过 |
 
 这些条目是执行过程中的事实登记，不等于最终审核完成。后续若 A11、本地故障或报告复核发现新问题，继续追加或更新对应 finding；不得为了得到零 open 计数而省略发现。
 
@@ -63,4 +64,4 @@ npm run inspect:p2-data-safety
 
 ## 5. 当前结论
 
-登记册、两个 Schema、纯分析器、离线检查器、不可覆盖生成器、P2 状态转换和最终历史重放均已实现。仓库全部 15 个 Draft 2020-12 Schema 由锁定版本验证器严格编译；数据安全收据 Schema 固定九份报告与十项控制的精确顺序，并具有生成正例、重复报告、控制重排和 open P1 篡改负例。P2-A12 已通过，登记册当前包含 resolved P1/P2/P3 各一项、open 各级均为零；但 P2-A11 修复候选重跑与本地故障证据尚未齐备，因此登记册保持 `draft`，不得生成 accepted 数据安全收据，也不得把“P0/P1 为零”标记为最终 Pass。
+登记册、两个 Schema、纯分析器、离线检查器、不可覆盖生成器、P2 状态转换和最终历史重放均已实现。仓库全部 15 个 Draft 2020-12 Schema 由锁定版本验证器严格编译；数据安全收据 Schema 固定九份报告与十项控制的精确顺序，并具有生成正例、重复报告、控制重排和 open P1 篡改负例。A11/A12 外部门禁和 A04/A10 本地故障门禁已通过；登记册当前包含 resolved P1 两项、P2/P3 各一项，open 各级均为零。登记册仍保持 `draft`，直到本轮报告、失败现场和已知限制复核完成；在真实 reviewed 提交前不得生成 accepted 数据安全收据，也不得把“P0/P1 为零”标记为最终 Pass。

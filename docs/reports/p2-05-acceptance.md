@@ -1,7 +1,7 @@
 # P2-05 缓存生命周期验收报告
 
-- 状态：Passed locally
-- 日期：2026-08-19
+- 状态：Accepted；P2-A10 candidate fault gate passed
+- 日期：2026-08-20
 - 对应：P2-05、P2-A10
 - 决策：[ADR-022](../../specs/adr/022-bounded-thumbnail-cache-lifecycle.md)
 
@@ -78,7 +78,7 @@ recovered disposition=maintained cache=1 asset=true sidecar=true
 
 两个用例都确认：启动成功、旧缓存条目为零、可见请求重新生成而非命中、重建后条目为一、原图摘要不变、Sidecar 摘要不变。测试临时目录验收后已移动到系统废纸篓。
 
-阶段 2 候选退出时，这两处崩溃会与 P2-A04 一起由 `npm run test:p2-local-fault-gates` 重新执行。执行器对 `after-cache-rename`、`after-cache-recreate` 各要求且只允许一个用例，核对 seed/abort/recover 的真实进程状态与恢复输出，记录 Release 二进制 SHA-256，并只在两例都通过且精确临时根已删除后发布不可覆盖的 `evidence/p2-local-fault-gates.json`。当前执行器、纯判定测试与 [`p2-local-fault-gates.schema.json`](../../schemas/p2-local-fault-gates.schema.json) 已就绪；为隔离正在运行的 P2-A11 资源样本，正式候选收据将在 soak 结束并提交后执行。
+阶段 2 候选退出时，这两处崩溃已与 P2-A04 一起由 `npm run test:p2-local-fault-gates` 从干净提交 `581a6615c06e7f94d0771647e87d523f52c2b2ff` 重新执行。`after-cache-rename`、`after-cache-recreate` 各且仅有一个用例，seed/abort/recover 状态、Release 二进制 SHA-256、用户素材/Sidecar 保持和精确临时根清理均通过；不可覆盖的 `evidence/p2-local-fault-gates.json` 也通过独立检查器、JSON Schema、SHA-256 与敏感信息审计。
 
 ## 6. 自动化验收矩阵
 
@@ -115,9 +115,9 @@ npm run ci
 
 - LRU 使用文件 mtime；外部工具若主动修改缓存目录时间，会影响淘汰顺序，但不会影响用户数据或缓存命中正确性；
 - 并发解码允许在维护锁获得前短暂超过估算容量，所有进行中的写入释放读锁后立即收敛；
-- 缓存维护需要遍历普通文件目录；P2-06 已把它纳入统一任务限流、后台优先级和长时间资源监测，正式 8 小时 A11 仍在运行；
-- P2-A08/P2-A09 已通过本地验收，P2-A12 已通过托管三平台验收；P2-A11 修复候选重跑及后续正式收据仍是阶段退出门禁。
+- 缓存维护需要遍历普通文件目录；P2-06 已把它纳入统一任务限流、后台优先级和正式 8 小时 A11 资源监测，长稳门禁已通过；
+- P2-A08 至 P2-A12、统一外部门禁和 A04/A10 候选故障门禁均已通过；缺陷 reviewed、数据安全和最终退出收据仍是阶段退出门禁。
 
 ## 9. 结论
 
-P2-05 已通过本地专项验收。缩略图缓存有明确且可见的容量、期限和版本规则，素材目录收敛后会回收孤立项；全量清理在两个真实崩溃边界中都能重启恢复，并证明原图与 Sidecar 不变。P2-06/P2-08 已完成本地实现，最终候选仍须重新执行 A10 故障收据并完成 A11/A12。
+P2-05 已通过正式专项验收。缩略图缓存有明确且可见的容量、期限和版本规则，素材目录收敛后会回收孤立项；全量清理在候选提交的两个真实崩溃边界中都能重启恢复，并证明原图与 Sidecar 不变。A10 候选故障收据已通过并等待随本报告提交。

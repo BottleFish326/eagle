@@ -105,7 +105,7 @@ npm run test:resource-stability
 | 缓存终值 | 20,000 项，未超过固定上限 | Pass |
 | 调度峰值 | active 2 / waiting 0 | Pass |
 
-独立 `inspectResourceStabilityReport` 使用全部原始样本和正式参数重新构造报告，返回 `accepted=true`、`failures=[]`，重放结果与磁盘 JSON 语义完全相同。文件普通性、32 MiB 上限、提交与参数绑定、完整时长、空 stderr、无本机路径或令牌模式也全部通过；`npm run audit:p2-soak-baseline` 返回 `accepted=true`，loaded/product `changedPaths` 均为空。P2-06 与 P2-A11 重新判定为 Pass；阶段 2 仍须完成统一外部门禁、本地故障、缺陷 reviewed、数据安全与最终退出收据。
+独立 `inspectResourceStabilityReport` 使用全部原始样本和正式参数重新构造报告，返回 `accepted=true`、`failures=[]`，重放结果与磁盘 JSON 语义完全相同。文件普通性、32 MiB 上限、提交与参数绑定、完整时长、空 stderr、无本机路径或令牌模式也全部通过；`npm run audit:p2-soak-baseline` 返回 `accepted=true`，loaded/product `changedPaths` 均为空。P2-06/P2-A11、统一外部门禁与本地故障门禁均已通过；阶段 2 仍须完成缺陷 reviewed、数据安全与最终退出收据。
 
 ## 6. 当前质量门禁
 
