@@ -1,7 +1,7 @@
-# P2-06 资源与稳定性控制验收准备报告
+# P2-06 资源与稳定性控制验收报告
 
-- 状态：Implemented locally；P2-A11 pending
-- 日期：2026-08-19
+- 状态：Completed locally；P2-A11 passed
+- 日期：2026-08-20
 - 对应：P2-06、P2-A11
 - 决策：[ADR-023](../../specs/adr/023-unified-bounded-resource-scheduling.md)
 
@@ -85,9 +85,25 @@ npm run test:resource-stability
 
 运行期间，partial 离线检查器会把五项运行参数逐项绑定到正式配置，并以 internal/native 两条采样流的较小 elapsed 计算目标、已覆盖、剩余毫秒和百分比；这只是健康进度，不替代最终原始样本重放。P2-A12 证据归档后，`verify-phase-2-external-gates.mjs` 会再次调用最终重放器，并将最终 JSON 原始字节 SHA-256、受测 commit、参数、环境和 summary 写入统一外部门禁结论。该统一结论不替代本节 8 小时判据。
 
-## 5. 尚未完成的验收
+## 5. P2-A11 正式验收结果
 
-P2-A11 明确要求连续 8 小时。正式 28,800 秒任务已从固定提交 `c18e1ca` 启动，当前 partial 持续通过只读健康检查；partial 只能证明进程仍在运行，不能替代 complete 样本或最终确定性重放。因此本报告仍不能标记为 `Passed locally`，P2-06 也不能标记为完成。任务正常结束、partial 被最终 JSON 替换并归档通过证据后，才能更新本报告、开发进度和下一工作项。
+正式任务从 `2026-08-19T15:37:27.899Z` 连续运行至 `2026-08-19T23:37:43.909Z`，正常写入 [`p2-06-resource-soak.json`](evidence/p2-06-resource-soak.json) 并清除 `.partial`。最终文件是 8,798,760 字节的普通文件，不是符号链接；SHA-256 为 `180537f44705b3a51da1132a7ba4bd02d4d36104bb7c1de896be36f1d0f494e4`，受测提交为 `c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21`。
+
+| 判据 | 实际结果 | 结论 |
+|---|---:|---|
+| 内部样本 / 最低要求 | 5,333 / 4,320 | Pass |
+| 原生样本 / 最低要求 | 5,749 / 4,311 | Pass |
+| 非法内部 / 原生样本 | 0 / 0 | Pass |
+| RSS 净增长 / 斜率 | -49,312 KiB / -33.17 KiB/min | Pass |
+| 句柄净增长 / 最大值 | -2 / 12 | Pass |
+| 线程基线 / 峰值 | 4 / 4 | Pass |
+| CPU 峰值 | 171.6%，低于 8 个前台许可的容量包络 | Pass |
+| 扫描 / 事件 / watcher 批次 | 1,487 / 40,705 / 40,704 | Pass |
+| 哈希 / 解码请求 | 54,384 / 54,384 | Pass |
+| 缓存终值 | 20,000 项，未超过固定上限 | Pass |
+| 调度峰值 | active 2 / waiting 0 | Pass |
+
+独立 `inspectResourceStabilityReport` 使用全部原始样本和正式参数重新构造报告，返回 `accepted=true`、`failures=[]`，重放结果与磁盘 JSON 语义完全相同。`npm run audit:p2-soak-baseline` 同时确认三份已加载输入和全部产品输入 `changedPaths=[]`。因此 P2-A11 正式通过，P2-06 可标记为 Completed locally；阶段 2 仍须等待 P2-A12、候选故障收据、数据安全审计和最终退出收据。
 
 ## 6. 当前质量门禁
 

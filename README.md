@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段 0 与阶段 1 已通过本地验收。阶段 2 已完成 P2-01 至 P2-05 和 P2-07；P2-06 的资源稳定性实现等待 P2-A11 连续 8 小时正式验收，P2-08 的平台兼容与离线根降级已通过 macOS 本机验收，等待 Windows/Linux 托管矩阵完成 P2-A12。仓库尚无远程地址，首次托管 CI 仍待远程建立后确认。开发阶段、交付物和验收规范见：
+阶段 0 与阶段 1 已通过本地验收。阶段 2 已完成 P2-01 至 P2-07；P2-A11 的 100,000 素材连续 8 小时正式验收已通过确定性重放，P2-08 的平台兼容与离线根降级已通过 macOS 本机验收，等待 Windows/Linux 托管矩阵完成 P2-A12。仓库尚无远程地址，首次托管 CI 仍待远程建立后确认。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
@@ -16,7 +16,7 @@
 - [P2-03 验收报告](docs/reports/p2-03-acceptance.md)
 - [P2-04 验收报告](docs/reports/p2-04-acceptance.md)
 - [P2-05 验收报告](docs/reports/p2-05-acceptance.md)
-- [P2-06 验收准备报告](docs/reports/p2-06-acceptance.md)
+- [P2-06 验收报告](docs/reports/p2-06-acceptance.md)
 - [P2-07 验收报告](docs/reports/p2-07-acceptance.md)
 - [P2-08 验收报告](docs/reports/p2-08-acceptance.md)
 - [阶段 2 验收报告（草案）](docs/reports/phase-2-acceptance.md)
