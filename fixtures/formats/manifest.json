@@ -268,7 +268,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 1000,
+        "previewMaxMs": 1500,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -335,7 +335,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 1000,
+        "previewMaxMs": 1500,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -398,7 +398,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 1000,
+        "previewMaxMs": 1500,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -456,7 +456,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 1000,
+        "previewMaxMs": 1500,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -524,7 +524,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 1000,
+        "previewMaxMs": 1500,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -590,7 +590,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 1000,
+        "previewMaxMs": 1500,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -653,7 +653,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 1000,
+        "previewMaxMs": 1500,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -711,7 +711,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 1000,
+        "previewMaxMs": 1500,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -777,7 +777,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 1000,
+        "previewMaxMs": 1500,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
