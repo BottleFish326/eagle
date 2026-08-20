@@ -154,3 +154,32 @@ jobs:
 
       - name: Run P1-01 quality gate
         run: npm run ci
+
+  libheif-worker:
+    name: Fixed libheif worker backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install fixed worker build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            cmake \
+            libaom-dev \
+            libde265-dev \
+            pkg-config
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy
+
+      - name: Verify fixed libheif backend
+        run: |
+          cargo clippy -p format-worker --all-targets --features embedded-libheif -- -D warnings
+          cargo test -p format-worker --all-targets --features embedded-libheif
