@@ -156,9 +156,13 @@ jobs:
         run: npm run ci
 
   libheif-worker:
-    name: Fixed libheif worker backend
-    runs-on: ubuntu-24.04
+    name: Fixed libheif worker backend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
 
     steps:
       - name: Check out repository
@@ -167,6 +171,7 @@ jobs:
           persist-credentials: false
 
       - name: Install fixed worker build dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install --yes \
@@ -176,6 +181,16 @@ jobs:
             libde265-dev \
             pkg-config
 
+      - name: Install fixed worker build dependencies
+        if: runner.os == 'macOS'
+        run: brew install aom cmake libde265 pkg-config
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
       - name: Install Rust toolchain
         run: rustup toolchain install stable --profile minimal --component clippy
 
@@ -183,3 +198,25 @@ jobs:
         run: |
           cargo clippy -p format-worker --all-targets --features embedded-libheif -- -D warnings
           cargo test -p format-worker --all-targets --features embedded-libheif
+
+      - name: Build and verify fixed worker bundle
+        env:
+          MATERIAL_EAGLE_WORKER_PLATFORM: ${{ runner.os == 'macOS' && 'macos' || 'linux' }}
+          MATERIAL_EAGLE_WORKER_ARCHITECTURE: ${{ runner.arch == 'ARM64' && 'aarch64' || 'x86_64' }}
+        run: |
+          cargo build -p format-worker --release --bin material-eagle-format-worker --features embedded-libheif
+          node tools/package-format-worker.mjs \
+            --binary target/release/material-eagle-format-worker \
+            --output-directory "${{ runner.temp }}/format-worker-bundle" \
+            --platform "$MATERIAL_EAGLE_WORKER_PLATFORM" \
+            --architecture "$MATERIAL_EAGLE_WORKER_ARCHITECTURE"
+          cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- \
+            "${{ runner.temp }}/format-worker-bundle"
+
+      - name: Archive verified worker bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: p3-01c-libheif-worker-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          path: ${{ runner.temp }}/format-worker-bundle
+          if-no-files-found: error
+          retention-days: 30
