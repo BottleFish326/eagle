@@ -5,7 +5,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use asset_core::{AssetDimensions, AssetIssue, AssetRecord, NativeImageMetadata, SidecarState};
+use asset_core::{
+    AssetDimensions, AssetIssue, AssetRecord, MediaProperties, NativeImageMetadata, SidecarState,
+};
+use asset_media::{MediaInspectError, VideoContainer, inspect_video_file};
 use asset_svg::{SvgError, inspect_svg_file};
 use exif::{In, Tag, Value};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
@@ -498,6 +501,37 @@ fn parse_asset(
                 .issues
                 .push(AssetIssue::InvalidImageMetadata(error.to_string())),
         }
+    } else if let Some(container) = video_container(&asset.mime) {
+        let remaining = options.file_parse_timeout.saturating_sub(started.elapsed());
+        match inspect_video_file(&canonical, container, remaining) {
+            Ok(inspection) => {
+                if let Some((width, height)) = inspection.width.zip(inspection.height) {
+                    asset.dimensions = Some(AssetDimensions { width, height });
+                }
+                asset.media = Some(MediaProperties {
+                    duration_ms: inspection.duration_ms,
+                    video_track_count: Some(inspection.video_track_count),
+                    audio_track_count: Some(inspection.audio_track_count),
+                    codec: inspection.codec.map(str::to_owned),
+                    ..MediaProperties::default()
+                });
+            }
+            Err(MediaInspectError::Unreadable) => asset.issues.push(AssetIssue::UnreadableFile(
+                "video enrichment could not reread the source".into(),
+            )),
+            Err(MediaInspectError::SourceChanged) => {
+                asset.issues.push(AssetIssue::InvalidNativeMetadata(
+                    "video source changed during container inspection".into(),
+                ));
+            }
+            Err(MediaInspectError::InvalidContent) => asset.issues.push(
+                AssetIssue::InvalidNativeMetadata("video container metadata is malformed".into()),
+            ),
+            Err(MediaInspectError::ResourceLimited) => asset.issues.push(
+                AssetIssue::ResourceLimited("video container inspection limit reached".into()),
+            ),
+            Err(MediaInspectError::UnsupportedFeature) => {}
+        }
     }
 
     if parse_deadline_exceeded(&mut asset, started, options.file_parse_timeout) {
@@ -560,6 +594,15 @@ fn parse_deadline_exceeded(asset: &mut AssetRecord, started: Instant, timeout: D
         )));
     }
     true
+}
+
+fn video_container(mime: &str) -> Option<VideoContainer> {
+    match mime {
+        "video/mp4" => Some(VideoContainer::Mp4),
+        "video/quicktime" => Some(VideoContainer::Mov),
+        "video/webm" => Some(VideoContainer::Webm),
+        _ => None,
+    }
 }
 
 fn merge_adjacent_sidecar(
@@ -836,20 +879,14 @@ mod tests {
     }
 
     #[test]
-    fn retains_registered_assets_and_sidecars_without_metadata_or_preview_providers() {
+    fn retains_registered_assets_and_sidecars_when_optional_capabilities_are_unavailable() {
         let directory = tempdir().expect("tempdir");
-        let fixtures: [(&str, &[u8], &str, AssetKind); 4] = [
+        let fixtures: [(&str, &[u8], &str, AssetKind); 3] = [
             (
                 "photo.avif",
                 b"\x00\x00\x00\x18ftypavif\x00\x00\x00\x00avif",
                 "image/avif",
                 AssetKind::Image,
-            ),
-            (
-                "clip.mp4",
-                b"\x00\x00\x00\x18ftypisom\x00\x00\x00\x00isom",
-                "video/mp4",
-                AssetKind::Video,
             ),
             ("sound.mp3", b"ID3\x04\x00", "audio/mpeg", AssetKind::Audio),
             (
@@ -886,6 +923,141 @@ mod tests {
             assert!(asset.sidecar_state.is_some());
             assert!(asset.dimensions.is_none());
             assert!(asset.issues.is_empty());
+        }
+    }
+
+    #[test]
+    fn enriches_normal_video_fixtures_and_keeps_unknown_codecs_neutral() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/formats/sources/video");
+        let report = scan_root(&root, &ScanOptions::default()).expect("scan video fixtures");
+
+        for (name, mime, codec) in [
+            ("minimal.mp4", "video/mp4", "h264"),
+            ("minimal.mov", "video/quicktime", "h264"),
+            ("minimal.webm", "video/webm", "vp9"),
+        ] {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .unwrap_or_else(|| panic!("missing normal video fixture {name}"));
+            assert_eq!(asset.mime, mime, "{name}");
+            assert_eq!(asset.kind, AssetKind::Video, "{name}");
+            assert_eq!(
+                asset.dimensions,
+                Some(AssetDimensions {
+                    width: 320,
+                    height: 180
+                }),
+                "{name}"
+            );
+            let media = asset.media.as_ref().expect("normal video media properties");
+            assert_eq!(media.duration_ms, Some(2_000), "{name}");
+            assert_eq!(media.video_track_count, Some(1), "{name}");
+            assert_eq!(media.audio_track_count, Some(1), "{name}");
+            assert_eq!(media.codec.as_deref(), Some(codec), "{name}");
+            assert!(asset.issues.is_empty(), "{name}: {:?}", asset.issues);
+        }
+
+        let unknown = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "unknown-codec.mp4")
+            .expect("unknown codec fixture");
+        assert_eq!(unknown.mime, "video/mp4");
+        let media = unknown
+            .media
+            .as_ref()
+            .expect("unknown codec media properties");
+        assert_eq!(media.duration_ms, Some(2_000));
+        assert_eq!(media.video_track_count, Some(1));
+        assert_eq!(media.audio_track_count, Some(1));
+        assert!(media.codec.is_none());
+        assert!(unknown.issues.is_empty());
+    }
+
+    #[test]
+    fn isolates_adversarial_video_fixtures_without_mutating_source_bytes() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/formats/sources/video");
+        let before = fs::read_dir(&root)
+            .expect("read video fixture directory")
+            .map(|entry| {
+                let path = entry.expect("video fixture entry").path();
+                let bytes = fs::read(&path).expect("read video fixture");
+                (path, bytes)
+            })
+            .collect::<Vec<_>>();
+        let report = scan_root(&root, &ScanOptions::default()).expect("scan video fixtures");
+        assert_eq!(report.assets.len(), before.len());
+
+        let truncated = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "truncated.mp4")
+            .expect("truncated fixture");
+        assert!(matches!(
+            truncated.issues.as_slice(),
+            [AssetIssue::InvalidNativeMetadata(_)]
+        ));
+
+        for name in ["oversized-duration.mp4", "oversized-dimensions.webm"] {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .unwrap_or_else(|| panic!("missing resource-limited fixture {name}"));
+            assert!(
+                matches!(asset.issues.as_slice(), [AssetIssue::ResourceLimited(_)]),
+                "{name}: {:?}",
+                asset.issues
+            );
+        }
+
+        let disguised_png = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "png-disguised-as-mp4.mp4")
+            .expect("disguised PNG fixture");
+        assert_eq!(disguised_png.mime, "image/png");
+        assert_eq!(
+            disguised_png.dimensions,
+            Some(AssetDimensions {
+                width: 16,
+                height: 16
+            })
+        );
+        assert!(matches!(
+            disguised_png.issues.as_slice(),
+            [AssetIssue::MimeMismatch(_)]
+        ));
+
+        let disguised_mp4 = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "mp4-disguised-as-webm.webm")
+            .expect("disguised MP4 fixture");
+        assert_eq!(disguised_mp4.mime, "video/mp4");
+        assert_eq!(
+            disguised_mp4.dimensions,
+            Some(AssetDimensions {
+                width: 320,
+                height: 180
+            })
+        );
+        assert!(matches!(
+            disguised_mp4.issues.as_slice(),
+            [AssetIssue::MimeMismatch(_)]
+        ));
+
+        for (path, expected) in before {
+            assert_eq!(
+                fs::read(&path).expect("reread video fixture"),
+                expected,
+                "{} changed",
+                path.display()
+            );
         }
     }
 

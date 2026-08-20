@@ -59,6 +59,7 @@ FormatDescriptor {
 ```text
 MediaProperties {
   durationMs?, pageCount?, frameCount?,
+  videoTrackCount?, audioTrackCount?,
   sampleRateHz?, channelCount?, bitDepth?,
   colorSpace?, codec?, hasAlpha?
 }
@@ -153,6 +154,12 @@ backend 重放；run `32397240917` 又从 Linux DEB、macOS `.app` 与 Windows N
 
 - MP4/MOV/WebM 轨道和时长；未知 codec 降级；
 - 视频帧 worker 单独验收，不阻塞基础格式支持。
+
+实施状态（2026-08-21）：容器属性 **Completed locally**。`asset-media` 精确锁定纯 Rust
+Symphonia 0.6.1，关闭默认 feature 且只启用 `isomp4`/`mkv` demuxer；ISO BMFF/EBML
+预检、32 MiB 读取预算、4,096 次 seek/元素、256 轨道、365 天时长、65,535 单边和扫描
+deadline 已接线。9 个正常/截断/伪装/未知 codec/超限夹具进入三平台 `core-only` 清单，
+扫描只写可重建派生属性并证明源字节不变。视频帧 worker 与完整 P3-A01/P3-A02 仍未通过。
 
 ### P3-01E：音频
 

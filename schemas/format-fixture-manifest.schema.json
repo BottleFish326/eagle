@@ -277,6 +277,8 @@
             "durationMs": { "type": "integer", "minimum": 0 },
             "pageCount": { "type": "integer", "minimum": 0 },
             "frameCount": { "type": "integer", "minimum": 0 },
+            "videoTrackCount": { "type": "integer", "minimum": 0 },
+            "audioTrackCount": { "type": "integer", "minimum": 0 },
             "sampleRateHz": { "type": "integer", "minimum": 1 },
             "channelCount": { "type": "integer", "minimum": 1 },
             "bitDepth": { "type": "integer", "minimum": 1 },

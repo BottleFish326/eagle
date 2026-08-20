@@ -42,6 +42,8 @@ export interface MediaProperties {
   durationMs: number | null;
   pageCount: number | null;
   frameCount: number | null;
+  videoTrackCount: number | null;
+  audioTrackCount: number | null;
   sampleRateHz: number | null;
   channelCount: number | null;
   bitDepth: number | null;

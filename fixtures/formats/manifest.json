@@ -728,6 +728,389 @@
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 64
       }
+    },
+    {
+      "id": "video-mp4-minimal",
+      "path": "sources/video/minimal.mp4",
+      "format": "mp4",
+      "case": "normal",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "cd0afa56bd2bc1de676a74cafe26982f0b1aa35865c7b8f743b3f64fcd4a6868",
+      "size": 976,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "video/mp4",
+            "kind": "video",
+            "issueCodes": [],
+            "metadata": {
+              "status": "available",
+              "properties": {
+                "width": 320,
+                "height": 180,
+                "durationMs": 2000,
+                "videoTrackCount": 1,
+                "audioTrackCount": 1,
+                "codec": "h264"
+              }
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "video-frame-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "video-mov-minimal",
+      "path": "sources/video/minimal.mov",
+      "format": "mov",
+      "case": "normal",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "54db7d19537c730754aadba7aea75c20f57b0b45a33227cb275b2c433b71f3aa",
+      "size": 972,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "video/quicktime",
+            "kind": "video",
+            "issueCodes": [],
+            "metadata": {
+              "status": "available",
+              "properties": {
+                "width": 320,
+                "height": 180,
+                "durationMs": 2000,
+                "videoTrackCount": 1,
+                "audioTrackCount": 1,
+                "codec": "h264"
+              }
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "video-frame-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "video-webm-minimal",
+      "path": "sources/video/minimal.webm",
+      "format": "webm",
+      "case": "normal",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "23a8beee9feed2ea0e22e3273a87a59bde706e0ffa58aacb78aec8f62cb430b8",
+      "size": 179,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "video/webm",
+            "kind": "video",
+            "issueCodes": [],
+            "metadata": {
+              "status": "available",
+              "properties": {
+                "width": 320,
+                "height": 180,
+                "durationMs": 2000,
+                "videoTrackCount": 1,
+                "audioTrackCount": 1,
+                "codec": "vp9"
+              }
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "video-frame-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "video-mp4-truncated",
+      "path": "sources/video/truncated.mp4",
+      "format": "mp4",
+      "case": "truncated",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "754ed2f212d495ae30ef2f68f8ab18b0ab162ce669f768373d79f72f1ba3c3bd",
+      "size": 24,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "video/mp4",
+            "kind": "video",
+            "issueCodes": ["invalid-native-metadata"],
+            "metadata": {
+              "status": "invalid-content",
+              "reasonCode": "invalid-video-container",
+              "properties": {}
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "video-frame-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "video-png-content-mismatch",
+      "path": "sources/video/png-disguised-as-mp4.mp4",
+      "format": "mp4",
+      "case": "content-mismatch",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "ead9b2404087d65c292c155f770e0f953a6b9c5590432d33d729bebd6d8f8de0",
+      "size": 95,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "image/png",
+            "kind": "image",
+            "issueCodes": ["mime-mismatch"],
+            "metadata": {
+              "status": "available",
+              "properties": {
+                "width": 16,
+                "height": 16
+              }
+            },
+            "preview": {
+              "status": "available",
+              "referencePath": "references/svg/minimal.png",
+              "referenceSha256": "ead9b2404087d65c292c155f770e0f953a6b9c5590432d33d729bebd6d8f8de0",
+              "width": 16,
+              "height": 16
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "video-mp4-extension-mismatch",
+      "path": "sources/video/mp4-disguised-as-webm.webm",
+      "format": "webm",
+      "case": "extension-mismatch",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "cd0afa56bd2bc1de676a74cafe26982f0b1aa35865c7b8f743b3f64fcd4a6868",
+      "size": 976,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "video/mp4",
+            "kind": "video",
+            "issueCodes": ["mime-mismatch"],
+            "metadata": {
+              "status": "available",
+              "properties": {
+                "width": 320,
+                "height": 180,
+                "durationMs": 2000,
+                "videoTrackCount": 1,
+                "audioTrackCount": 1,
+                "codec": "h264"
+              }
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "video-frame-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "video-mp4-unknown-codec",
+      "path": "sources/video/unknown-codec.mp4",
+      "format": "mp4",
+      "case": "unknown-codec",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "41f8528911ecd30890719ed77fac534a0cdeeafac38c079c3dffe9de1746309f",
+      "size": 976,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "video/mp4",
+            "kind": "video",
+            "issueCodes": [],
+            "metadata": {
+              "status": "available",
+              "properties": {
+                "durationMs": 2000,
+                "videoTrackCount": 1,
+                "audioTrackCount": 1
+              }
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "video-frame-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "video-mp4-oversized-duration",
+      "path": "sources/video/oversized-duration.mp4",
+      "format": "mp4",
+      "case": "oversized-declaration",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "23b7de3b6a9647367a2e2f341e23494213dd422de6ffb620bb0c00f21d0243e8",
+      "size": 976,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "video/mp4",
+            "kind": "video",
+            "issueCodes": ["resource-limited"],
+            "metadata": {
+              "status": "resource-limited",
+              "reasonCode": "video-metadata-limit",
+              "properties": {}
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "video-frame-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
+    },
+    {
+      "id": "video-webm-oversized-dimensions",
+      "path": "sources/video/oversized-dimensions.webm",
+      "format": "webm",
+      "case": "oversized-declaration",
+      "source": {
+        "origin": "generated-in-repository",
+        "license": "MIT"
+      },
+      "sha256": "9213a178b4566a04b8fb522025e82744a29fc8312612808d45145b9f484e1547",
+      "size": 180,
+      "expectations": [
+        {
+          "platforms": ["windows", "macos", "linux"],
+          "providerProfile": "core-only",
+          "result": {
+            "recognized": true,
+            "mime": "video/webm",
+            "kind": "video",
+            "issueCodes": ["resource-limited"],
+            "metadata": {
+              "status": "resource-limited",
+              "reasonCode": "video-metadata-limit",
+              "properties": {}
+            },
+            "preview": {
+              "status": "unsupported-feature",
+              "reasonCode": "video-frame-worker-unavailable"
+            }
+          }
+        }
+      ],
+      "budgets": {
+        "scanMaxMs": 100,
+        "previewMaxMs": 250,
+        "maxRssDeltaBytes": 16777216,
+        "maxPreviewBytes": 1048576
+      }
     }
   ]
 }

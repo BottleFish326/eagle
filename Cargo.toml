@@ -8,6 +8,7 @@ members = [
   "crates/format-worker",
   "crates/index",
   "crates/link-resolver",
+  "crates/media",
   "crates/metadata",
   "crates/preview",
   "crates/resource-control",
@@ -43,6 +44,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml_ng = "0.10"
 sha2 = "0.10"
+symphonia = { version = "=0.6.1", default-features = false, features = ["isomp4", "mkv"] }
 tempfile = "3"
 thiserror = "2"
 usvg = { version = "=0.48.1", default-features = false }
