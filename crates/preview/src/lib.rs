@@ -24,6 +24,9 @@ mod cache;
 mod decoder;
 
 pub const BUILTIN_RASTER_PROVIDER_ID: &str = "builtin-raster";
+pub const EMBEDDED_MP3_COVER_PROVIDER_ID: &str = "embedded-mp3-cover";
+pub const EMBEDDED_FLAC_COVER_PROVIDER_ID: &str = "embedded-flac-cover";
+pub const EMBEDDED_AUDIO_COVER_PROVIDER_VERSION: &str = "bounded-audio-cover-v1";
 pub const THUMBNAIL_DECODER_VERSION: &str = "image-0.25.9-triangle-png-v1";
 pub const THUMBNAIL_CACHE_LAYOUT_VERSION: u32 = 3;
 pub const MIN_THUMBNAIL_EDGE: u32 = 16;
@@ -117,6 +120,14 @@ const BUILTIN_RASTER_PROVIDER: PreviewProviderIdentity = PreviewProviderIdentity
 const SAFE_SVG_PROVIDER: PreviewProviderIdentity = PreviewProviderIdentity {
     id: SVG_PROVIDER_ID,
     version: SVG_PROVIDER_VERSION,
+};
+const EMBEDDED_MP3_COVER_PROVIDER: PreviewProviderIdentity = PreviewProviderIdentity {
+    id: EMBEDDED_MP3_COVER_PROVIDER_ID,
+    version: EMBEDDED_AUDIO_COVER_PROVIDER_VERSION,
+};
+const EMBEDDED_FLAC_COVER_PROVIDER: PreviewProviderIdentity = PreviewProviderIdentity {
+    id: EMBEDDED_FLAC_COVER_PROVIDER_ID,
+    version: EMBEDDED_AUDIO_COVER_PROVIDER_VERSION,
 };
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -668,8 +679,9 @@ fn preview_provider(
             "the pinned optional image worker is unavailable",
         )),
         "image/svg+xml" => Ok(SAFE_SVG_PROVIDER),
-        "video/mp4" | "video/quicktime" | "video/webm" | "audio/mpeg" | "audio/wav"
-        | "audio/flac" | "application/pdf" => Err((
+        "audio/mpeg" => Ok(EMBEDDED_MP3_COVER_PROVIDER),
+        "audio/flac" => Ok(EMBEDDED_FLAC_COVER_PROVIDER),
+        "video/mp4" | "video/quicktime" | "video/webm" | "audio/wav" | "application/pdf" => Err((
             ThumbnailPlaceholderReason::PreviewUnavailable,
             "this registered format does not yet have a preview provider",
         )),
@@ -687,6 +699,9 @@ fn preview_provider(
 pub(crate) fn is_current_preview_provider(id: &str, version: &str) -> bool {
     (id == BUILTIN_RASTER_PROVIDER.id && version == BUILTIN_RASTER_PROVIDER.version)
         || (id == SAFE_SVG_PROVIDER.id && version == SAFE_SVG_PROVIDER.version)
+        || (id == EMBEDDED_MP3_COVER_PROVIDER.id && version == EMBEDDED_MP3_COVER_PROVIDER.version)
+        || (id == EMBEDDED_FLAC_COVER_PROVIDER.id
+            && version == EMBEDDED_FLAC_COVER_PROVIDER.version)
         || (id == LIBHEIF_PROVIDER_ID && version == LIBHEIF_PROVIDER_VERSION)
 }
 
@@ -768,8 +783,9 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        CachePolicy, CacheStartupDisposition, THUMBNAIL_DECODER_VERSION, ThumbnailOutcome,
-        ThumbnailPlaceholderReason, ThumbnailService, apply_heif_properties,
+        CachePolicy, CacheStartupDisposition, EMBEDDED_AUDIO_COVER_PROVIDER_VERSION,
+        EMBEDDED_FLAC_COVER_PROVIDER_ID, EMBEDDED_MP3_COVER_PROVIDER_ID, THUMBNAIL_DECODER_VERSION,
+        ThumbnailOutcome, ThumbnailPlaceholderReason, ThumbnailService, apply_heif_properties,
     };
 
     #[test]
@@ -1423,6 +1439,84 @@ mod tests {
         assert_eq!(descriptor["providerId"], thumbnail.provider_id);
         assert_eq!(descriptor["providerVersion"], thumbnail.provider_version);
         assert!(descriptor.get("decoderVersion").is_none());
+    }
+
+    #[test]
+    fn embedded_mp3_and_flac_covers_generate_bounded_pngs_without_source_writes() {
+        let root =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/formats/sources/audio");
+        let directory = tempdir().expect("tempdir");
+        let service = ThumbnailService::open(&directory.path().join("cache"), 1).expect("service");
+
+        for (name, mime, provider) in [
+            ("cover.mp3", "audio/mpeg", EMBEDDED_MP3_COVER_PROVIDER_ID),
+            ("cover.flac", "audio/flac", EMBEDDED_FLAC_COVER_PROVIDER_ID),
+        ] {
+            let path = root.join(name);
+            let before = fs::read(&path).expect("audio source");
+            let metadata = fs::metadata(&path).expect("audio metadata");
+            let record = AssetRecord::untagged(
+                path.to_string_lossy().into_owned(),
+                path.clone(),
+                mime.into(),
+                metadata.len(),
+                0,
+            );
+            let thumbnail = expect_ready(service.request(&record, 32).expect("audio cover"));
+            assert_eq!((thumbnail.width, thumbnail.height), (16, 16), "{name}");
+            assert_eq!(thumbnail.provider_id, provider, "{name}");
+            assert_eq!(
+                thumbnail.provider_version, EMBEDDED_AUDIO_COVER_PROVIDER_VERSION,
+                "{name}"
+            );
+            let bytes = service.read(&thumbnail.cache_key).expect("cover PNG");
+            assert_eq!(
+                image::guess_format(&bytes).expect("cover format"),
+                ImageFormat::Png
+            );
+            assert_eq!(
+                fs::read(&path).expect("audio source after"),
+                before,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_invalid_and_oversized_audio_covers_remain_isolated_placeholders() {
+        let root =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/formats/sources/audio");
+        let directory = tempdir().expect("tempdir");
+        let service = ThumbnailService::open(&directory.path().join("cache"), 1).expect("service");
+        for (name, expected) in [
+            (
+                "minimal.mp3",
+                ThumbnailPlaceholderReason::PreviewUnavailable,
+            ),
+            ("truncated.mp3", ThumbnailPlaceholderReason::InvalidContent),
+            (
+                "oversized-cover.mp3",
+                ThumbnailPlaceholderReason::ResourceLimited,
+            ),
+        ] {
+            let path = root.join(name);
+            let metadata = fs::metadata(&path).expect("audio metadata");
+            let record = AssetRecord::untagged(
+                path.to_string_lossy().into_owned(),
+                path,
+                "audio/mpeg".into(),
+                metadata.len(),
+                0,
+            );
+            assert!(
+                matches!(
+                    service.request(&record, 32).expect("audio placeholder"),
+                    ThumbnailOutcome::Placeholder { reason, .. } if reason == expected
+                ),
+                "{name}"
+            );
+        }
+        assert_eq!(png_files(service.cache.root()), 0);
     }
 
     fn record(path: &Path) -> AssetRecord {

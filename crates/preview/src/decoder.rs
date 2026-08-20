@@ -1,12 +1,15 @@
 use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::path::Path;
+use std::time::Duration;
 
+use asset_media::{AudioContainer, MediaInspectError, inspect_audio_file};
 use asset_svg::{SVG_PROVIDER_ID, SvgError, render_svg_file};
 use format_worker::{WorkerClient, WorkerErrorCode, WorkerRunError};
 use image::imageops::FilterType;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
 
+use crate::{EMBEDDED_FLAC_COVER_PROVIDER_ID, EMBEDDED_MP3_COVER_PROVIDER_ID};
 use crate::{PreviewProviderIdentity, ThumbnailPlaceholderReason};
 
 const MAX_SOURCE_DIMENSION: u32 = 65_535;
@@ -34,6 +37,12 @@ pub(crate) fn decode_thumbnail(
     }
     if provider.id == SVG_PROVIDER_ID {
         return decode_svg(path, max_edge);
+    }
+    if provider.id == EMBEDDED_MP3_COVER_PROVIDER_ID {
+        return decode_audio_cover(path, max_edge, AudioContainer::Mp3);
+    }
+    if provider.id == EMBEDDED_FLAC_COVER_PROVIDER_ID {
+        return decode_audio_cover(path, max_edge, AudioContainer::Flac);
     }
     let file =
         File::open(path).map_err(|error| failure(ThumbnailPlaceholderReason::Unreadable, error))?;
@@ -69,6 +78,83 @@ pub(crate) fn decode_thumbnail(
         .map_err(|error| failure(ThumbnailPlaceholderReason::DecodeFailed, error))?;
     source.apply_orientation(orientation);
 
+    let thumbnail = if source.width() <= max_edge && source.height() <= max_edge {
+        source
+    } else {
+        source.resize(max_edge, max_edge, FilterType::Triangle)
+    };
+    let width = thumbnail.width();
+    let height = thumbnail.height();
+    let mut output = Cursor::new(Vec::new());
+    thumbnail
+        .write_to(&mut output, ImageFormat::Png)
+        .map_err(|error| failure(ThumbnailPlaceholderReason::DecodeFailed, error))?;
+    Ok(DecodedThumbnail {
+        bytes: output.into_inner(),
+        width,
+        height,
+    })
+}
+
+fn decode_audio_cover(
+    path: &Path,
+    max_edge: u32,
+    container: AudioContainer,
+) -> Result<DecodedThumbnail, DecodeFailure> {
+    let inspection =
+        inspect_audio_file(path, container, Duration::from_secs(2)).map_err(|error| {
+            let reason = match error {
+                MediaInspectError::Unreadable => ThumbnailPlaceholderReason::Unreadable,
+                MediaInspectError::SourceChanged => ThumbnailPlaceholderReason::SourceChanged,
+                MediaInspectError::InvalidContent => ThumbnailPlaceholderReason::InvalidContent,
+                MediaInspectError::ResourceLimited => ThumbnailPlaceholderReason::ResourceLimited,
+                MediaInspectError::UnsupportedFeature => {
+                    ThumbnailPlaceholderReason::PreviewUnavailable
+                }
+            };
+            DecodeFailure {
+                reason,
+                message: error.to_string(),
+            }
+        })?;
+    let cover = inspection.cover.ok_or_else(|| DecodeFailure {
+        reason: ThumbnailPlaceholderReason::PreviewUnavailable,
+        message: "audio source has no embedded cover".into(),
+    })?;
+    let original = cover.bytes;
+    let mut reader = ImageReader::new(Cursor::new(original.as_slice()))
+        .with_guessed_format()
+        .map_err(|error| failure(ThumbnailPlaceholderReason::InvalidContent, error))?;
+    let format = reader.format().ok_or_else(|| DecodeFailure {
+        reason: ThumbnailPlaceholderReason::InvalidContent,
+        message: "embedded audio cover format could not be identified".into(),
+    })?;
+    if !matches!(
+        format,
+        ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::Gif | ImageFormat::WebP
+    ) {
+        return Err(DecodeFailure {
+            reason: ThumbnailPlaceholderReason::UnsupportedFormat,
+            message: format!("embedded audio cover format is not supported: {format:?}"),
+        });
+    }
+    let mut limits = Limits::default();
+    limits.max_image_width = Some(MAX_SOURCE_DIMENSION);
+    limits.max_image_height = Some(MAX_SOURCE_DIMENSION);
+    limits.max_alloc = Some(MAX_DECODE_ALLOCATION);
+    reader.limits(limits);
+    let decoder = reader
+        .into_decoder()
+        .map_err(|error| failure(ThumbnailPlaceholderReason::InvalidContent, error))?;
+    let source = DynamicImage::from_decoder(decoder)
+        .map_err(|error| failure(ThumbnailPlaceholderReason::InvalidContent, error))?;
+    if format == ImageFormat::Png && source.width() <= max_edge && source.height() <= max_edge {
+        return Ok(DecodedThumbnail {
+            bytes: original,
+            width: source.width(),
+            height: source.height(),
+        });
+    }
     let thumbnail = if source.width() <= max_edge && source.height() <= max_edge {
         source
     } else {

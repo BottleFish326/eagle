@@ -6,6 +6,14 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration as WallDuration, Instant, SystemTime};
 
 use symphonia::core::codecs::CodecParameters;
+use symphonia::core::codecs::audio::AudioCodecId;
+use symphonia::core::codecs::audio::well_known::{
+    CODEC_ID_FLAC, CODEC_ID_MP3, CODEC_ID_PCM_F32BE, CODEC_ID_PCM_F32LE, CODEC_ID_PCM_F64BE,
+    CODEC_ID_PCM_F64LE, CODEC_ID_PCM_S8, CODEC_ID_PCM_S16BE, CODEC_ID_PCM_S16LE,
+    CODEC_ID_PCM_S24BE, CODEC_ID_PCM_S24LE, CODEC_ID_PCM_S32BE, CODEC_ID_PCM_S32LE,
+    CODEC_ID_PCM_U8, CODEC_ID_PCM_U16BE, CODEC_ID_PCM_U16LE, CODEC_ID_PCM_U24BE,
+    CODEC_ID_PCM_U24LE, CODEC_ID_PCM_U32BE, CODEC_ID_PCM_U32LE,
+};
 use symphonia::core::codecs::video::VideoCodecId;
 use symphonia::core::codecs::video::well_known::{
     CODEC_ID_AV1, CODEC_ID_H264, CODEC_ID_HEVC, CODEC_ID_MJPEG, CODEC_ID_MPEG1, CODEC_ID_MPEG2,
@@ -14,7 +22,7 @@ use symphonia::core::codecs::video::well_known::{
 use symphonia::core::common::Limit;
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::probe::Hint;
-use symphonia::core::formats::{FormatOptions, TrackType};
+use symphonia::core::formats::{FormatOptions, FormatReader, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::meta::MetadataOptions;
 use thiserror::Error;
@@ -25,6 +33,10 @@ pub const MAX_CONTAINER_ELEMENTS: u64 = 4_096;
 pub const MAX_MEDIA_DURATION_MS: u64 = 365 * 24 * 60 * 60 * 1_000;
 pub const MAX_MEDIA_TRACKS: usize = 256;
 pub const MAX_VIDEO_DIMENSION: u32 = 65_535;
+pub const MAX_AUDIO_COVER_BYTES: u64 = 16 * 1024 * 1024;
+pub const MAX_AUDIO_SAMPLE_RATE_HZ: u32 = 768_000;
+pub const MAX_AUDIO_CHANNELS: u32 = 64;
+pub const MAX_AUDIO_BIT_DEPTH: u32 = 64;
 
 const EBML_ID_HEADER: u64 = 0x1a45_dfa3;
 const EBML_ID_SEGMENT: u64 = 0x1853_8067;
@@ -38,6 +50,39 @@ pub enum VideoContainer {
     Mp4,
     Mov,
     Webm,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioContainer {
+    Mp3,
+    Wav,
+    Flac,
+}
+
+impl AudioContainer {
+    const fn extension(self) -> &'static str {
+        match self {
+            Self::Mp3 => "mp3",
+            Self::Wav => "wav",
+            Self::Flac => "flac",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmbeddedCover {
+    pub media_type: Option<String>,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudioInspection {
+    pub duration_ms: Option<u64>,
+    pub sample_rate_hz: Option<u32>,
+    pub channel_count: Option<u32>,
+    pub bit_depth: Option<u32>,
+    pub codec: Option<&'static str>,
+    pub cover: Option<EmbeddedCover>,
 }
 
 impl VideoContainer {
@@ -187,6 +232,495 @@ pub fn inspect_video_file(
         audio_track_count,
         codec,
     })
+}
+
+/// Inspects audio properties and an optional bounded embedded cover without decoding packets.
+///
+/// The source remains authoritative and is never modified. Container declarations, parser I/O,
+/// metadata allocations, track counts, duration, and wall time are all bounded.
+///
+/// # Errors
+///
+/// Returns a stable failure when the source is unreadable, changes, is malformed, exceeds an
+/// inspection limit, or uses an unsupported container feature.
+pub fn inspect_audio_file(
+    path: &Path,
+    container: AudioContainer,
+    timeout: WallDuration,
+) -> Result<AudioInspection, MediaInspectError> {
+    let before = source_version(path)?;
+    if timeout.is_zero() {
+        return Err(MediaInspectError::ResourceLimited);
+    }
+    preflight_audio(path, container, before.len)?;
+    if container == AudioContainer::Flac {
+        let inspection = inspect_flac_metadata(path, before.len, timeout)?;
+        let after = source_version(path)?;
+        if before != after {
+            return Err(MediaInspectError::SourceChanged);
+        }
+        return Ok(inspection);
+    }
+
+    let state = Arc::new(SourceLimitState::new(timeout));
+    let file = File::open(path).map_err(|_| MediaInspectError::Unreadable)?;
+    let source = BoundedMediaSource {
+        file,
+        len: before.len,
+        state: Arc::clone(&state),
+    };
+    let stream = MediaSourceStream::new(
+        Box::new(source),
+        MediaSourceStreamOptions {
+            buffer_len: 64 * 1024,
+        },
+    );
+    let mut hint = Hint::new();
+    hint.with_extension(container.extension());
+    let maximum_metadata_bytes = usize::try_from(MAX_CONTAINER_METADATA_BYTES)
+        .map_err(|_| MediaInspectError::ResourceLimited)?;
+    let maximum_cover_bytes =
+        usize::try_from(MAX_AUDIO_COVER_BYTES).map_err(|_| MediaInspectError::ResourceLimited)?;
+    let metadata_options = MetadataOptions::default()
+        .limit_tag_bytes(Limit::Maximum(maximum_metadata_bytes))
+        .limit_visual_bytes(Limit::Maximum(maximum_cover_bytes));
+    let mut format = symphonia::default::get_probe()
+        .probe(&hint, stream, FormatOptions::default(), metadata_options)
+        .map_err(|error| classify_symphonia_error(&error, &state))?;
+
+    if format.tracks().len() > MAX_MEDIA_TRACKS {
+        return Err(MediaInspectError::ResourceLimited);
+    }
+    let duration_ms = duration_milliseconds(format.media_info())?.or_else(|| {
+        (container == AudioContainer::Mp3)
+            .then(|| mp3_duration_milliseconds(path, before.len))
+            .flatten()
+    });
+    if duration_ms.is_some_and(|duration| duration > MAX_MEDIA_DURATION_MS) {
+        return Err(MediaInspectError::ResourceLimited);
+    }
+
+    let mut inspection = symphonia_audio_track_inspection(&*format)?;
+    inspection.duration_ms = duration_ms;
+    inspection.cover = first_embedded_cover(&mut *format);
+    if inspection
+        .cover
+        .as_ref()
+        .is_some_and(|cover| cover.bytes.len() as u64 > MAX_AUDIO_COVER_BYTES)
+    {
+        return Err(MediaInspectError::ResourceLimited);
+    }
+
+    drop(format);
+    let after = source_version(path)?;
+    if before != after {
+        return Err(MediaInspectError::SourceChanged);
+    }
+    Ok(inspection)
+}
+
+fn symphonia_audio_track_inspection(
+    format: &dyn FormatReader,
+) -> Result<AudioInspection, MediaInspectError> {
+    let parameters = format
+        .tracks()
+        .iter()
+        .find_map(|track| match &track.codec_params {
+            Some(CodecParameters::Audio(parameters)) => Some(parameters),
+            _ => None,
+        });
+    let sample_rate_hz = parameters.and_then(|parameters| parameters.sample_rate);
+    let channel_count = parameters
+        .and_then(|parameters| parameters.channels.as_ref())
+        .map(|channels| u32::try_from(channels.count()).unwrap_or(u32::MAX));
+    let bit_depth = parameters.and_then(|parameters| {
+        parameters
+            .bits_per_coded_sample
+            .or(parameters.bits_per_sample)
+    });
+    if sample_rate_hz.is_some_and(|value| value == 0 || value > MAX_AUDIO_SAMPLE_RATE_HZ)
+        || channel_count.is_some_and(|value| value == 0 || value > MAX_AUDIO_CHANNELS)
+        || bit_depth.is_some_and(|value| value == 0 || value > MAX_AUDIO_BIT_DEPTH)
+    {
+        return Err(MediaInspectError::ResourceLimited);
+    }
+    Ok(AudioInspection {
+        duration_ms: None,
+        sample_rate_hz,
+        channel_count,
+        bit_depth,
+        codec: parameters.and_then(|parameters| audio_codec_name(parameters.codec)),
+        cover: None,
+    })
+}
+
+fn first_embedded_cover(format: &mut dyn FormatReader) -> Option<EmbeddedCover> {
+    let mut metadata = format.metadata();
+    metadata.skip_to_latest().and_then(|revision| {
+        revision
+            .media
+            .visuals
+            .iter()
+            .chain(
+                revision
+                    .per_track
+                    .iter()
+                    .flat_map(|track| track.metadata.visuals.iter()),
+            )
+            .next()
+            .map(|visual| EmbeddedCover {
+                media_type: visual.media_type.clone(),
+                bytes: visual.data.to_vec(),
+            })
+    })
+}
+
+fn audio_codec_name(codec: AudioCodecId) -> Option<&'static str> {
+    if codec == CODEC_ID_MP3 {
+        Some("mp3")
+    } else if codec == CODEC_ID_FLAC {
+        Some("flac")
+    } else if matches!(
+        codec,
+        CODEC_ID_PCM_S8
+            | CODEC_ID_PCM_S16LE
+            | CODEC_ID_PCM_S16BE
+            | CODEC_ID_PCM_S24LE
+            | CODEC_ID_PCM_S24BE
+            | CODEC_ID_PCM_S32LE
+            | CODEC_ID_PCM_S32BE
+            | CODEC_ID_PCM_U8
+            | CODEC_ID_PCM_U16LE
+            | CODEC_ID_PCM_U16BE
+            | CODEC_ID_PCM_U24LE
+            | CODEC_ID_PCM_U24BE
+            | CODEC_ID_PCM_U32LE
+            | CODEC_ID_PCM_U32BE
+            | CODEC_ID_PCM_F32LE
+            | CODEC_ID_PCM_F32BE
+            | CODEC_ID_PCM_F64LE
+            | CODEC_ID_PCM_F64BE
+    ) {
+        Some("pcm")
+    } else {
+        None
+    }
+}
+
+fn preflight_audio(
+    path: &Path,
+    container: AudioContainer,
+    file_len: u64,
+) -> Result<(), MediaInspectError> {
+    match container {
+        AudioContainer::Mp3 => preflight_mp3(path, file_len),
+        AudioContainer::Wav => preflight_wav(path, file_len),
+        AudioContainer::Flac => preflight_flac(path, file_len),
+    }
+}
+
+fn preflight_mp3(path: &Path, file_len: u64) -> Result<(), MediaInspectError> {
+    let mut file = File::open(path).map_err(|_| MediaInspectError::Unreadable)?;
+    let mut header = [0_u8; 10];
+    file.read_exact(&mut header)
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    let audio_start = if &header[..3] == b"ID3" {
+        if header[6..10].iter().any(|byte| byte & 0x80 != 0) {
+            return Err(MediaInspectError::InvalidContent);
+        }
+        let tag_size = header[6..10]
+            .iter()
+            .fold(0_u64, |value, byte| (value << 7) | u64::from(*byte));
+        if tag_size > MAX_CONTAINER_METADATA_BYTES {
+            return Err(MediaInspectError::ResourceLimited);
+        }
+        10_u64
+            .checked_add(tag_size)
+            .filter(|end| *end < file_len)
+            .ok_or(MediaInspectError::InvalidContent)?
+    } else {
+        0
+    };
+    file.seek(SeekFrom::Start(audio_start))
+        .map_err(|_| MediaInspectError::Unreadable)?;
+    let mut frame = [0_u8; 2];
+    file.read_exact(&mut frame)
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    if frame[0] != 0xff || frame[1] & 0xe0 != 0xe0 {
+        return Err(MediaInspectError::InvalidContent);
+    }
+    Ok(())
+}
+
+fn mp3_duration_milliseconds(path: &Path, file_len: u64) -> Option<u64> {
+    let mut file = File::open(path).ok()?;
+    let mut header = [0_u8; 10];
+    file.read_exact(&mut header).ok()?;
+    let audio_start = if &header[..3] == b"ID3" {
+        let tag_size = header[6..10]
+            .iter()
+            .fold(0_u64, |value, byte| (value << 7) | u64::from(*byte));
+        10_u64.checked_add(tag_size)?
+    } else {
+        0
+    };
+    file.seek(SeekFrom::Start(audio_start)).ok()?;
+    let mut frame = [0_u8; 4];
+    file.read_exact(&mut frame).ok()?;
+    let header = u32::from_be_bytes(frame);
+    let version = (header >> 19) & 0b11;
+    let layer = (header >> 17) & 0b11;
+    let bitrate_index = usize::try_from((header >> 12) & 0x0f).ok()?;
+    if layer != 0b01 || matches!(bitrate_index, 0 | 15) {
+        return None;
+    }
+    let bitrate_kbps = if version == 0b11 {
+        [
+            0_u64, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0,
+        ][bitrate_index]
+    } else {
+        [
+            0_u64, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0,
+        ][bitrate_index]
+    };
+    file_len
+        .checked_sub(audio_start)?
+        .checked_mul(8)?
+        .checked_div(bitrate_kbps)
+}
+
+fn inspect_flac_metadata(
+    path: &Path,
+    file_len: u64,
+    timeout: WallDuration,
+) -> Result<AudioInspection, MediaInspectError> {
+    let started = Instant::now();
+    let mut file = File::open(path).map_err(|_| MediaInspectError::Unreadable)?;
+    let mut marker = [0_u8; 4];
+    file.read_exact(&mut marker)
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    let mut position = 4_u64;
+    let mut stream = None;
+    let mut cover = None;
+    let mut count = 0_u64;
+    loop {
+        if started.elapsed() >= timeout {
+            return Err(MediaInspectError::ResourceLimited);
+        }
+        count = count.saturating_add(1);
+        if count > MAX_CONTAINER_ELEMENTS {
+            return Err(MediaInspectError::ResourceLimited);
+        }
+        file.seek(SeekFrom::Start(position))
+            .map_err(|_| MediaInspectError::Unreadable)?;
+        let mut header = [0_u8; 4];
+        file.read_exact(&mut header)
+            .map_err(|_| MediaInspectError::InvalidContent)?;
+        let last = header[0] & 0x80 != 0;
+        let block_type = header[0] & 0x7f;
+        let size = u64::from_be_bytes([0, 0, 0, 0, 0, header[1], header[2], header[3]]);
+        let payload = position + 4;
+        if block_type == 0 {
+            let mut info = [0_u8; 34];
+            file.read_exact(&mut info)
+                .map_err(|_| MediaInspectError::InvalidContent)?;
+            let packed = u64::from_be_bytes(info[10..18].try_into().expect("eight-byte slice"));
+            let sample_rate = u32::try_from((packed >> 44) & 0x0f_ffff)
+                .map_err(|_| MediaInspectError::InvalidContent)?;
+            let channels = u32::try_from(((packed >> 41) & 0x07) + 1)
+                .map_err(|_| MediaInspectError::InvalidContent)?;
+            let bit_depth = u32::try_from(((packed >> 36) & 0x1f) + 1)
+                .map_err(|_| MediaInspectError::InvalidContent)?;
+            let total_samples = packed & 0x0f_ffff_ffff;
+            if sample_rate == 0 {
+                return Err(MediaInspectError::InvalidContent);
+            }
+            stream = Some((sample_rate, channels, bit_depth, total_samples));
+        } else if block_type == 6 && cover.is_none() {
+            cover = read_flac_picture(&mut file, payload, size)?;
+        }
+        position = payload
+            .checked_add(size)
+            .filter(|end| *end <= file_len)
+            .ok_or(MediaInspectError::InvalidContent)?;
+        if last {
+            break;
+        }
+    }
+    let (sample_rate_hz, channel_count, bit_depth, total_samples) =
+        stream.ok_or(MediaInspectError::InvalidContent)?;
+    if sample_rate_hz > MAX_AUDIO_SAMPLE_RATE_HZ
+        || channel_count > MAX_AUDIO_CHANNELS
+        || bit_depth > MAX_AUDIO_BIT_DEPTH
+    {
+        return Err(MediaInspectError::ResourceLimited);
+    }
+    let duration_ms = total_samples
+        .checked_mul(1_000)
+        .and_then(|value| value.checked_div(u64::from(sample_rate_hz)))
+        .ok_or(MediaInspectError::ResourceLimited)?;
+    if duration_ms > MAX_MEDIA_DURATION_MS {
+        return Err(MediaInspectError::ResourceLimited);
+    }
+    Ok(AudioInspection {
+        duration_ms: Some(duration_ms),
+        sample_rate_hz: Some(sample_rate_hz),
+        channel_count: Some(channel_count),
+        bit_depth: Some(bit_depth),
+        codec: Some("flac"),
+        cover,
+    })
+}
+
+fn read_flac_picture(
+    file: &mut File,
+    payload: u64,
+    size: u64,
+) -> Result<Option<EmbeddedCover>, MediaInspectError> {
+    file.seek(SeekFrom::Start(payload + 4))
+        .map_err(|_| MediaInspectError::Unreadable)?;
+    let media_type_len = u64::from(read_be_u32(file)?);
+    if media_type_len > 256 {
+        return Err(MediaInspectError::ResourceLimited);
+    }
+    let media_type_len_usize =
+        usize::try_from(media_type_len).map_err(|_| MediaInspectError::ResourceLimited)?;
+    let mut media_type = vec![0_u8; media_type_len_usize];
+    file.read_exact(&mut media_type)
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    let media_type =
+        String::from_utf8(media_type).map_err(|_| MediaInspectError::InvalidContent)?;
+    let description_len = u64::from(read_be_u32(file)?);
+    if description_len > 64 * 1024 {
+        return Err(MediaInspectError::ResourceLimited);
+    }
+    file.seek(SeekFrom::Current(
+        i64::try_from(description_len + 16).map_err(|_| MediaInspectError::ResourceLimited)?,
+    ))
+    .map_err(|_| MediaInspectError::InvalidContent)?;
+    let data_len = u64::from(read_be_u32(file)?);
+    if data_len > MAX_AUDIO_COVER_BYTES {
+        return Err(MediaInspectError::ResourceLimited);
+    }
+    let consumed = 4_u64
+        .checked_add(4 + media_type_len)
+        .and_then(|value| value.checked_add(4 + description_len + 16 + 4 + data_len))
+        .ok_or(MediaInspectError::ResourceLimited)?;
+    if consumed > size {
+        return Err(MediaInspectError::InvalidContent);
+    }
+    let data_len = usize::try_from(data_len).map_err(|_| MediaInspectError::ResourceLimited)?;
+    let mut bytes = vec![0_u8; data_len];
+    file.read_exact(&mut bytes)
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    Ok(Some(EmbeddedCover {
+        media_type: (!media_type.is_empty()).then_some(media_type),
+        bytes,
+    }))
+}
+
+fn read_be_u32(file: &mut File) -> Result<u32, MediaInspectError> {
+    let mut bytes = [0_u8; 4];
+    file.read_exact(&mut bytes)
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    Ok(u32::from_be_bytes(bytes))
+}
+
+fn preflight_wav(path: &Path, file_len: u64) -> Result<(), MediaInspectError> {
+    let mut file = File::open(path).map_err(|_| MediaInspectError::Unreadable)?;
+    let mut header = [0_u8; 12];
+    file.read_exact(&mut header)
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    if &header[..4] != b"RIFF" || &header[8..] != b"WAVE" {
+        return Err(MediaInspectError::InvalidContent);
+    }
+    let declared_end = 8_u64
+        .checked_add(u64::from(u32::from_le_bytes(
+            header[4..8].try_into().expect("four-byte slice"),
+        )))
+        .filter(|end| *end <= file_len)
+        .ok_or(MediaInspectError::InvalidContent)?;
+    let mut position = 12_u64;
+    let mut count = 0_u64;
+    let mut found_fmt = false;
+    let mut found_data = false;
+    while position < declared_end {
+        count = count.saturating_add(1);
+        if count > MAX_CONTAINER_ELEMENTS {
+            return Err(MediaInspectError::ResourceLimited);
+        }
+        file.seek(SeekFrom::Start(position))
+            .map_err(|_| MediaInspectError::Unreadable)?;
+        let mut chunk = [0_u8; 8];
+        file.read_exact(&mut chunk)
+            .map_err(|_| MediaInspectError::InvalidContent)?;
+        let size = u64::from(u32::from_le_bytes(
+            chunk[4..].try_into().expect("four-byte slice"),
+        ));
+        if &chunk[..4] != b"data" && size > MAX_CONTAINER_METADATA_BYTES {
+            return Err(MediaInspectError::ResourceLimited);
+        }
+        let padded = size
+            .checked_add(size & 1)
+            .ok_or(MediaInspectError::ResourceLimited)?;
+        let end = position
+            .checked_add(8)
+            .and_then(|value| value.checked_add(padded))
+            .filter(|end| *end <= declared_end)
+            .ok_or(MediaInspectError::InvalidContent)?;
+        found_fmt |= &chunk[..4] == b"fmt ";
+        found_data |= &chunk[..4] == b"data";
+        position = end;
+    }
+    if !found_fmt || !found_data {
+        return Err(MediaInspectError::InvalidContent);
+    }
+    Ok(())
+}
+
+fn preflight_flac(path: &Path, file_len: u64) -> Result<(), MediaInspectError> {
+    let mut file = File::open(path).map_err(|_| MediaInspectError::Unreadable)?;
+    let mut marker = [0_u8; 4];
+    file.read_exact(&mut marker)
+        .map_err(|_| MediaInspectError::InvalidContent)?;
+    if &marker != b"fLaC" {
+        return Err(MediaInspectError::InvalidContent);
+    }
+    let mut position = 4_u64;
+    let mut count = 0_u64;
+    let mut total = 0_u64;
+    loop {
+        count = count.saturating_add(1);
+        if count > MAX_CONTAINER_ELEMENTS {
+            return Err(MediaInspectError::ResourceLimited);
+        }
+        file.seek(SeekFrom::Start(position))
+            .map_err(|_| MediaInspectError::Unreadable)?;
+        let mut header = [0_u8; 4];
+        file.read_exact(&mut header)
+            .map_err(|_| MediaInspectError::InvalidContent)?;
+        let last = header[0] & 0x80 != 0;
+        let block_type = header[0] & 0x7f;
+        let size = u64::from_be_bytes([0, 0, 0, 0, 0, header[1], header[2], header[3]]);
+        if count == 1 && (block_type != 0 || size != 34) {
+            return Err(MediaInspectError::InvalidContent);
+        }
+        if size > MAX_CONTAINER_METADATA_BYTES {
+            return Err(MediaInspectError::ResourceLimited);
+        }
+        total = total
+            .checked_add(size + 4)
+            .filter(|value| *value <= MAX_CONTAINER_IO_BYTES)
+            .ok_or(MediaInspectError::ResourceLimited)?;
+        position = position
+            .checked_add(4 + size)
+            .filter(|end| *end <= file_len)
+            .ok_or(MediaInspectError::InvalidContent)?;
+        if last {
+            break;
+        }
+    }
+    Ok(())
 }
 
 fn duration_milliseconds(
@@ -538,6 +1072,12 @@ mod tests {
             .join(relative)
     }
 
+    fn audio_fixture(relative: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/formats/sources/audio")
+            .join(relative)
+    }
+
     #[test]
     fn inspects_generated_mp4_mov_and_webm_without_decoding_packets() {
         for (name, container, codec) in [
@@ -612,6 +1152,95 @@ mod tests {
         assert!(matches!(
             inspect_video_file(&oversized, VideoContainer::Mp4, WallDuration::from_secs(1)),
             Err(MediaInspectError::InvalidContent | MediaInspectError::ResourceLimited)
+        ));
+    }
+
+    #[test]
+    fn inspects_mp3_wav_and_flac_without_decoding_packets() {
+        for (name, container, expected) in [
+            (
+                "minimal.mp3",
+                AudioContainer::Mp3,
+                (Some(521), Some(44_100), Some(2), None, Some("mp3")),
+            ),
+            (
+                "minimal.wav",
+                AudioContainer::Wav,
+                (Some(1_000), Some(8_000), Some(1), Some(16), Some("pcm")),
+            ),
+            (
+                "minimal.flac",
+                AudioContainer::Flac,
+                (Some(1_000), Some(8_000), Some(1), Some(16), Some("flac")),
+            ),
+        ] {
+            let inspection =
+                inspect_audio_file(&audio_fixture(name), container, WallDuration::from_secs(1))
+                    .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+            assert_eq!(
+                (
+                    inspection.duration_ms,
+                    inspection.sample_rate_hz,
+                    inspection.channel_count,
+                    inspection.bit_depth,
+                    inspection.codec,
+                ),
+                expected,
+                "{name}"
+            );
+            assert!(inspection.cover.is_none(), "{name}");
+        }
+    }
+
+    #[test]
+    fn extracts_bounded_mp3_and_flac_covers() {
+        for (name, container) in [
+            ("cover.mp3", AudioContainer::Mp3),
+            ("cover.flac", AudioContainer::Flac),
+        ] {
+            let inspection =
+                inspect_audio_file(&audio_fixture(name), container, WallDuration::from_secs(1))
+                    .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+            let cover = inspection.cover.expect("embedded cover");
+            assert_eq!(cover.media_type.as_deref(), Some("image/png"));
+            assert_eq!(
+                cover.bytes,
+                fs::read(
+                    Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join("../../fixtures/formats/references/svg/minimal.png")
+                )
+                .expect("reference PNG")
+            );
+        }
+    }
+
+    #[test]
+    fn isolates_audio_truncation_disguises_unknown_codecs_and_resource_bombs() {
+        for (name, container) in [
+            ("truncated.mp3", AudioContainer::Mp3),
+            ("png-disguised-as-mp3.mp3", AudioContainer::Mp3),
+            ("mp3-disguised-as-wav.wav", AudioContainer::Wav),
+        ] {
+            assert!(matches!(
+                inspect_audio_file(&audio_fixture(name), container, WallDuration::from_secs(1)),
+                Err(MediaInspectError::InvalidContent)
+            ));
+        }
+        assert!(matches!(
+            inspect_audio_file(
+                &audio_fixture("unknown-codec.wav"),
+                AudioContainer::Wav,
+                WallDuration::from_secs(1)
+            ),
+            Err(MediaInspectError::UnsupportedFeature)
+        ));
+        assert!(matches!(
+            inspect_audio_file(
+                &audio_fixture("oversized-cover.mp3"),
+                AudioContainer::Mp3,
+                WallDuration::from_secs(1)
+            ),
+            Err(MediaInspectError::ResourceLimited)
         ));
     }
 }

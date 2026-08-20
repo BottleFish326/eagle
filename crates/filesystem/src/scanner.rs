@@ -8,7 +8,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use asset_core::{
     AssetDimensions, AssetIssue, AssetRecord, MediaProperties, NativeImageMetadata, SidecarState,
 };
-use asset_media::{MediaInspectError, VideoContainer, inspect_video_file};
+use asset_media::{
+    AudioContainer, MediaInspectError, VideoContainer, inspect_audio_file, inspect_video_file,
+};
 use asset_svg::{SvgError, inspect_svg_file};
 use exif::{In, Tag, Value};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
@@ -532,6 +534,35 @@ fn parse_asset(
             ),
             Err(MediaInspectError::UnsupportedFeature) => {}
         }
+    } else if let Some(container) = audio_container(&asset.mime) {
+        let remaining = options.file_parse_timeout.saturating_sub(started.elapsed());
+        match inspect_audio_file(&canonical, container, remaining) {
+            Ok(inspection) => {
+                asset.media = Some(MediaProperties {
+                    duration_ms: inspection.duration_ms,
+                    sample_rate_hz: inspection.sample_rate_hz,
+                    channel_count: inspection.channel_count,
+                    bit_depth: inspection.bit_depth,
+                    codec: inspection.codec.map(str::to_owned),
+                    ..MediaProperties::default()
+                });
+            }
+            Err(MediaInspectError::Unreadable) => asset.issues.push(AssetIssue::UnreadableFile(
+                "audio enrichment could not reread the source".into(),
+            )),
+            Err(MediaInspectError::SourceChanged) => {
+                asset.issues.push(AssetIssue::InvalidNativeMetadata(
+                    "audio source changed during container inspection".into(),
+                ));
+            }
+            Err(MediaInspectError::InvalidContent) => asset.issues.push(
+                AssetIssue::InvalidNativeMetadata("audio container metadata is malformed".into()),
+            ),
+            Err(MediaInspectError::ResourceLimited) => asset.issues.push(
+                AssetIssue::ResourceLimited("audio container inspection limit reached".into()),
+            ),
+            Err(MediaInspectError::UnsupportedFeature) => {}
+        }
     }
 
     if parse_deadline_exceeded(&mut asset, started, options.file_parse_timeout) {
@@ -601,6 +632,15 @@ fn video_container(mime: &str) -> Option<VideoContainer> {
         "video/mp4" => Some(VideoContainer::Mp4),
         "video/quicktime" => Some(VideoContainer::Mov),
         "video/webm" => Some(VideoContainer::Webm),
+        _ => None,
+    }
+}
+
+fn audio_container(mime: &str) -> Option<AudioContainer> {
+    match mime {
+        "audio/mpeg" => Some(AudioContainer::Mp3),
+        "audio/wav" => Some(AudioContainer::Wav),
+        "audio/flac" => Some(AudioContainer::Flac),
         _ => None,
     }
 }
@@ -881,14 +921,13 @@ mod tests {
     #[test]
     fn retains_registered_assets_and_sidecars_when_optional_capabilities_are_unavailable() {
         let directory = tempdir().expect("tempdir");
-        let fixtures: [(&str, &[u8], &str, AssetKind); 3] = [
+        let fixtures: [(&str, &[u8], &str, AssetKind); 2] = [
             (
                 "photo.avif",
                 b"\x00\x00\x00\x18ftypavif\x00\x00\x00\x00avif",
                 "image/avif",
                 AssetKind::Image,
             ),
-            ("sound.mp3", b"ID3\x04\x00", "audio/mpeg", AssetKind::Audio),
             (
                 "document.pdf",
                 b"%PDF-1.7",
@@ -1054,6 +1093,109 @@ mod tests {
         for (path, expected) in before {
             assert_eq!(
                 fs::read(&path).expect("reread video fixture"),
+                expected,
+                "{} changed",
+                path.display()
+            );
+        }
+    }
+
+    #[test]
+    fn enriches_normal_audio_fixtures_and_keeps_unknown_codecs_visible() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/formats/sources/audio");
+        let report = scan_root(&root, &ScanOptions::default()).expect("scan audio fixtures");
+
+        for (name, mime, duration, rate, channels, depth, codec) in [
+            ("minimal.mp3", "audio/mpeg", 521, 44_100, 2, None, "mp3"),
+            ("minimal.wav", "audio/wav", 1_000, 8_000, 1, Some(16), "pcm"),
+            (
+                "minimal.flac",
+                "audio/flac",
+                1_000,
+                8_000,
+                1,
+                Some(16),
+                "flac",
+            ),
+        ] {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .unwrap_or_else(|| panic!("missing normal audio fixture {name}"));
+            assert_eq!(asset.mime, mime, "{name}");
+            assert_eq!(asset.kind, AssetKind::Audio, "{name}");
+            let media = asset.media.as_ref().expect("normal audio properties");
+            assert_eq!(media.duration_ms, Some(duration), "{name}");
+            assert_eq!(media.sample_rate_hz, Some(rate), "{name}");
+            assert_eq!(media.channel_count, Some(channels), "{name}");
+            assert_eq!(media.bit_depth, depth, "{name}");
+            assert_eq!(media.codec.as_deref(), Some(codec), "{name}");
+            assert!(asset.issues.is_empty(), "{name}: {:?}", asset.issues);
+        }
+
+        let unknown = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "unknown-codec.wav")
+            .expect("unknown WAV codec fixture");
+        assert_eq!(unknown.kind, AssetKind::Audio);
+        assert!(unknown.media.is_none());
+        assert!(unknown.issues.is_empty());
+    }
+
+    #[test]
+    fn isolates_adversarial_audio_fixtures_without_mutating_source_bytes() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/formats/sources/audio");
+        let before = fs::read_dir(&root)
+            .expect("read audio fixture directory")
+            .map(|entry| {
+                let path = entry.expect("audio fixture entry").path();
+                let bytes = fs::read(&path).expect("read audio fixture");
+                (path, bytes)
+            })
+            .collect::<Vec<_>>();
+        let report = scan_root(&root, &ScanOptions::default()).expect("scan audio fixtures");
+        assert_eq!(report.assets.len(), before.len());
+
+        let truncated = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "truncated.mp3")
+            .expect("truncated audio fixture");
+        assert!(matches!(
+            truncated.issues.as_slice(),
+            [AssetIssue::InvalidNativeMetadata(_)]
+        ));
+        let oversized = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "oversized-cover.mp3")
+            .expect("oversized cover fixture");
+        assert!(matches!(
+            oversized.issues.as_slice(),
+            [AssetIssue::ResourceLimited(_)]
+        ));
+        for (name, mime) in [
+            ("png-disguised-as-mp3.mp3", "image/png"),
+            ("mp3-disguised-as-wav.wav", "audio/mpeg"),
+        ] {
+            let asset = report
+                .assets
+                .iter()
+                .find(|asset| asset.file_name == name)
+                .unwrap_or_else(|| panic!("missing disguised fixture {name}"));
+            assert_eq!(asset.mime, mime, "{name}");
+            assert!(matches!(
+                asset.issues.first(),
+                Some(AssetIssue::MimeMismatch(_))
+            ));
+        }
+        for (path, expected) in before {
+            assert_eq!(
+                fs::read(&path).expect("reread audio fixture"),
                 expected,
                 "{} changed",
                 path.display()
