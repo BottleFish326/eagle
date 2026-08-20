@@ -1,8 +1,13 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use asset_core::AssetKind;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::advanced::{
+    InstantField, IntegerField, NullableBoolean, Orientation, RangeConstraint, Ratio, RatioField,
+    UnknownField, parse_advanced_filter,
+};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +18,16 @@ pub struct AssetQuery {
     pub kinds: BTreeSet<AssetKind>,
     pub extensions: BTreeSet<String>,
     pub favorite: Option<bool>,
+    pub integer_ranges: BTreeMap<IntegerField, RangeConstraint<u64>>,
+    pub instant_ranges: BTreeMap<InstantField, RangeConstraint<i64>>,
+    pub ratio_ranges: BTreeMap<RatioField, RangeConstraint<Ratio>>,
+    pub unknown_fields: BTreeSet<UnknownField>,
+    pub orientations: BTreeSet<Orientation>,
+    pub root_ids: BTreeSet<uuid::Uuid>,
+    pub path_contains: Vec<String>,
+    pub color_spaces: BTreeSet<String>,
+    pub has_note: Option<bool>,
+    pub has_alpha: Option<NullableBoolean>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -29,6 +44,18 @@ pub enum QueryParseErrorKind {
     InvalidExtension,
     InvalidFavorite,
     ConflictingFavorite,
+    InvalidOperator,
+    InvalidInteger,
+    InvalidUnit,
+    NumericOverflow,
+    InvalidRatio,
+    InvalidDate,
+    InvalidEnum,
+    InvalidRootId,
+    InvalidPath,
+    UnsupportedUnknown,
+    ConflictingRange,
+    ConflictingValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Error)]
@@ -42,9 +69,9 @@ pub struct QueryParseError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Token {
-    value: String,
-    offset: usize,
+pub(super) struct Token {
+    pub(super) value: String,
+    pub(super) offset: usize,
 }
 
 /// Parses a user-facing query expression into a validated index query.
@@ -97,6 +124,7 @@ fn parse_token(token: &Token, query: &mut AssetQuery) -> Result<(), QueryParseEr
             ));
         }
         query.favorite = Some(favorite);
+    } else if parse_advanced_filter(token, query)? {
     } else {
         let explicit_tag = token.value.strip_prefix("tag:");
         let tag = explicit_tag.unwrap_or(&token.value);
@@ -314,7 +342,7 @@ fn finish_token(tokens: &mut Vec<Token>, value: &mut String, offset: &mut Option
     }
 }
 
-fn error(kind: QueryParseErrorKind, token: &Token, message: &str) -> QueryParseError {
+pub(super) fn error(kind: QueryParseErrorKind, token: &Token, message: &str) -> QueryParseError {
     QueryParseError {
         kind,
         offset: token.offset,
@@ -355,6 +383,7 @@ mod tests {
                 kinds: BTreeSet::from([AssetKind::Image, AssetKind::Video]),
                 extensions: BTreeSet::from(["jpeg".into(), "png".into()]),
                 favorite: Some(true),
+                ..AssetQuery::default()
             }
         );
     }

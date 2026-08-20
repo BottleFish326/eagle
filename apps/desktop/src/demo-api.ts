@@ -853,6 +853,16 @@ function emptyQuery(): AssetQuery {
     kinds: [],
     extensions: [],
     favorite: null,
+    integerRanges: {},
+    instantRanges: {},
+    ratioRanges: {},
+    unknownFields: [],
+    orientations: [],
+    rootIds: [],
+    pathContains: [],
+    colorSpaces: [],
+    hasNote: null,
+    hasAlpha: null,
   };
 }
 

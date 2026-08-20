@@ -206,8 +206,12 @@ name = "asset-index"
 version = "0.1.0"
 dependencies = [
  "asset-core",
+ "chrono",
  "serde",
+ "serde_json",
  "thiserror 2.0.20",
+ "unicode-normalization",
+ "uuid",
 ]
 
 [[package]]
