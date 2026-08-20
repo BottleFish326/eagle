@@ -9,7 +9,7 @@
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
 | 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
 | 阶段 2：可靠性与恢复 | Accepted | P2-A01 至 P2-A12、外部/本地/数据安全门禁和最终历史重放全部通过；最终收据 SHA-256 `76b135b…` |
-| 阶段 3：完整素材能力 | In progress | P3-01/P3-A01/A02 与 P3-02/P3-A03 已接受；下一动作是实施 P3-03 保存过滤器，P3-A04 至 P3-A11 未通过 |
+| 阶段 3：完整素材能力 | In progress | P3-01 至 P3-03、P3-A01 至 P3-A05 已接受；下一动作是 P3-04/P3-A06 批量工作流，P3-A06 至 P3-A11 未通过 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出；P4-01 至 P4-08 的完整实施准备已收敛 |
 
 ## 阶段 0 工作项
@@ -59,11 +59,11 @@
 
 ## 阶段 3 工作项
 
-| 准备项 | 状态 | 证据 |
+| 工作项 | 状态 | 证据 |
 |---|---|---|
 | P3-01 扩展格式能力管线 | Accepted | 43 个格式夹具、31 个对抗夹具在 core-only/bundled-codecs × Linux/macOS/Windows 全部通过，12 份原始报告已独立重放，三平台桌面包内 worker 探测成功；见 `reports/p3-01-acceptance.md` |
 | P3-02 智能属性与高级过滤 | Accepted | 64/64/25 三方语料、L 100,000 条 × 200 次查询、真实文件/Sidecar 扫描、原素材 SHA 和可访问字段编辑器全部通过；P3-A03 已接受，见 `reports/p3-02-acceptance.md` |
-| P3-03 保存过滤器 | Design ready | 已固定用户级 YAML、条目隔离、未知字段保留、完整版本、精确 Tag AST 重写和跨文件协调恢复；阶段 2 退出前不计作 P3 开始，见 `reports/p3-03-readiness.md` |
+| P3-03 保存过滤器 | Accepted | 用户级 YAML、当前文件重算、条目隔离、精确 Tag AST 重写、两阶段恢复及 5 个真实进程终止点通过；P3-A04/A05 已接受，见 `reports/p3-03-acceptance.md` |
 | P3-04 批量工作流 | Design ready | 已固定精确全选快照、catalog revision、只读预检、协作取消、事务续传与剪贴板单次提交；阶段 2 退出前不计作 P3 开始，见 `reports/p3-04-readiness.md` |
 | P3-05 重复素材分析 | Design ready | 已固定大小/快速指纹/完整 SHA-256、当前文件重读、物理别名、视觉候选隔离和非破坏性报告；阶段 2 退出前不计作 P3 开始，见 `reports/p3-05-readiness.md` |
 | P3-06 拖放与剪贴板 | Design ready | 已固定原始文件/引用双拖柄、后端授权 native drag、Copy-only、Vault 内外有序引用和最小剪贴板权限；阶段 2 退出前不计作 P3 开始，见 `reports/p3-06-readiness.md` |
@@ -144,6 +144,7 @@
 - [P3-02E 桌面高级属性过滤验收报告](reports/p3-02e-acceptance.md)
 - [P3-02 智能属性与 P3-A03 验收报告](reports/p3-02-acceptance.md)
 - [P3-03 保存过滤器实施准备报告](reports/p3-03-readiness.md)
+- [P3-03 保存过滤器与 P3-A04/P3-A05 验收报告](reports/p3-03-acceptance.md)
 - [P3-04 批量工作流实施准备报告](reports/p3-04-readiness.md)
 - [P3-05 重复素材分析实施准备报告](reports/p3-05-readiness.md)
 - [P3-06 拖放与剪贴板实施准备报告](reports/p3-06-readiness.md)

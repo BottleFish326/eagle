@@ -17,6 +17,7 @@ import {
   P2_DATA_SAFETY_REPORTS,
 } from "./p2-data-safety-audit.mjs";
 import { inspectP2LocalFaultGatesReceipt } from "./p2-local-fault-gates.mjs";
+import { inspectP3FilterGatesReceipt } from "./p3-filter-gates.mjs";
 import {
   buildPhase2ExitGatesReport,
   inspectPhase2ExitGatesReceipt,
@@ -40,6 +41,21 @@ test("validates the tracked draft defect register", async () => {
     await readFile(path.join(repository, "docs", "defects.json"), "utf8"),
   );
   validate("defect-register.schema.json", register);
+});
+
+test("validates and replays the tracked P3 saved-filter gate receipt", async () => {
+  const report = JSON.parse(
+    await readFile(
+      path.join(
+        repository,
+        "docs/reports/evidence/p3-a04-a05-filter-gates.json",
+      ),
+      "utf8",
+    ),
+  );
+  validate("p3-filter-gates-evidence.schema.json", report);
+  const inspection = inspectP3FilterGatesReceipt(report);
+  assert.equal(inspection.accepted, true, inspection.failures.join("; "));
 });
 
 test("validates generated P2 source and stage receipts", () => {

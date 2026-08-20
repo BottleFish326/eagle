@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段 0、阶段 1 与阶段 2 已通过验收。阶段 2 的 P2-01 至 P2-08、P2-A11 100,000 素材连续 8 小时正式验收、P2-A12 GitHub-hosted macOS/Linux/Windows 原生矩阵、统一外部门禁、本地故障、数据安全和最终退出重放全部通过。阶段 3 的 P3-01A 与 P3-01B 已在本地完成：注册格式不会因 codec/provider 缺失而消失，通用类型卡片与后端类型查询已贯通；SVG 具有有界、无外部资源的确定性静态 PNG provider，活动内容和外部引用被隔离。P3-01C 已通过严格 ISO BMFF brand、AVIF/HEIC 正常/对抗夹具、固定 libheif 1.23.1 worker、Library Root 授权、三平台参考 PNG 以及 DEB/`.app`/NSIS 成品内重放。P3-01D 的 MP4/MOV/WebM 有界容器属性已本地完成，视频帧 worker 按发行边界暂缓。P3-01E 的 MP3/WAV/FLAC 属性与 MP3/FLAC 有界封面已接入。P3-01F 也已本地完成：经典 PDF 具有有界页数、首页面尺寸与主动内容标记，加密/对象流保持素材可见并降级，PDFium 首页 worker 按发行边界暂缓。P3-A01/P3-A02 仍未关闭，下一动作是统一格式一致性与恶意集合门禁。SSH origin、`main` 与托管 CI 已就绪。开发阶段、交付物和验收规范见：
+阶段 0、阶段 1 与阶段 2 已通过验收。阶段 3 正在推进：扩展格式、智能属性/高级过滤和保存过滤器均已接受，P3-A01 至 P3-A05 已通过。保存项只保存可读查询配置并从当前文件重算；精确 Tag AST 重写和 Sidecar/filter 两阶段纯文件恢复通过 5 个真实进程终止点与外部修改保护。下一工作项是 P3-04/P3-A06 批量工作流；P3-A06 至 P3-A11 和阶段 3 退出仍未通过。SSH origin、`main` 与托管 CI 已就绪。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
@@ -27,6 +27,8 @@
 - [P3-01D 视频容器验收](docs/reports/p3-01d-acceptance.md)
 - [P3-01E 音频属性与封面验收](docs/reports/p3-01e-acceptance.md)
 - [P3-01F PDF 属性与安全降级验收](docs/reports/p3-01f-acceptance.md)
+- [P3-02 智能属性与 P3-A03 验收](docs/reports/p3-02-acceptance.md)
+- [P3-03 保存过滤器与 P3-A04/P3-A05 验收](docs/reports/p3-03-acceptance.md)
 - [格式 worker 协议](specs/format-worker-protocol.md)
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
