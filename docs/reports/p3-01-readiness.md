@@ -35,3 +35,16 @@
 本报告不表示 P3-01 已实现。P2-A12 三平台原生路径矩阵已通过；当前 release 正在对 Windows 长路径修复后的候选提交重新执行 P2-A11 连续 8 小时正式验收。P2-A11 与其余阶段 2 退出收据全部通过后，按 P3-01A 开始代码和夹具实现。
 
 在门禁结束前允许继续审阅本协议和准备可再分发夹具来源，但不得把设计文档、交叉编译或 codec 库能力说明计作 P3-A01/P3-A02 通过。
+
+## 4. 阶段切换后的首个测试切片
+
+P3-01A 必须以测试和清单验证器开场，不能先扩大扩展名白名单。当前代码的精确落点与完成顺序如下：
+
+1. 在 `crates/filesystem` 增加静态格式注册表及纯识别测试。注册表先证明 descriptor ID、扩展名、MIME 与 `AssetKind` 唯一且一致，再覆盖签名优先、扩展候选和内容冲突；`asset-core` 继续只持有稳定素材值模型，不承担文件探测。
+2. 为 `fixtures/formats/manifest.json` 增加独立语义验证器。除 JSON Schema 外，必须验证根内 canonical path、拒绝符号链接、真实大小/SHA-256、参考 PNG、`(fixture, providerProfile, platform)` 无重复且覆盖完整；示例中的占位摘要永远不能成为验收输入。
+3. 在 `crates/filesystem/src/scanner.rs` 的单元与集成测试先建立注册格式的基础记录，证明属性或 preview provider 缺失时仍保留文件字段、稳定 kind、相邻 Sidecar 与查询可见性；随后才移除 `is_supported_mvp_image` 过滤。
+4. 在 `crates/preview` 把“没有已安装 provider”与“内容损坏/解码失败”拆成稳定结果。缓存键在 provider 接入前先预留 provider ID/version，不允许继续只用全局图片 decoder version 表示所有格式。
+5. 在 `apps/desktop/src/thumbnail.ts` 与 `AssetThumbnail.tsx` 增加契约和组件测试：`codec-unavailable`、`preview-unavailable` 显示中性的文件类型卡片，只有损坏、不可读、超限或超时显示故障状态。当前把所有 placeholder 渲染成红色“无法预览”的行为不得带入 P3-01A。
+6. 复用现有后端 `type:image|video|audio|pdf` 查询语义增加端到端夹具断言，不在 React 中复制格式或查询判定。
+
+以上六项均在阶段 2 最终退出收据接受后执行；本节只把代码审计结果转换为可直接执行的测试顺序，不表示阶段 3 已开始。
