@@ -54,6 +54,14 @@ brand。AVIF 优先识别 `avif/avis`，HEIC/HEIF 覆盖静态与 sequence brand
 覆盖。独立 Rust verifier 随后使用与桌面启动完全相同的 loader 重放清单、平台、架构、
 provider 和摘要校验；CI 只归档通过该重放的 bundle。
 
+正式随包构建统一使用独立 vcpkg manifest，固定到
+`33e5269bbfc24fb252bc48a3e624c8193afdccce`（libheif 1.23.1 port），关闭默认 feature，
+只显式启用 AOM；libde265 由该 port 的核心依赖提供。这样 Windows 门禁不会隐式引入
+x265 encoder，Linux/macOS 也不再依赖 runner 上偶然存在的 Homebrew/APT codec。
+Unix 使用固定 vcpkg 静态库，门禁拒绝成品中的 libheif/AOM/libde265 等外部动态依赖；
+Windows 使用 `x64-windows-static-md`。每个 job 必须真实解码两个固定样本、生成摘要清单
+并由同一 runtime loader 重放后才归档；当前实现已进入托管 CI，结果尚未接受。
+
 stdin 请求与 stdout JSON header 均使用四字节长度前缀，PNG payload 具有独立长度、
 SHA-256 和 IHDR 尺寸约束。父进程并行、持续排空 stdout/stderr，但只保留受限字节；
 stdout 洪泛返回 `output-too-large`，stderr 最多 4 KiB 且素材绝对路径替换为 `<source>`。
@@ -90,15 +98,19 @@ cargo test -p format-worker --all-targets --features embedded-libheif
   严格 Clippy 通过。完整仓库门禁必须在提交后以干净工作树重放。
 - 构建期 bundle：2 项 Node 边界测试通过；本机 release worker 经清单生成后由 Rust
   runtime loader 成功重放。
-- GitHub run `32384941995` 的 Linux/macOS `Fixed libheif worker backend` jobs 均成功：
-  两端完成真实属性/PNG 解码、release bundle 生成、runtime loader 重放和 artifact 归档；
-  该 run 的全仓质量 job 在记录本条时仍运行，因此这里只接受这两个独立 job 的结论。
+- GitHub run `32384941995` 全部成功；其中 Linux/macOS `Fixed libheif worker backend` jobs
+  均完成真实属性/PNG 解码、release bundle 生成、runtime loader 重放和 artifact 归档。
+- GitHub run `32385977748` 全部成功，重新覆盖扫描派生属性提交的全仓质量、Linux/macOS
+  worker bundle 与原有三平台路径门禁。
 - GitHub run `32380847491` 全部成功；其 `Fixed libheif worker backend` job：6 项 feature 单元测试
   与 1 项真实 backend 集成测试通过；固定 AVIF/HEIC 均完成属性与受限 PNG 解码。
 
 ## 5. 未关闭范围与下一动作
 
-P3-01C 仍缺少 Windows backend 托管证据和三平台随应用打包。扫描属性接线已本地实现，
+P3-01C 仍缺少 Windows backend 的已接受托管证据和三平台随应用打包。下一轮 CI 已增加
+Windows 真实样本 probe、Unix 动态依赖审计，以及依赖 Linux/macOS/Windows worker artifact 的 `deb`、`.app`
+和 NSIS 构建；每个构建都会从成品中提取资源，再由生产 runtime loader 执行两个真实
+样本。该门禁尚未产生已接受结果。扫描属性接线已本地实现，
 但还要用真实应用 bundle 关闭端到端扫描门禁。构建期摘要清单生成与 runtime 重放门禁
 已经实现，但尚未用随包三平台产物
 关闭端到端门禁。正常 backend 还没有进入 `bundled-codecs` 夹具期望，损坏、截断、

@@ -30,6 +30,7 @@ coverage/
 .turbo/
 .vite/
 .parcel-cache/
+.vcpkg/
 *.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
@@ -40,6 +41,7 @@ pnpm-debug.log*
 target/
 **/*.rs.bk
 apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/resources/format-workers/
 
 # Tests and generated fixtures
 test-results/

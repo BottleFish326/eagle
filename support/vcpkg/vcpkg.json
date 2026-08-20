@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "material-eagle-format-worker-dependencies",
+  "version-string": "0.1.0",
+  "builtin-baseline": "33e5269bbfc24fb252bc48a3e624c8193afdccce",
+  "dependencies": [
+    {
+      "name": "libheif",
+      "default-features": false,
+      "features": ["aom"]
+    }
+  ]
+}

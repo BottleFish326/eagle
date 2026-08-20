@@ -158,7 +158,7 @@ jobs:
   libheif-worker:
     name: Fixed libheif worker backend (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -170,20 +170,45 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check out fixed vcpkg baseline
+        uses: actions/checkout@v6
+        with:
+          repository: microsoft/vcpkg
+          ref: 33e5269bbfc24fb252bc48a3e624c8193afdccce
+          path: .vcpkg
+          persist-credentials: false
+
       - name: Install fixed worker build dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install --yes \
+            autoconf \
+            autoconf-archive \
+            automake \
             build-essential \
             cmake \
-            libaom-dev \
-            libde265-dev \
+            libtool \
+            nasm \
+            ninja-build \
             pkg-config
 
       - name: Install fixed worker build dependencies
         if: runner.os == 'macOS'
-        run: brew install aom cmake libde265 pkg-config
+        run: brew install autoconf autoconf-archive automake cmake libtool nasm ninja pkg-config
+
+      - name: Build fixed static libheif dependencies
+        env:
+          MATERIAL_EAGLE_VCPKG_TRIPLET: ${{ runner.os == 'macOS' && 'arm64-osx' || 'x64-linux' }}
+        run: |
+          ./.vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          ./.vcpkg/vcpkg install \
+            --x-manifest-root="${{ github.workspace }}/support/vcpkg" \
+            --x-install-root="${{ runner.temp }}/vcpkg-installed" \
+            --triplet="$MATERIAL_EAGLE_VCPKG_TRIPLET" \
+            --clean-after-build
+          echo "PKG_CONFIG_PATH=${{ runner.temp }}/vcpkg-installed/$MATERIAL_EAGLE_VCPKG_TRIPLET/lib/pkgconfig:${{ runner.temp }}/vcpkg-installed/$MATERIAL_EAGLE_VCPKG_TRIPLET/share/pkgconfig" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_ALL_STATIC=1" >> "$GITHUB_ENV"
 
       - name: Install Node.js 24
         uses: actions/setup-node@v6
@@ -196,22 +221,37 @@ jobs:
 
       - name: Verify fixed libheif backend
         run: |
-          cargo clippy -p format-worker --all-targets --features embedded-libheif -- -D warnings
-          cargo test -p format-worker --all-targets --features embedded-libheif
+          cargo clippy -p format-worker --all-targets --features libheif-backend -- -D warnings
+          cargo test -p format-worker --all-targets --features libheif-backend
 
       - name: Build and verify fixed worker bundle
         env:
           MATERIAL_EAGLE_WORKER_PLATFORM: ${{ runner.os == 'macOS' && 'macos' || 'linux' }}
           MATERIAL_EAGLE_WORKER_ARCHITECTURE: ${{ runner.arch == 'ARM64' && 'aarch64' || 'x86_64' }}
         run: |
-          cargo build -p format-worker --release --bin material-eagle-format-worker --features embedded-libheif
+          cargo build -p format-worker --release --bin material-eagle-format-worker --features libheif-backend
           node tools/package-format-worker.mjs \
             --binary target/release/material-eagle-format-worker \
             --output-directory "${{ runner.temp }}/format-worker-bundle" \
             --platform "$MATERIAL_EAGLE_WORKER_PLATFORM" \
             --architecture "$MATERIAL_EAGLE_WORKER_ARCHITECTURE"
           cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- \
-            "${{ runner.temp }}/format-worker-bundle"
+            "${{ runner.temp }}/format-worker-bundle" \
+            fixtures/formats/sources
+
+      - name: Reject unpackaged Unix codec dependencies
+        if: runner.os == 'Linux'
+        run: |
+          dependencies=$(ldd target/release/material-eagle-format-worker)
+          printf '%s\n' "$dependencies"
+          ! grep -E 'not found|lib(heif|aom|de265|vmaf|jpeg|sharpyuv)' <<< "$dependencies"
+
+      - name: Reject unpackaged Unix codec dependencies
+        if: runner.os == 'macOS'
+        run: |
+          dependencies=$(otool -L target/release/material-eagle-format-worker | tail -n +2)
+          printf '%s\n' "$dependencies"
+          ! grep -Ev '^[[:space:]]+(/usr/lib/|/System/Library/)' <<< "$dependencies"
 
       - name: Archive verified worker bundle
         uses: actions/upload-artifact@v7
@@ -220,3 +260,208 @@ jobs:
           path: ${{ runner.temp }}/format-worker-bundle
           if-no-files-found: error
           retention-days: 30
+
+  libheif-worker-windows:
+    name: Fixed libheif worker backend (windows-2025)
+    runs-on: windows-2025
+    timeout-minutes: 50
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy
+
+      - name: Install fixed decoder-only vcpkg dependencies
+        shell: pwsh
+        run: |
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          "VCPKGRS_TRIPLET=x64-windows-static-md" >> $env:GITHUB_ENV
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
+            --x-manifest-root="$env:GITHUB_WORKSPACE\support\vcpkg" `
+            --triplet=x64-windows-static-md `
+            --clean-after-build
+
+      - name: Verify fixed libheif backend
+        run: |
+          cargo clippy -p format-worker --all-targets --features libheif-backend -- -D warnings
+          cargo test -p format-worker --all-targets --features libheif-backend
+
+      - name: Build and verify fixed worker bundle
+        shell: pwsh
+        run: |
+          cargo build -p format-worker --release --bin material-eagle-format-worker --features libheif-backend
+          node tools/package-format-worker.mjs `
+            --binary target/release/material-eagle-format-worker.exe `
+            --output-directory "$env:RUNNER_TEMP\format-worker-bundle" `
+            --platform windows `
+            --architecture x86_64
+          cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- `
+            "$env:RUNNER_TEMP\format-worker-bundle" `
+            fixtures/formats/sources
+
+      - name: Archive verified worker bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: p3-01c-libheif-worker-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          path: ${{ runner.temp }}/format-worker-bundle
+          if-no-files-found: error
+          retention-days: 30
+
+  packaged-desktop-worker:
+    name: Packaged desktop worker (${{ matrix.os }})
+    needs: [libheif-worker, libheif-worker-windows]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            artifact_os: Linux
+            artifact_arch: X64
+            bundle: deb
+            bundle_path: target/release/bundle/deb/*.deb
+          - os: macos-15
+            artifact_os: macOS
+            artifact_arch: ARM64
+            bundle: app
+            bundle_path: target/release/bundle/macos/*.app
+          - os: windows-2025
+            artifact_os: Windows
+            artifact_arch: X64
+            bundle: nsis
+            bundle_path: target/release/bundle/nsis/*.exe
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download verified worker bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: p3-01c-libheif-worker-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}-${{ github.sha }}
+          path: apps/desktop/src-tauri/resources/format-workers/libheif
+
+      - name: Restore Unix worker executable permission
+        if: runner.os != 'Windows'
+        run: chmod 755 apps/desktop/src-tauri/resources/format-workers/libheif/material-eagle-format-worker
+
+      - name: Install Tauri Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            wget
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install desktop dependencies
+        run: npm ci --prefix apps/desktop
+
+      - name: Re-probe staged worker through the runtime loader
+        run: |
+          cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- \
+            apps/desktop/src-tauri/resources/format-workers/libheif \
+            fixtures/formats/sources
+        if: runner.os != 'Windows'
+
+      - name: Re-probe staged worker through the runtime loader
+        shell: pwsh
+        run: |
+          cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- `
+            apps/desktop/src-tauri/resources/format-workers/libheif `
+            fixtures/formats/sources
+        if: runner.os == 'Windows'
+
+      - name: Build signed-layout desktop bundle without signing
+        if: runner.os != 'Windows'
+        env:
+          EAGLE_GIT_COMMIT: ${{ github.sha }}
+          MATERIAL_EAGLE_BUNDLE: ${{ matrix.bundle }}
+        run: |
+          npm --prefix apps/desktop exec tauri -- build \
+            --config '{"bundle":{"active":true}}' \
+            --bundles "$MATERIAL_EAGLE_BUNDLE" \
+            --ci \
+            --no-sign
+
+      - name: Build signed-layout desktop bundle without signing
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          EAGLE_GIT_COMMIT: ${{ github.sha }}
+        run: |
+          npm --prefix apps/desktop exec tauri -- build `
+            --config '{"bundle":{"active":true}}' `
+            --bundles nsis `
+            --ci `
+            --no-sign
+
+      - name: Verify worker inside Linux application bundle
+        if: runner.os == 'Linux'
+        run: |
+          package_path=$(find target/release/bundle/deb -name '*.deb' -print -quit)
+          test -n "$package_path"
+          dpkg-deb --extract "$package_path" "${{ runner.temp }}/extracted-app"
+          manifest_path=$(find "${{ runner.temp }}/extracted-app" -path '*/format-workers/libheif/manifest.json' -print -quit)
+          test -n "$manifest_path"
+          cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- \
+            "$(dirname "$manifest_path")" \
+            fixtures/formats/sources
+
+      - name: Verify worker inside macOS application bundle
+        if: runner.os == 'macOS'
+        run: |
+          cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- \
+            'target/release/bundle/macos/Material Eagle.app/Contents/Resources/format-workers/libheif' \
+            fixtures/formats/sources
+
+      - name: Verify worker inside Windows application bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = @(Get-ChildItem target/release/bundle/nsis -Filter '*.exe')
+          if ($installer.Count -ne 1) { throw 'expected exactly one NSIS installer' }
+          & 7z x $installer[0].FullName "-o$env:RUNNER_TEMP\extracted-app" -y
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS extraction failed' }
+          $manifest = @(Get-ChildItem "$env:RUNNER_TEMP\extracted-app" -Recurse -Filter manifest.json | Where-Object { $_.FullName -like '*\format-workers\libheif\manifest.json' })
+          if ($manifest.Count -ne 1) { throw 'expected exactly one packaged worker manifest' }
+          cargo run --quiet -p format-worker --bin material-eagle-verify-worker-bundle -- `
+            $manifest[0].Directory.FullName `
+            fixtures/formats/sources
+
+      - name: Archive verified desktop bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: p3-01c-desktop-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          path: ${{ matrix.bundle_path }}
+          if-no-files-found: error
+          retention-days: 14
