@@ -22,7 +22,7 @@ test("accepts the tracked format fixture manifest with real integrity metadata",
   assert.equal(report.accepted, true, report.failures.join("; "));
   assert.equal(report.fixtureCount, 42);
   assert.equal(report.sourceBytes, 1_468_255);
-  assert.equal(report.referenceBytes, 24_718);
+  assert.equal(report.referenceBytes, 25_083);
 });
 
 test("rejects placeholder hashes, digest changes, and incomplete provider coverage", async (context) => {

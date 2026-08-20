@@ -1327,6 +1327,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "format-gate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "asset-core",
+ "asset-filesystem",
+ "asset-preview",
+ "clap",
+ "format-worker",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "format-worker"
 version = "0.1.0"
 dependencies = [

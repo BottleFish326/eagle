@@ -446,8 +446,8 @@
             },
             "preview": {
               "status": "available",
-              "referencePath": "references/svg/minimal.png",
-              "referenceSha256": "ead9b2404087d65c292c155f770e0f953a6b9c5590432d33d729bebd6d8f8de0",
+              "referencePath": "references/raster/minimal-16.png",
+              "referenceSha256": "d6186dc03e2a065d610e6a2e65e1f7445570bfab3ed1956773b9c18385183b90",
               "width": 16,
               "height": 16
             }
@@ -470,8 +470,8 @@
             },
             "preview": {
               "status": "available",
-              "referencePath": "references/svg/minimal.png",
-              "referenceSha256": "ead9b2404087d65c292c155f770e0f953a6b9c5590432d33d729bebd6d8f8de0",
+              "referencePath": "references/raster/minimal-16.png",
+              "referenceSha256": "d6186dc03e2a065d610e6a2e65e1f7445570bfab3ed1956773b9c18385183b90",
               "width": 16,
               "height": 16
             }
@@ -932,8 +932,8 @@
             },
             "preview": {
               "status": "available",
-              "referencePath": "references/svg/minimal.png",
-              "referenceSha256": "ead9b2404087d65c292c155f770e0f953a6b9c5590432d33d729bebd6d8f8de0",
+              "referencePath": "references/raster/minimal-16.png",
+              "referenceSha256": "d6186dc03e2a065d610e6a2e65e1f7445570bfab3ed1956773b9c18385183b90",
               "width": 16,
               "height": 16
             }
@@ -1380,8 +1380,8 @@
             },
             "preview": {
               "status": "available",
-              "referencePath": "references/svg/minimal.png",
-              "referenceSha256": "ead9b2404087d65c292c155f770e0f953a6b9c5590432d33d729bebd6d8f8de0",
+              "referencePath": "references/raster/minimal-16.png",
+              "referenceSha256": "d6186dc03e2a065d610e6a2e65e1f7445570bfab3ed1956773b9c18385183b90",
               "width": 16,
               "height": 16
             }
@@ -1671,8 +1671,8 @@
             },
             "preview": {
               "status": "available",
-              "referencePath": "references/svg/minimal.png",
-              "referenceSha256": "ead9b2404087d65c292c155f770e0f953a6b9c5590432d33d729bebd6d8f8de0",
+              "referencePath": "references/raster/minimal-16.png",
+              "referenceSha256": "d6186dc03e2a065d610e6a2e65e1f7445570bfab3ed1956773b9c18385183b90",
               "width": 16,
               "height": 16
             }
@@ -1740,7 +1740,7 @@
             "issueCodes": [],
             "metadata": {
               "status": "unsupported-feature",
-              "reasonCode": "encrypted-pdf-isolated-worker-required",
+              "reasonCode": "pdf-isolated-worker-required",
               "properties": {}
             },
             "preview": {
@@ -1776,7 +1776,7 @@
             "issueCodes": [],
             "metadata": {
               "status": "unsupported-feature",
-              "reasonCode": "compressed-pdf-isolated-worker-required",
+              "reasonCode": "pdf-isolated-worker-required",
               "properties": {}
             },
             "preview": {
@@ -1812,7 +1812,7 @@
             "issueCodes": ["resource-limited"],
             "metadata": {
               "status": "resource-limited",
-              "reasonCode": "pdf-page-count-limit",
+              "reasonCode": "pdf-metadata-limit",
               "properties": {}
             },
             "preview": {
@@ -1848,7 +1848,7 @@
             "issueCodes": ["resource-limited"],
             "metadata": {
               "status": "resource-limited",
-              "reasonCode": "pdf-page-dimension-limit",
+              "reasonCode": "pdf-metadata-limit",
               "properties": {}
             },
             "preview": {

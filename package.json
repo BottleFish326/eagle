@@ -20,6 +20,7 @@
     "generate:video-format-fixtures": "node tools/generate-video-format-fixtures.mjs",
     "generate:audio-format-fixtures": "node tools/generate-audio-format-fixtures.mjs",
     "generate:pdf-format-fixtures": "node tools/generate-pdf-format-fixtures.mjs",
+    "verify:p3-format-gate": "npm run verify:format-fixtures && cargo run -p format-gate -- --manifest fixtures/formats/manifest.json --provider-profile core-only",
     "import:libheif-fixtures": "node --use-env-proxy tools/import-format-fixtures.mjs",
     "package:format-worker": "node tools/package-format-worker.mjs",
     "audit:p2-soak-baseline": "node tools/verify-soak-baseline-audit.mjs",
