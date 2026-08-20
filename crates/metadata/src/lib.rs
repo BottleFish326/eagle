@@ -412,12 +412,17 @@ fn write_serialized_sidecar_atomic(
     expected: &ExpectedVersion,
 ) -> Result<WriteReceipt, SidecarError> {
     verify_expected_version(path, expected)?;
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let parent = path
+        .parent()
+        .filter(|value| !value.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let (persistence_parent, persistence_path) = persistence_paths(parent, path)?;
 
-    let mut temp = NamedTempFile::new_in(parent).map_err(|source| SidecarError::Io {
-        path: parent.to_path_buf(),
-        source,
-    })?;
+    let mut temp =
+        NamedTempFile::new_in(&persistence_parent).map_err(|source| SidecarError::Io {
+            path: parent.to_path_buf(),
+            source,
+        })?;
     temp.write_all(serialized)
         .and_then(|()| temp.as_file().sync_all())
         .map_err(|source| SidecarError::Io {
@@ -427,10 +432,11 @@ fn write_serialized_sidecar_atomic(
 
     inject_fault("after-temp-sync");
     verify_expected_version(path, expected)?;
-    temp.persist(path).map_err(|error| SidecarError::Persist {
-        path: path.to_path_buf(),
-        source: error.error,
-    })?;
+    temp.persist(&persistence_path)
+        .map_err(|error| SidecarError::Persist {
+            path: path.to_path_buf(),
+            source: error.error,
+        })?;
     inject_fault("after-persist");
     sync_parent(parent)?;
 
@@ -446,6 +452,34 @@ fn write_serialized_sidecar_atomic(
         size: version.size,
         modified_unix_ms: version.modified_unix_ms,
     })
+}
+
+#[cfg(windows)]
+fn persistence_paths(parent: &Path, path: &Path) -> Result<(PathBuf, PathBuf), SidecarError> {
+    // `canonicalize` returns a verbatim Windows path. Keep both tempfile creation and
+    // replacement in that namespace because tempfile's replacement call otherwise
+    // receives the legacy-length spelling even when Rust's ordinary file APIs can
+    // open the same path.
+    let canonical_parent = parent.canonicalize().map_err(|source| SidecarError::Io {
+        path: parent.to_path_buf(),
+        source,
+    })?;
+    let Some(file_name) = path.file_name() else {
+        return Err(SidecarError::Io {
+            path: path.to_path_buf(),
+            source: io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "sidecar destination has no file name",
+            ),
+        });
+    };
+    let persistence_path = canonical_parent.join(file_name);
+    Ok((canonical_parent, persistence_path))
+}
+
+#[cfg(not(windows))]
+fn persistence_paths(parent: &Path, path: &Path) -> Result<(PathBuf, PathBuf), SidecarError> {
+    Ok((parent.to_path_buf(), path.to_path_buf()))
 }
 
 /// Computes the lowercase SHA-256 digest of a file.
