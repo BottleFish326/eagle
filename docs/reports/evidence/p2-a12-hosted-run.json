@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "failures": [],
+  "repository": "BottleFish326/eagle",
+  "verifiedAt": "2026-08-20T04:44:27Z",
+  "run": {
+    "databaseId": 32332405466,
+    "attempt": 1,
+    "event": "workflow_dispatch",
+    "headBranch": "main",
+    "headSha": "9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751",
+    "status": "completed",
+    "conclusion": "success",
+    "workflowName": "CI",
+    "createdAt": "2026-08-20T04:35:01Z",
+    "startedAt": "2026-08-20T04:35:01Z",
+    "updatedAt": "2026-08-20T04:44:27Z",
+    "url": "https://github.com/BottleFish326/eagle/actions/runs/32332405466"
+  },
+  "jobs": [
+    {
+      "databaseId": 96315480493,
+      "name": "Path compatibility (ubuntu-24.04)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-08-20T04:35:19Z",
+      "completedAt": "2026-08-20T04:35:43Z",
+      "url": "https://github.com/BottleFish326/eagle/actions/runs/32332405466/job/96315480493"
+    },
+    {
+      "databaseId": 96315480353,
+      "name": "Path compatibility (macos-15)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-08-20T04:35:20Z",
+      "completedAt": "2026-08-20T04:36:00Z",
+      "url": "https://github.com/BottleFish326/eagle/actions/runs/32332405466/job/96315480353"
+    },
+    {
+      "databaseId": 96315480451,
+      "name": "Path compatibility (windows-2025)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-08-20T04:35:20Z",
+      "completedAt": "2026-08-20T04:36:42Z",
+      "url": "https://github.com/BottleFish326/eagle/actions/runs/32332405466/job/96315480451"
+    },
+    {
+      "databaseId": 96315717664,
+      "name": "Consolidate path compatibility evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-08-20T04:36:45Z",
+      "completedAt": "2026-08-20T04:36:54Z",
+      "url": "https://github.com/BottleFish326/eagle/actions/runs/32332405466/job/96315717664"
+    },
+    {
+      "databaseId": 96315480257,
+      "name": "Format, test, and build",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-08-20T04:35:19Z",
+      "completedAt": "2026-08-20T04:44:26Z",
+      "url": "https://github.com/BottleFish326/eagle/actions/runs/32332405466/job/96315480257"
+    }
+  ],
+  "archive": {
+    "gitCommit": "9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751",
+    "githubRunAttempt": "1",
+    "runUrl": "https://github.com/BottleFish326/eagle/actions/runs/32332405466",
+    "files": [
+      {
+        "relativePath": "p2-a12-matrix-9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751-attempt-1/p2-08-platform-matrix.json",
+        "sha256": "1a2cd5d7c0ce58840fb255cdba9f04c139a75c91de2c41dad99be57882fde4f8",
+        "bytes": 13757
+      },
+      {
+        "relativePath": "p2-a12-source-Linux-9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751-attempt-1/p2-a12-platform-paths.json",
+        "sha256": "90173b13f65ec9bade38db0d6606ba454923c8a500df7119e994889cd732b93e",
+        "bytes": 11724
+      },
+      {
+        "relativePath": "p2-a12-source-Windows-9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751-attempt-1/p2-a12-platform-paths.json",
+        "sha256": "5d8a8c98ce1673d71e1a4bd213d62f12a9dfc72969147df9e98ac30c24ad4c74",
+        "bytes": 10536
+      },
+      {
+        "relativePath": "p2-a12-source-macOS-9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751-attempt-1/p2-a12-platform-paths.json",
+        "sha256": "ec21e70ea71f127bc4a0fabea0516a6adcbbe8c8820b9a252b79ea3ecdcd3ed5",
+        "bytes": 10820
+      }
+    ]
+  },
+  "temporaryDownloadRemoved": true
+}

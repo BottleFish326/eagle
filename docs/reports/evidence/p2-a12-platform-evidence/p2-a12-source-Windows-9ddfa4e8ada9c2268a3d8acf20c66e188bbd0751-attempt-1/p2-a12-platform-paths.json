@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "failures": [],
+  "startedAt": "2026-08-20T04:35:48.458Z",
+  "completedAt": "2026-08-20T04:36:38.817Z",
+  "gitCommit": "9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751",
+  "command": "cargo test --locked -p asset-filesystem p2_platform -- --nocapture",
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "nodeVersion": "v24.19.0",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.97.1\nLLVM version: 22.1.6",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "githubActions": "true",
+    "githubSha": "9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751",
+    "githubRunId": "32332405466",
+    "githubRunAttempt": "1",
+    "githubWorkflowRef": "BottleFish326/eagle/.github/workflows/ci.yml@refs/heads/main",
+    "githubRepository": "BottleFish326/eagle",
+    "githubServerUrl": "https://github.com",
+    "runnerOs": "Windows",
+    "runnerArch": "X64",
+    "runnerEnvironment": "github-hosted",
+    "gitCommit": "9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751"
+  },
+  "requireWindowsSymlink": true,
+  "expectedTests": [
+    "library::tests::p2_platform_rejects_configuration_that_enables_symlink_traversal",
+    "library::tests::p2_platform_rejects_duplicate_and_overlapping_roots",
+    "platform::tests::p2_platform_linux_keys_preserve_case_and_unicode_spelling",
+    "platform::tests::p2_platform_macos_normalizes_unicode_without_assuming_volume_case_mode",
+    "platform::tests::p2_platform_windows_keys_are_case_insensitive_and_unicode_normalized",
+    "platform::tests::p2_platform_windows_portability_diagnostics_cover_names_characters_and_length",
+    "scanner::tests::p2_platform_scans_native_unicode_path_without_rewriting_it",
+    "scanner::tests::p2_platform_windows_long_path_scans_and_atomically_updates_sidecar",
+    "scanner::tests::p2_platform_windows_symlink_loop_is_skipped_when_native_creation_is_available"
+  ],
+  "listedTests": [
+    "library::tests::p2_platform_rejects_configuration_that_enables_symlink_traversal",
+    "library::tests::p2_platform_rejects_duplicate_and_overlapping_roots",
+    "platform::tests::p2_platform_linux_keys_preserve_case_and_unicode_spelling",
+    "platform::tests::p2_platform_macos_normalizes_unicode_without_assuming_volume_case_mode",
+    "platform::tests::p2_platform_windows_keys_are_case_insensitive_and_unicode_normalized",
+    "platform::tests::p2_platform_windows_portability_diagnostics_cover_names_characters_and_length",
+    "scanner::tests::p2_platform_scans_native_unicode_path_without_rewriting_it",
+    "scanner::tests::p2_platform_windows_long_path_scans_and_atomically_updates_sidecar",
+    "scanner::tests::p2_platform_windows_symlink_loop_is_skipped_when_native_creation_is_available"
+  ],
+  "executedTests": [
+    "library::tests::p2_platform_rejects_configuration_that_enables_symlink_traversal",
+    "library::tests::p2_platform_rejects_duplicate_and_overlapping_roots",
+    "platform::tests::p2_platform_linux_keys_preserve_case_and_unicode_spelling",
+    "platform::tests::p2_platform_macos_normalizes_unicode_without_assuming_volume_case_mode",
+    "platform::tests::p2_platform_windows_keys_are_case_insensitive_and_unicode_normalized",
+    "platform::tests::p2_platform_windows_portability_diagnostics_cover_names_characters_and_length",
+    "scanner::tests::p2_platform_scans_native_unicode_path_without_rewriting_it",
+    "scanner::tests::p2_platform_windows_long_path_scans_and_atomically_updates_sidecar",
+    "scanner::tests::p2_platform_windows_symlink_loop_is_skipped_when_native_creation_is_available"
+  ],
+  "summary": {
+    "result": "ok",
+    "passed": 9,
+    "failed": 0,
+    "ignored": 0,
+    "measured": 0,
+    "filteredOut": 27
+  },
+  "processResults": {
+    "list": {
+      "status": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "library::tests::p2_platform_rejects_configuration_that_enables_symlink_traversal: test\nlibrary::tests::p2_platform_rejects_duplicate_and_overlapping_roots: test\nplatform::tests::p2_platform_linux_keys_preserve_case_and_unicode_spelling: test\nplatform::tests::p2_platform_macos_normalizes_unicode_without_assuming_volume_case_mode: test\nplatform::tests::p2_platform_windows_keys_are_case_insensitive_and_unicode_normalized: test\nplatform::tests::p2_platform_windows_portability_diagnostics_cover_names_characters_and_length: test\nscanner::tests::p2_platform_scans_native_unicode_path_without_rewriting_it: test\nscanner::tests::p2_platform_windows_long_path_scans_and_atomically_updates_sidecar: test\nscanner::tests::p2_platform_windows_symlink_loop_is_skipped_when_native_creation_is_available: test\n\n9 tests, 0 benchmarks",
+      "stderr": "Updating crates.io index\n Downloading crates ...\n  Downloaded aho-corasick v1.1.5\n  Downloaded cfg-if v1.0.4\n  Downloaded globset v0.4.19\n  Downloaded block-buffer v0.10.4\n  Downloaded autocfg v1.5.1\n  Downloaded equivalent v1.0.2\n  Downloaded byteorder v1.5.0\n  Downloaded hashbrown v0.17.1\n  Downloaded cfb v0.7.3\n  Downloaded notify-types v2.1.0\n  Downloaded bitflags v2.13.1\n  Downloaded fnv v1.0.7\n  Downloaded same-file v1.0.6\n  Downloaded windows-link v0.2.1\n  Downloaded crypto-common v0.1.7\n  Downloaded digest v0.10.7\n  Downloaded cpufeatures v0.2.17\n  Downloaded itoa v1.0.18\n  Downloaded mutate_once v0.1.2\n  Downloaded tinyvec_macros v0.1.1\n  Downloaded winapi-util v0.1.11\n  Downloaded windows-targets v0.53.5\n  Downloaded generic-array v0.14.7\n  Downloaded walkdir v2.5.0\n  Downloaded notify v8.2.0\n  Downloaded thiserror-impl v2.0.20\n  Downloaded version_check v0.9.5\n  Downloaded imagesize v0.15.0\n  Downloaded num-traits v0.2.19\n  Downloaded fastrand v2.5.0\n  Downloaded quote v1.0.47\n  Downloaded sha2 v0.10.9\n  Downloaded thiserror v2.0.20\n  Downloaded infer v0.19.0\n  Downloaded log v0.4.33\n  Downloaded tempfile v3.27.0\n  Downloaded once_cell v1.21.4\n  Downloaded proc-macro2 v1.0.107\n  Downloaded getrandom v0.4.3\n  Downloaded ryu v1.0.23\n  Downloaded kamadak-exif v0.6.1\n  Downloaded serde_derive v1.0.229\n  Downloaded tinyvec v1.12.0\n  Downloaded unicode-ident v1.0.24\n  Downloaded uuid v1.24.0\n  Downloaded serde_yaml_ng v0.10.0\n  Downloaded unsafe-libyaml v0.2.11\n  Downloaded serde_core v1.0.229\n  Downloaded indexmap v2.14.0\n  Downloaded serde v1.0.229\n  Downloaded memchr v2.8.3\n  Downloaded typenum v1.20.1\n  Downloaded unicode-normalization v0.1.25\n  Downloaded chrono v0.4.45\n  Downloaded bstr v1.13.1\n  Downloaded syn v3.0.3\n  Downloaded regex-syntax v0.8.11\n  Downloaded regex-automata v0.4.18\n  Downloaded windows_x86_64_msvc v0.53.1\n  Downloaded libc v0.2.189\n  Downloaded windows-sys v0.61.2\n  Downloaded windows-sys v0.60.2\n   Compiling proc-macro2 v1.0.107\n   Compiling unicode-ident v1.0.24\n   Compiling quote v1.0.47\n   Compiling serde_core v1.0.229\n   Compiling version_check v0.9.5\n   Compiling windows-link v0.2.1\n   Compiling cfg-if v1.0.4\n   Compiling getrandom v0.4.3\n   Compiling generic-array v0.14.7\n   Compiling serde v1.0.229\n   Compiling windows-sys v0.61.2\n   Compiling typenum v1.20.1\n   Compiling syn v3.0.3\n   Compiling windows_x86_64_msvc v0.53.1\n   Compiling autocfg v1.5.1\n   Compiling memchr v2.8.3\n   Compiling num-traits v0.2.19\n   Compiling uuid v1.24.0\n   Compiling thiserror v2.0.20\n   Compiling block-buffer v0.10.4\n   Compiling crypto-common v0.1.7\n   Compiling winapi-util v0.1.11\n   Compiling equivalent v1.0.2\n   Compiling hashbrown v0.17.1\n   Compiling libc v0.2.189\n   Compiling same-file v1.0.6\n   Compiling digest v0.10.7\n   Compiling windows-targets v0.53.5\n   Compiling aho-corasick v1.1.5\n   Compiling indexmap v2.14.0\n   Compiling serde_derive v1.0.229\n   Compiling thiserror-impl v2.0.20\n   Compiling tinyvec_macros v0.1.1\n   Compiling regex-syntax v0.8.11\n   Compiling byteorder v1.5.0\n   Compiling fastrand v2.5.0\n   Compiling once_cell v1.21.4\n   Compiling itoa v1.0.18\n   Compiling cpufeatures v0.2.17\n   Compiling bitflags v2.13.1\n   Compiling unsafe-libyaml v0.2.11\n   Compiling fnv v1.0.7\n   Compiling ryu v1.0.23\n   Compiling cfb v0.7.3\n   Compiling notify-types v2.1.0\n   Compiling serde_yaml_ng v0.10.0\n   Compiling chrono v0.4.45\n   Compiling sha2 v0.10.9\n   Compiling tempfile v3.27.0\n   Compiling regex-automata v0.4.18\n   Compiling tinyvec v1.12.0\n   Compiling windows-sys v0.60.2\n   Compiling walkdir v2.5.0\n   Compiling bstr v1.13.1\n   Compiling log v0.4.33\n   Compiling mutate_once v0.1.2\n   Compiling kamadak-exif v0.6.1\n   Compiling notify v8.2.0\n   Compiling globset v0.4.19\n   Compiling metadata v0.1.0 (D:\\a\\eagle\\eagle\\crates\\metadata)\n   Compiling unicode-normalization v0.1.25\n   Compiling resource-control v0.1.0 (D:\\a\\eagle\\eagle\\crates\\resource-control)\n   Compiling asset-core v0.1.0 (D:\\a\\eagle\\eagle\\crates\\asset-core)\n   Compiling infer v0.19.0\n   Compiling imagesize v0.15.0\n   Compiling asset-filesystem v0.1.0 (D:\\a\\eagle\\eagle\\crates\\filesystem)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 47.88s\n     Running unittests src\\lib.rs (target\\debug\\deps\\asset_filesystem-ca1d6caf552c3afd.exe)"
+    },
+    "test": {
+      "status": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "running 9 tests\ntest platform::tests::p2_platform_linux_keys_preserve_case_and_unicode_spelling ... ok\ntest platform::tests::p2_platform_macos_normalizes_unicode_without_assuming_volume_case_mode ... ok\ntest platform::tests::p2_platform_windows_portability_diagnostics_cover_names_characters_and_length ... ok\ntest platform::tests::p2_platform_windows_keys_are_case_insensitive_and_unicode_normalized ... ok\ntest library::tests::p2_platform_rejects_configuration_that_enables_symlink_traversal ... ok\ntest scanner::tests::p2_platform_scans_native_unicode_path_without_rewriting_it ... ok\ntest scanner::tests::p2_platform_windows_symlink_loop_is_skipped_when_native_creation_is_available ... ok\ntest library::tests::p2_platform_rejects_duplicate_and_overlapping_roots ... ok\ntest scanner::tests::p2_platform_windows_long_path_scans_and_atomically_updates_sidecar ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.03s",
+      "stderr": "Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s\n     Running unittests src\\lib.rs (target\\debug\\deps\\asset_filesystem-ca1d6caf552c3afd.exe)"
+    }
+  }
+}
