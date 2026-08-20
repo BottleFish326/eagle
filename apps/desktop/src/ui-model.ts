@@ -11,6 +11,11 @@ export interface TagSummary {
   state: TagFilterState;
 }
 
+export interface QueryViewState {
+  visibleKeys: string[];
+  error?: string;
+}
+
 export function cycleTagFilter(state: TagFilterState): TagFilterState {
   if (state === "neutral") return "include";
   if (state === "include") return "exclude";
@@ -154,10 +159,23 @@ export function formatBytes(bytes: number | null): string {
 
 export function formatQueryError(error: unknown): string {
   if (isQueryAssetsError(error)) {
-    return error.kind === "parse" ? error.error.message : error.message;
+    if (error.kind === "internal") return error.message;
+    const token = error.error.token ? `，Token：${error.error.token}` : "";
+    return `${error.error.message}（${error.error.kind}，UTF-8 字节 ${error.error.offset}${token}）`;
   }
   if (error instanceof Error) return error.message;
   return typeof error === "string" ? error : "查询失败，请重试";
+}
+
+export function settleSuccessfulQuery(keys: readonly string[]): QueryViewState {
+  return { visibleKeys: [...keys] };
+}
+
+export function settleFailedQuery(
+  current: QueryViewState,
+  error: unknown,
+): QueryViewState {
+  return { ...current, error: formatQueryError(error) };
 }
 
 export function matchesDemoExpression(
@@ -192,11 +210,162 @@ export function matchesDemoExpression(
     } else if (token.startsWith("any:(") && token.endsWith(")")) {
       const tags = token.slice(5, -1).split("|");
       if (!tags.some((tag) => asset.tags.includes(tag))) return false;
-    } else if (!asset.tags.includes(token)) {
-      return false;
+    } else {
+      const advancedMatch = matchesAdvancedDemoToken(asset, token);
+      if (advancedMatch === false) return false;
+      if (advancedMatch === undefined && !asset.tags.includes(token))
+        return false;
     }
   }
   return true;
+}
+
+function matchesAdvancedDemoToken(
+  asset: AssetRecord,
+  token: string,
+): boolean | undefined {
+  const match = /^([a-z-]+):((?:<=|>=|<|>)?)(.*)$/u.exec(token);
+  if (!match) return undefined;
+  const [, field, operator = "", value = ""] = match;
+  if (
+    ![
+      "rating",
+      "size",
+      "width",
+      "height",
+      "aspect",
+      "created",
+      "modified",
+      "duration",
+      "pages",
+      "orientation",
+      "root",
+      "path",
+      "color-space",
+      "has-note",
+      "has-alpha",
+    ].includes(field)
+  ) {
+    return undefined;
+  }
+  const dimensions = effectiveDemoDimensions(asset);
+  if (field === "orientation") {
+    const orientation =
+      dimensions === null
+        ? null
+        : dimensions.width > dimensions.height
+          ? "landscape"
+          : dimensions.width < dimensions.height
+            ? "portrait"
+            : "square";
+    return matchesDemoEnum(orientation, value);
+  }
+  if (field === "root") return matchesDemoEnum(asset.rootId, value);
+  if (field === "color-space") {
+    return matchesDemoEnum(asset.media?.colorSpace ?? null, value);
+  }
+  if (field === "has-note") {
+    return asset.note.trim().length > 0 === (value === "true");
+  }
+  if (field === "has-alpha") {
+    const alpha = asset.media?.hasAlpha ?? null;
+    return value === "unknown"
+      ? alpha === null
+      : alpha !== null && alpha === (value === "true");
+  }
+  if (field === "path") {
+    return asset.relativePath.normalize("NFC").includes(value.normalize("NFC"));
+  }
+
+  const known =
+    field === "rating"
+      ? asset.rating
+      : field === "size"
+        ? asset.size
+        : field === "width"
+          ? (dimensions?.width ?? null)
+          : field === "height"
+            ? (dimensions?.height ?? null)
+            : field === "created"
+              ? asset.createdUnixMs
+              : field === "modified"
+                ? asset.modifiedUnixMs
+                : field === "duration"
+                  ? (asset.media?.durationMs ?? null)
+                  : field === "pages"
+                    ? (asset.media?.pageCount ?? null)
+                    : dimensions === null
+                      ? null
+                      : dimensions.width / dimensions.height;
+  if (value === "unknown") return known === null;
+  if (known === null) return false;
+  const expected =
+    field === "size"
+      ? parseDemoUnit(value, "size")
+      : field === "duration"
+        ? parseDemoUnit(value, "duration")
+        : field === "created" || field === "modified"
+          ? Date.parse(value)
+          : field === "aspect"
+            ? parseDemoRatio(value)
+            : Number(value);
+  if (!Number.isFinite(expected)) return false;
+  return compareDemoNumber(known, expected, operator);
+}
+
+function effectiveDemoDimensions(
+  asset: AssetRecord,
+): { width: number; height: number } | null {
+  if (asset.dimensions === null) return null;
+  const nativeQuarterTurn =
+    asset.nativeMetadata?.orientation !== null &&
+    asset.nativeMetadata?.orientation !== undefined &&
+    asset.nativeMetadata.orientation >= 5 &&
+    asset.nativeMetadata.orientation <= 8;
+  const videoQuarterTurn =
+    asset.media?.displayQuarterTurns !== null &&
+    asset.media?.displayQuarterTurns !== undefined &&
+    Math.abs(asset.media.displayQuarterTurns) % 2 === 1;
+  return nativeQuarterTurn || videoQuarterTurn
+    ? { width: asset.dimensions.height, height: asset.dimensions.width }
+    : asset.dimensions;
+}
+
+function matchesDemoEnum(known: string | null, value: string): boolean {
+  if (value === "unknown") return known === null;
+  return known !== null && value.split("|").includes(known);
+}
+
+function parseDemoUnit(value: string, kind: "size" | "duration"): number {
+  const units: Readonly<Record<string, number>> =
+    kind === "size"
+      ? { TiB: 1024 ** 4, GiB: 1024 ** 3, MiB: 1024 ** 2, KiB: 1024, B: 1 }
+      : { min: 60_000, ms: 1, s: 1_000, h: 3_600_000 };
+  const unit = Object.keys(units).find((candidate) =>
+    value.endsWith(candidate),
+  );
+  const number = unit === undefined ? value : value.slice(0, -unit.length);
+  return (
+    Number(number) * (unit === undefined ? 1 : (units[unit] ?? Number.NaN))
+  );
+}
+
+function parseDemoRatio(value: string): number {
+  const [numerator, denominator, extra] = value.split("/");
+  if (extra !== undefined) return Number.NaN;
+  return Number(numerator) / Number(denominator);
+}
+
+function compareDemoNumber(
+  actual: number,
+  expected: number,
+  operator: string,
+): boolean {
+  if (operator === "<") return actual < expected;
+  if (operator === "<=") return actual <= expected;
+  if (operator === ">") return actual > expected;
+  if (operator === ">=") return actual >= expected;
+  return actual === expected;
 }
 
 function tagTerm(tag: string): string {

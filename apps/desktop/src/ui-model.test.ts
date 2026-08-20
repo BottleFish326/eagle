@@ -4,10 +4,13 @@ import type { AssetRecord } from "./scanner";
 import {
   composeAssetQuery,
   cycleTagFilter,
+  formatQueryError,
   matchesDemoExpression,
   nextGridIndex,
   reconcileSelectedKeys,
   reconcileSelectionAnchor,
+  settleFailedQuery,
+  settleSuccessfulQuery,
   summarizeTags,
 } from "./ui-model";
 
@@ -66,7 +69,11 @@ describe("desktop UI model", () => {
   });
 
   it("matches the demo query with the same visible filter forms", () => {
-    const asset = record("one", ["ui/icon", "color/blue"]);
+    const asset = {
+      ...record("one", ["ui/icon", "color/blue"]),
+      rating: 4,
+      modifiedUnixMs: Date.parse("2026-08-20T00:00:00Z"),
+    };
     expect(
       matchesDemoExpression(
         asset,
@@ -74,6 +81,33 @@ describe("desktop UI model", () => {
       ),
     ).toBe(true);
     expect(matchesDemoExpression(asset, 'tag:"color/red"')).toBe(false);
+    expect(
+      matchesDemoExpression(
+        asset,
+        "rating:>=4 width:>=100 aspect:1/1 modified:>=2026-08-19T00:00:00Z",
+      ),
+    ).toBe(true);
+    expect(matchesDemoExpression(asset, "rating:>4")).toBe(false);
+    expect(matchesDemoExpression(asset, "duration:unknown")).toBe(true);
+  });
+
+  it("reports structured UTF-8 query positions and preserves legal results", () => {
+    const successful = settleSuccessfulQuery(["one", "two"]);
+    const failed = settleFailedQuery(successful, {
+      kind: "parse",
+      error: {
+        kind: "invalid-integer",
+        offset: 7,
+        token: "width:abc",
+        message: "value must be an unsigned decimal integer",
+      },
+    });
+
+    expect(failed.visibleKeys).toEqual(["one", "two"]);
+    expect(failed.error).toContain("invalid-integer");
+    expect(failed.error).toContain("UTF-8 字节 7");
+    expect(failed.error).toContain("width:abc");
+    expect(formatQueryError("offline")).toBe("offline");
   });
 });
 

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  AdvancedFilterBuilder,
+  appendAdvancedPredicate,
+} from "./AdvancedFilterBuilder";
 import { AssetGrid, type AssetSelectionIntent } from "./AssetGrid";
 import {
   copyLocalPath,
@@ -47,11 +51,13 @@ import type { CacheMaintenanceReport } from "./thumbnail";
 import {
   composeAssetQuery,
   cycleTagFilter,
-  formatQueryError,
   reconcileSelectedKeys,
   reconcileSelectionAnchor,
   removeRootAssets,
+  settleFailedQuery,
+  settleSuccessfulQuery,
   summarizeTags,
+  type QueryViewState,
   type TagFilterMap,
   type TagFilterState,
   upsertAssets,
@@ -97,13 +103,16 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
   const [assets, setAssets] = useState<Map<string, AssetRecord>>(
     () => new Map(),
   );
-  const [visibleKeys, setVisibleKeys] = useState<string[]>([]);
+  const [queryView, setQueryView] = useState<QueryViewState>(() => ({
+    visibleKeys: [] as string[],
+  }));
+  const visibleKeys = queryView.visibleKeys;
+  const queryError = queryView.error;
   const [gridWindowKeys, setGridWindowKeys] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [selectionAnchor, setSelectionAnchor] = useState<string>();
   const [expression, setExpression] = useState("");
   const [tagFilters, setTagFilters] = useState<TagFilterMap>({});
-  const [queryError, setQueryError] = useState<string>();
   const [queryPending, setQueryPending] = useState(false);
   const [scans, setScans] = useState<Record<string, ScanUiState>>({});
   const [reconciliationReports, setReconciliationReports] = useState<
@@ -496,12 +505,13 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
         .queryAssets({ expression: effectiveQuery })
         .then((result) => {
           if (!active) return;
-          setVisibleKeys(result.keys.filter((key) => assets.has(key)));
-          setQueryError(undefined);
+          setQueryView(
+            settleSuccessfulQuery(result.keys.filter((key) => assets.has(key))),
+          );
         })
         .catch((error: unknown) => {
           if (!active) return;
-          setQueryError(formatQueryError(error));
+          setQueryView((current) => settleFailedQuery(current, error));
         })
         .finally(() => {
           if (active) setQueryPending(false);
@@ -985,7 +995,7 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
       const report = await api.resetDerivedState();
       setResetReport(report);
       setAssets(new Map());
-      setVisibleKeys([]);
+      setQueryView(settleSuccessfulQuery([]));
       setSelected(new Set());
       setSelectionAnchor(undefined);
       setScans({});
@@ -1235,18 +1245,28 @@ export function App({ api = defaultApi }: { api?: DesktopApi }) {
           </span>
         </a>
 
-        <div className={`search-box${queryError ? " has-error" : ""}`}>
-          <Icon name="search" size={17} />
-          <input
-            aria-describedby={queryError ? "query-error" : undefined}
-            aria-label="搜索和过滤素材"
-            onChange={(event) => setExpression(event.target.value)}
-            placeholder="搜索 Tag，或输入 type:image  /  favorite:true"
-            ref={search}
-            spellCheck={false}
-            value={expression}
-          />
-          <kbd>/</kbd>
+        <div className="search-area">
+          <div className={`search-box${queryError ? " has-error" : ""}`}>
+            <Icon name="search" size={17} />
+            <input
+              aria-describedby={queryError ? "query-error" : undefined}
+              aria-invalid={queryError ? true : undefined}
+              aria-label="搜索和过滤素材"
+              onChange={(event) => setExpression(event.target.value)}
+              placeholder="搜索 Tag，或输入 type:image  /  favorite:true"
+              ref={search}
+              spellCheck={false}
+              value={expression}
+            />
+            <kbd>/</kbd>
+            <AdvancedFilterBuilder
+              onAdd={(predicate) =>
+                setExpression((current) =>
+                  appendAdvancedPredicate(current, predicate),
+                )
+              }
+            />
+          </div>
         </div>
 
         <div className="topbar-actions">
