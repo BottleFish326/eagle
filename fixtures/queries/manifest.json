@@ -1,0 +1,4218 @@
+{
+  "schema": 1,
+  "suite": {
+    "id": "advanced-query-p3-a03",
+    "version": 1
+  },
+  "records": [
+    {
+      "key": "asset-000",
+      "rootId": null,
+      "relativePath": "Brand Assets/Hero 000.png",
+      "kind": "image",
+      "extension": "png",
+      "size": null,
+      "createdUnixMs": null,
+      "modifiedUnixMs": null,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft",
+        "usage/hero",
+        "主题/鹰"
+      ]
+    },
+    {
+      "key": "asset-001",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 001.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 0,
+      "createdUnixMs": 1767312000000,
+      "modifiedUnixMs": 1767229200000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": 1000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-002",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "日本語/素材 002.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 2097152,
+      "createdUnixMs": 1767398400000,
+      "modifiedUnixMs": 1767232800000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": 2000,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "候选 2",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-003",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 003.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 3145728,
+      "createdUnixMs": 1767484800000,
+      "modifiedUnixMs": 1767236400000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "候选 3",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-004",
+      "rootId": null,
+      "relativePath": "Case/Logo 004.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 4194304,
+      "createdUnixMs": 1767571200000,
+      "modifiedUnixMs": 1767240000000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": true,
+      "rating": 4,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-005",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "case/logo 005.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 5242880,
+      "createdUnixMs": 1767657600000,
+      "modifiedUnixMs": 1767243600000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 5,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "usage/hero"
+      ]
+    },
+    {
+      "key": "asset-006",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "Brand Assets/Hero 006.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 6291456,
+      "createdUnixMs": 1767744000000,
+      "modifiedUnixMs": 1767247200000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": 6000,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "候选 6",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-007",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 007.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 7340032,
+      "createdUnixMs": 1767830400000,
+      "modifiedUnixMs": 1767250800000,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 3,
+      "durationMs": 7000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "候选 7",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-008",
+      "rootId": null,
+      "relativePath": "日本語/素材 008.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 8388608,
+      "createdUnixMs": 1767916800000,
+      "modifiedUnixMs": 1767254400000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": null,
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-009",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 009.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 9437184,
+      "createdUnixMs": 1768003200000,
+      "modifiedUnixMs": 1767258000000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-010",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "Case/Logo 010.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 10485760,
+      "createdUnixMs": 1768089600000,
+      "modifiedUnixMs": 1767261600000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 4,
+      "favorite": true,
+      "note": "候选 10",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "usage/hero",
+        "主题/鹰"
+      ]
+    },
+    {
+      "key": "asset-011",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "case/logo 011.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": null,
+      "createdUnixMs": 1768176000000,
+      "modifiedUnixMs": 1767265200000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": 11000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 5,
+      "favorite": false,
+      "note": "候选 11",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-012",
+      "rootId": null,
+      "relativePath": "Brand Assets/Hero 012.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 12582912,
+      "createdUnixMs": 1768262400000,
+      "modifiedUnixMs": 1767268800000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": 12000,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-013",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 013.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 13631488,
+      "createdUnixMs": null,
+      "modifiedUnixMs": 1767272400000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-014",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "日本語/素材 014.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 14680064,
+      "createdUnixMs": 1768435200000,
+      "modifiedUnixMs": 1767276000000,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 2,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "候选 14",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-015",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 015.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 15728640,
+      "createdUnixMs": 1768521600000,
+      "modifiedUnixMs": 1767279600000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "候选 15",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft",
+        "usage/hero"
+      ]
+    },
+    {
+      "key": "asset-016",
+      "rootId": null,
+      "relativePath": "Case/Logo 016.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 16777216,
+      "createdUnixMs": 1768608000000,
+      "modifiedUnixMs": 1767283200000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": 16000,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": true,
+      "rating": 4,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-017",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "case/logo 017.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 17825792,
+      "createdUnixMs": 1768694400000,
+      "modifiedUnixMs": null,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": 17000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 5,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-018",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "Brand Assets/Hero 018.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 18874368,
+      "createdUnixMs": 1768780800000,
+      "modifiedUnixMs": 1767290400000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": "display-p3",
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "候选 18",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-019",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 019.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 19922944,
+      "createdUnixMs": 1768867200000,
+      "modifiedUnixMs": 1767294000000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "候选 19",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-020",
+      "rootId": null,
+      "relativePath": "日本語/素材 020.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 20971520,
+      "createdUnixMs": 1768953600000,
+      "modifiedUnixMs": 1767297600000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "usage/hero",
+        "主题/鹰"
+      ]
+    },
+    {
+      "key": "asset-021",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 021.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 22020096,
+      "createdUnixMs": 1769040000000,
+      "modifiedUnixMs": 1767301200000,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 1,
+      "durationMs": 21000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-022",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "Case/Logo 022.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": null,
+      "createdUnixMs": 1769126400000,
+      "modifiedUnixMs": 1767304800000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": 22000,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 4,
+      "favorite": true,
+      "note": "候选 22",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-023",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "case/logo 023.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 24117248,
+      "createdUnixMs": 1769212800000,
+      "modifiedUnixMs": 1767308400000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 5,
+      "favorite": false,
+      "note": "候选 23",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-024",
+      "rootId": null,
+      "relativePath": "Brand Assets/Hero 024.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 25165824,
+      "createdUnixMs": 1769299200000,
+      "modifiedUnixMs": 1767312000000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-025",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 025.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 26214400,
+      "createdUnixMs": 1769385600000,
+      "modifiedUnixMs": 1767315600000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "usage/hero"
+      ]
+    },
+    {
+      "key": "asset-026",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "日本語/素材 026.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 27262976,
+      "createdUnixMs": null,
+      "modifiedUnixMs": 1767319200000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": 26000,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "候选 26",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-027",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 027.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 28311552,
+      "createdUnixMs": 1769558400000,
+      "modifiedUnixMs": 1767322800000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "候选 27",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-028",
+      "rootId": null,
+      "relativePath": "Case/Logo 028.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 29360128,
+      "createdUnixMs": 1769644800000,
+      "modifiedUnixMs": 1767326400000,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": null,
+      "hasAlpha": true,
+      "rating": 4,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-029",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "case/logo 029.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 30408704,
+      "createdUnixMs": 1769731200000,
+      "modifiedUnixMs": 1767330000000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 5,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-030",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "Brand Assets/Hero 030.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 31457280,
+      "createdUnixMs": 1769817600000,
+      "modifiedUnixMs": 1767333600000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "候选 30",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft",
+        "usage/hero",
+        "主题/鹰"
+      ]
+    },
+    {
+      "key": "asset-031",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 031.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 32505856,
+      "createdUnixMs": 1769904000000,
+      "modifiedUnixMs": 1767337200000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": 31000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "候选 31",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-032",
+      "rootId": null,
+      "relativePath": "日本語/素材 032.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 33554432,
+      "createdUnixMs": 1769990400000,
+      "modifiedUnixMs": 1767340800000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": 32000,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-033",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 033.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": null,
+      "createdUnixMs": 1770076800000,
+      "modifiedUnixMs": 1767344400000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-034",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "Case/Logo 034.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 35651584,
+      "createdUnixMs": 1770163200000,
+      "modifiedUnixMs": null,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 4,
+      "favorite": true,
+      "note": "候选 34",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-035",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "case/logo 035.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 36700160,
+      "createdUnixMs": 1770249600000,
+      "modifiedUnixMs": 1767351600000,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 5,
+      "favorite": false,
+      "note": "候选 35",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "usage/hero"
+      ]
+    },
+    {
+      "key": "asset-036",
+      "rootId": null,
+      "relativePath": "Brand Assets/Hero 036.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 37748736,
+      "createdUnixMs": 1770336000000,
+      "modifiedUnixMs": 1767355200000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-037",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 037.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 38797312,
+      "createdUnixMs": 1770422400000,
+      "modifiedUnixMs": 1767358800000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": 37000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-038",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "日本語/素材 038.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 39845888,
+      "createdUnixMs": 1770508800000,
+      "modifiedUnixMs": 1767362400000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "候选 38",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-039",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 039.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 40894464,
+      "createdUnixMs": null,
+      "modifiedUnixMs": 1767366000000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "候选 39",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-040",
+      "rootId": null,
+      "relativePath": "Case/Logo 040.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 41943040,
+      "createdUnixMs": 1770681600000,
+      "modifiedUnixMs": 1767369600000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": true,
+      "rating": 4,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "usage/hero",
+        "主题/鹰"
+      ]
+    },
+    {
+      "key": "asset-041",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "case/logo 041.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 42991616,
+      "createdUnixMs": 1770768000000,
+      "modifiedUnixMs": 1767373200000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": 41000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 5,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-042",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "Brand Assets/Hero 042.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 44040192,
+      "createdUnixMs": 1770854400000,
+      "modifiedUnixMs": 1767376800000,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 2,
+      "durationMs": 42000,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "候选 42",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-043",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 043.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 45088768,
+      "createdUnixMs": 1770940800000,
+      "modifiedUnixMs": 1767380400000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "候选 43",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-044",
+      "rootId": null,
+      "relativePath": "日本語/素材 044.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": null,
+      "createdUnixMs": 1771027200000,
+      "modifiedUnixMs": 1767384000000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-045",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 045.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 47185920,
+      "createdUnixMs": 1771113600000,
+      "modifiedUnixMs": 1767387600000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft",
+        "usage/hero"
+      ]
+    },
+    {
+      "key": "asset-046",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "Case/Logo 046.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 48234496,
+      "createdUnixMs": 1771200000000,
+      "modifiedUnixMs": 1767391200000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": 46000,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 4,
+      "favorite": true,
+      "note": "候选 46",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-047",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "case/logo 047.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 49283072,
+      "createdUnixMs": 1771286400000,
+      "modifiedUnixMs": 1767394800000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": 47000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 5,
+      "favorite": false,
+      "note": "候选 47",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-048",
+      "rootId": null,
+      "relativePath": "Brand Assets/Hero 048.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 50331648,
+      "createdUnixMs": 1771372800000,
+      "modifiedUnixMs": 1767398400000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": null,
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-049",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 049.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 51380224,
+      "createdUnixMs": 1771459200000,
+      "modifiedUnixMs": 1767402000000,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 1,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-050",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "日本語/素材 050.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 52428800,
+      "createdUnixMs": 1771545600000,
+      "modifiedUnixMs": 1767405600000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "候选 50",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "usage/hero",
+        "主题/鹰"
+      ]
+    },
+    {
+      "key": "asset-051",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 051.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 53477376,
+      "createdUnixMs": 1771632000000,
+      "modifiedUnixMs": null,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": 51000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "候选 51",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-052",
+      "rootId": null,
+      "relativePath": "Case/Logo 052.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 54525952,
+      "createdUnixMs": null,
+      "modifiedUnixMs": 1767412800000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": 52000,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": true,
+      "rating": 4,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-053",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "case/logo 053.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 55574528,
+      "createdUnixMs": 1771804800000,
+      "modifiedUnixMs": 1767416400000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 5,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-054",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "Brand Assets/Hero 054.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 56623104,
+      "createdUnixMs": 1771891200000,
+      "modifiedUnixMs": 1767420000000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "候选 54",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-055",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 055.png",
+      "kind": "image",
+      "extension": "png",
+      "size": null,
+      "createdUnixMs": 1771977600000,
+      "modifiedUnixMs": 1767423600000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "候选 55",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "usage/hero"
+      ]
+    },
+    {
+      "key": "asset-056",
+      "rootId": null,
+      "relativePath": "日本語/素材 056.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 58720256,
+      "createdUnixMs": 1772064000000,
+      "modifiedUnixMs": 1767427200000,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 0,
+      "durationMs": 56000,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-057",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 057.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 59768832,
+      "createdUnixMs": 1772150400000,
+      "modifiedUnixMs": 1767430800000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": 57000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft"
+      ]
+    },
+    {
+      "key": "asset-058",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "Case/Logo 058.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 60817408,
+      "createdUnixMs": 1772236800000,
+      "modifiedUnixMs": 1767434400000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 4,
+      "favorite": true,
+      "note": "候选 58",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-059",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "case/logo 059.bin",
+      "kind": "other",
+      "extension": "bin",
+      "size": 61865984,
+      "createdUnixMs": 1772323200000,
+      "modifiedUnixMs": 1767438000000,
+      "width": 1600,
+      "height": 1200,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 5,
+      "favorite": false,
+      "note": "候选 59",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-060",
+      "rootId": null,
+      "relativePath": "Brand Assets/Hero 060.png",
+      "kind": "image",
+      "extension": "png",
+      "size": 62914560,
+      "createdUnixMs": 1772409600000,
+      "modifiedUnixMs": 1767441600000,
+      "width": 1920,
+      "height": 1080,
+      "displayQuarterTurns": 0,
+      "durationMs": null,
+      "pageCount": null,
+      "colorSpace": null,
+      "hasAlpha": null,
+      "rating": 0,
+      "favorite": true,
+      "note": "",
+      "tags": [
+        "group/even",
+        "project/eagle",
+        "state/draft",
+        "usage/hero",
+        "主题/鹰"
+      ]
+    },
+    {
+      "key": "asset-061",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "品牌/图像 061.mp4",
+      "kind": "video",
+      "extension": "mp4",
+      "size": 63963136,
+      "createdUnixMs": 1772496000000,
+      "modifiedUnixMs": 1767445200000,
+      "width": 1080,
+      "height": 1920,
+      "displayQuarterTurns": 1,
+      "durationMs": 61000,
+      "pageCount": null,
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "rating": 1,
+      "favorite": false,
+      "note": "　",
+      "tags": [
+        "group/odd",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-062",
+      "rootId": "019b76c0-0000-7000-8000-000000000001",
+      "relativePath": "日本語/素材 062.wav",
+      "kind": "audio",
+      "extension": "wav",
+      "size": 65011712,
+      "createdUnixMs": 1772582400000,
+      "modifiedUnixMs": 1767448800000,
+      "width": 1000,
+      "height": 1000,
+      "displayQuarterTurns": 2,
+      "durationMs": 62000,
+      "pageCount": null,
+      "colorSpace": "display-p3",
+      "hasAlpha": true,
+      "rating": 2,
+      "favorite": true,
+      "note": "候选 62",
+      "tags": [
+        "group/even",
+        "project/eagle"
+      ]
+    },
+    {
+      "key": "asset-063",
+      "rootId": "019b76c0-0000-7000-8000-000000000002",
+      "relativePath": "Emoji/🦅 063.pdf",
+      "kind": "pdf",
+      "extension": "pdf",
+      "size": 66060288,
+      "createdUnixMs": 1772668800000,
+      "modifiedUnixMs": 1767452400000,
+      "width": null,
+      "height": null,
+      "displayQuarterTurns": 3,
+      "durationMs": null,
+      "pageCount": 4,
+      "colorSpace": "srgb",
+      "hasAlpha": null,
+      "rating": 3,
+      "favorite": false,
+      "note": "候选 63",
+      "tags": [
+        "group/odd",
+        "project/eagle",
+        "state/draft"
+      ]
+    }
+  ],
+  "validCases": [
+    {
+      "id": "all-assets",
+      "expression": "",
+      "oracle": [],
+      "expectedKeys": [
+        "asset-000",
+        "asset-001",
+        "asset-002",
+        "asset-003",
+        "asset-004",
+        "asset-005",
+        "asset-006",
+        "asset-007",
+        "asset-008",
+        "asset-009",
+        "asset-010",
+        "asset-011",
+        "asset-012",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-016",
+        "asset-017",
+        "asset-018",
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-032",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-037",
+        "asset-038",
+        "asset-039",
+        "asset-040",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-048",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-052",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-056",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-060",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "tag-all",
+      "expression": "project/eagle",
+      "oracle": [
+        {
+          "field": "tag",
+          "operator": "all",
+          "value": [
+            "project/eagle"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-001",
+        "asset-002",
+        "asset-003",
+        "asset-004",
+        "asset-005",
+        "asset-006",
+        "asset-007",
+        "asset-008",
+        "asset-009",
+        "asset-010",
+        "asset-011",
+        "asset-012",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-016",
+        "asset-017",
+        "asset-018",
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-032",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-037",
+        "asset-038",
+        "asset-039",
+        "asset-040",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-048",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-052",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-056",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-060",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "tag-all-two",
+      "expression": "project/eagle usage/hero",
+      "oracle": [
+        {
+          "field": "tag",
+          "operator": "all",
+          "value": [
+            "project/eagle",
+            "usage/hero"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-005",
+        "asset-010",
+        "asset-015",
+        "asset-020",
+        "asset-025",
+        "asset-030",
+        "asset-035",
+        "asset-040",
+        "asset-045",
+        "asset-050",
+        "asset-055",
+        "asset-060"
+      ]
+    },
+    {
+      "id": "tag-any",
+      "expression": "any:(group/even|group/odd)",
+      "oracle": [
+        {
+          "field": "tag",
+          "operator": "any",
+          "value": [
+            "group/even",
+            "group/odd"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-001",
+        "asset-002",
+        "asset-003",
+        "asset-004",
+        "asset-005",
+        "asset-006",
+        "asset-007",
+        "asset-008",
+        "asset-009",
+        "asset-010",
+        "asset-011",
+        "asset-012",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-016",
+        "asset-017",
+        "asset-018",
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-032",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-037",
+        "asset-038",
+        "asset-039",
+        "asset-040",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-048",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-052",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-056",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-060",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "tag-none",
+      "expression": "-state/draft",
+      "oracle": [
+        {
+          "field": "tag",
+          "operator": "none",
+          "value": [
+            "state/draft"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-002",
+        "asset-004",
+        "asset-005",
+        "asset-007",
+        "asset-008",
+        "asset-010",
+        "asset-011",
+        "asset-013",
+        "asset-014",
+        "asset-016",
+        "asset-017",
+        "asset-019",
+        "asset-020",
+        "asset-022",
+        "asset-023",
+        "asset-025",
+        "asset-026",
+        "asset-028",
+        "asset-029",
+        "asset-031",
+        "asset-032",
+        "asset-034",
+        "asset-035",
+        "asset-037",
+        "asset-038",
+        "asset-040",
+        "asset-041",
+        "asset-043",
+        "asset-044",
+        "asset-046",
+        "asset-047",
+        "asset-049",
+        "asset-050",
+        "asset-052",
+        "asset-053",
+        "asset-055",
+        "asset-056",
+        "asset-058",
+        "asset-059",
+        "asset-061",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "tag-namespace",
+      "expression": "group/*",
+      "oracle": [
+        {
+          "field": "tag",
+          "operator": "all",
+          "value": [
+            "group/*"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-001",
+        "asset-002",
+        "asset-003",
+        "asset-004",
+        "asset-005",
+        "asset-006",
+        "asset-007",
+        "asset-008",
+        "asset-009",
+        "asset-010",
+        "asset-011",
+        "asset-012",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-016",
+        "asset-017",
+        "asset-018",
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-032",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-037",
+        "asset-038",
+        "asset-039",
+        "asset-040",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-048",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-052",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-056",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-060",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "tag-explicit",
+      "expression": "tag:project/eagle",
+      "oracle": [
+        {
+          "field": "tag",
+          "operator": "all",
+          "value": [
+            "project/eagle"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-001",
+        "asset-002",
+        "asset-003",
+        "asset-004",
+        "asset-005",
+        "asset-006",
+        "asset-007",
+        "asset-008",
+        "asset-009",
+        "asset-010",
+        "asset-011",
+        "asset-012",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-016",
+        "asset-017",
+        "asset-018",
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-032",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-037",
+        "asset-038",
+        "asset-039",
+        "asset-040",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-048",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-052",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-056",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-060",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "tag-unicode",
+      "expression": "主题/鹰",
+      "oracle": [
+        {
+          "field": "tag",
+          "operator": "all",
+          "value": [
+            "主题/鹰"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-010",
+        "asset-020",
+        "asset-030",
+        "asset-040",
+        "asset-050",
+        "asset-060"
+      ]
+    },
+    {
+      "id": "type-image",
+      "expression": "type:image",
+      "oracle": [
+        {
+          "field": "type",
+          "operator": "any",
+          "value": [
+            "image"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-005",
+        "asset-010",
+        "asset-015",
+        "asset-020",
+        "asset-025",
+        "asset-030",
+        "asset-035",
+        "asset-040",
+        "asset-045",
+        "asset-050",
+        "asset-055",
+        "asset-060"
+      ]
+    },
+    {
+      "id": "type-image-video",
+      "expression": "type:image\\|video",
+      "oracle": [
+        {
+          "field": "type",
+          "operator": "any",
+          "value": [
+            "image",
+            "video"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-001",
+        "asset-005",
+        "asset-006",
+        "asset-010",
+        "asset-011",
+        "asset-015",
+        "asset-016",
+        "asset-020",
+        "asset-021",
+        "asset-025",
+        "asset-026",
+        "asset-030",
+        "asset-031",
+        "asset-035",
+        "asset-036",
+        "asset-040",
+        "asset-041",
+        "asset-045",
+        "asset-046",
+        "asset-050",
+        "asset-051",
+        "asset-055",
+        "asset-056",
+        "asset-060",
+        "asset-061"
+      ]
+    },
+    {
+      "id": "extension-png",
+      "expression": "ext:png",
+      "oracle": [
+        {
+          "field": "extension",
+          "operator": "any",
+          "value": [
+            "png"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-005",
+        "asset-010",
+        "asset-015",
+        "asset-020",
+        "asset-025",
+        "asset-030",
+        "asset-035",
+        "asset-040",
+        "asset-045",
+        "asset-050",
+        "asset-055",
+        "asset-060"
+      ]
+    },
+    {
+      "id": "extension-pdf-wav",
+      "expression": "ext:pdf\\|wav",
+      "oracle": [
+        {
+          "field": "extension",
+          "operator": "any",
+          "value": [
+            "pdf",
+            "wav"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-002",
+        "asset-003",
+        "asset-007",
+        "asset-008",
+        "asset-012",
+        "asset-013",
+        "asset-017",
+        "asset-018",
+        "asset-022",
+        "asset-023",
+        "asset-027",
+        "asset-028",
+        "asset-032",
+        "asset-033",
+        "asset-037",
+        "asset-038",
+        "asset-042",
+        "asset-043",
+        "asset-047",
+        "asset-048",
+        "asset-052",
+        "asset-053",
+        "asset-057",
+        "asset-058",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "favorite-true",
+      "expression": "favorite:true",
+      "oracle": [
+        {
+          "field": "favorite",
+          "operator": "eq",
+          "value": true
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-002",
+        "asset-004",
+        "asset-006",
+        "asset-008",
+        "asset-010",
+        "asset-012",
+        "asset-014",
+        "asset-016",
+        "asset-018",
+        "asset-020",
+        "asset-022",
+        "asset-024",
+        "asset-026",
+        "asset-028",
+        "asset-030",
+        "asset-032",
+        "asset-034",
+        "asset-036",
+        "asset-038",
+        "asset-040",
+        "asset-042",
+        "asset-044",
+        "asset-046",
+        "asset-048",
+        "asset-050",
+        "asset-052",
+        "asset-054",
+        "asset-056",
+        "asset-058",
+        "asset-060",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "favorite-false",
+      "expression": "favorite:false",
+      "oracle": [
+        {
+          "field": "favorite",
+          "operator": "eq",
+          "value": false
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-003",
+        "asset-005",
+        "asset-007",
+        "asset-009",
+        "asset-011",
+        "asset-013",
+        "asset-015",
+        "asset-017",
+        "asset-019",
+        "asset-021",
+        "asset-023",
+        "asset-025",
+        "asset-027",
+        "asset-029",
+        "asset-031",
+        "asset-033",
+        "asset-035",
+        "asset-037",
+        "asset-039",
+        "asset-041",
+        "asset-043",
+        "asset-045",
+        "asset-047",
+        "asset-049",
+        "asset-051",
+        "asset-053",
+        "asset-055",
+        "asset-057",
+        "asset-059",
+        "asset-061",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "rating-zero",
+      "expression": "rating:0",
+      "oracle": [
+        {
+          "field": "rating",
+          "operator": "eq",
+          "value": 0
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-006",
+        "asset-012",
+        "asset-018",
+        "asset-024",
+        "asset-030",
+        "asset-036",
+        "asset-042",
+        "asset-048",
+        "asset-054",
+        "asset-060"
+      ]
+    },
+    {
+      "id": "rating-high",
+      "expression": "rating:>=4",
+      "oracle": [
+        {
+          "field": "rating",
+          "operator": "gte",
+          "value": 4
+        }
+      ],
+      "expectedKeys": [
+        "asset-004",
+        "asset-005",
+        "asset-010",
+        "asset-011",
+        "asset-016",
+        "asset-017",
+        "asset-022",
+        "asset-023",
+        "asset-028",
+        "asset-029",
+        "asset-034",
+        "asset-035",
+        "asset-040",
+        "asset-041",
+        "asset-046",
+        "asset-047",
+        "asset-052",
+        "asset-053",
+        "asset-058",
+        "asset-059"
+      ]
+    },
+    {
+      "id": "rating-range",
+      "expression": "rating:>=2 rating:<5",
+      "oracle": [
+        {
+          "field": "rating",
+          "operator": "gte",
+          "value": 2
+        },
+        {
+          "field": "rating",
+          "operator": "lt",
+          "value": 5
+        }
+      ],
+      "expectedKeys": [
+        "asset-002",
+        "asset-003",
+        "asset-004",
+        "asset-008",
+        "asset-009",
+        "asset-010",
+        "asset-014",
+        "asset-015",
+        "asset-016",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-026",
+        "asset-027",
+        "asset-028",
+        "asset-032",
+        "asset-033",
+        "asset-034",
+        "asset-038",
+        "asset-039",
+        "asset-040",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-050",
+        "asset-051",
+        "asset-052",
+        "asset-056",
+        "asset-057",
+        "asset-058",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "size-unknown",
+      "expression": "size:unknown",
+      "oracle": [
+        {
+          "field": "size",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-011",
+        "asset-022",
+        "asset-033",
+        "asset-044",
+        "asset-055"
+      ]
+    },
+    {
+      "id": "size-zero",
+      "expression": "size:0",
+      "oracle": [
+        {
+          "field": "size",
+          "operator": "eq",
+          "value": 0
+        }
+      ],
+      "expectedKeys": [
+        "asset-001"
+      ]
+    },
+    {
+      "id": "size-at-least-10-mib",
+      "expression": "size:>=10MiB",
+      "oracle": [
+        {
+          "field": "size",
+          "operator": "gte",
+          "value": 10485760
+        }
+      ],
+      "expectedKeys": [
+        "asset-010",
+        "asset-012",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-016",
+        "asset-017",
+        "asset-018",
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-032",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-037",
+        "asset-038",
+        "asset-039",
+        "asset-040",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-048",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-052",
+        "asset-053",
+        "asset-054",
+        "asset-056",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-060",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "size-window",
+      "expression": "size:>=16MiB size:<32MiB",
+      "oracle": [
+        {
+          "field": "size",
+          "operator": "gte",
+          "value": 16777216
+        },
+        {
+          "field": "size",
+          "operator": "lt",
+          "value": 33554432
+        }
+      ],
+      "expectedKeys": [
+        "asset-016",
+        "asset-017",
+        "asset-018",
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-031"
+      ]
+    },
+    {
+      "id": "width-unknown",
+      "expression": "width:unknown",
+      "oracle": [
+        {
+          "field": "width",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-007",
+        "asset-014",
+        "asset-021",
+        "asset-028",
+        "asset-035",
+        "asset-042",
+        "asset-049",
+        "asset-056",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "width-hd",
+      "expression": "width:>=1920",
+      "oracle": [
+        {
+          "field": "width",
+          "operator": "gte",
+          "value": 1920
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-004",
+        "asset-005",
+        "asset-008",
+        "asset-009",
+        "asset-012",
+        "asset-013",
+        "asset-016",
+        "asset-017",
+        "asset-020",
+        "asset-024",
+        "asset-025",
+        "asset-029",
+        "asset-032",
+        "asset-033",
+        "asset-036",
+        "asset-037",
+        "asset-040",
+        "asset-041",
+        "asset-044",
+        "asset-045",
+        "asset-048",
+        "asset-052",
+        "asset-053",
+        "asset-057",
+        "asset-060",
+        "asset-061"
+      ]
+    },
+    {
+      "id": "height-small",
+      "expression": "height:<=1080",
+      "oracle": [
+        {
+          "field": "height",
+          "operator": "lte",
+          "value": 1080
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-002",
+        "asset-004",
+        "asset-005",
+        "asset-006",
+        "asset-008",
+        "asset-009",
+        "asset-010",
+        "asset-012",
+        "asset-013",
+        "asset-016",
+        "asset-017",
+        "asset-018",
+        "asset-020",
+        "asset-022",
+        "asset-024",
+        "asset-025",
+        "asset-026",
+        "asset-029",
+        "asset-030",
+        "asset-032",
+        "asset-033",
+        "asset-034",
+        "asset-036",
+        "asset-037",
+        "asset-038",
+        "asset-040",
+        "asset-041",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-048",
+        "asset-050",
+        "asset-052",
+        "asset-053",
+        "asset-054",
+        "asset-057",
+        "asset-058",
+        "asset-060",
+        "asset-061",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "aspect-unknown",
+      "expression": "aspect:unknown",
+      "oracle": [
+        {
+          "field": "aspect",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-007",
+        "asset-014",
+        "asset-021",
+        "asset-028",
+        "asset-035",
+        "asset-042",
+        "asset-049",
+        "asset-056",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "aspect-square",
+      "expression": "aspect:1/1",
+      "oracle": [
+        {
+          "field": "aspect",
+          "operator": "eq",
+          "value": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      ],
+      "expectedKeys": [
+        "asset-002",
+        "asset-006",
+        "asset-010",
+        "asset-018",
+        "asset-022",
+        "asset-026",
+        "asset-030",
+        "asset-034",
+        "asset-038",
+        "asset-046",
+        "asset-050",
+        "asset-054",
+        "asset-058",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "aspect-wide",
+      "expression": "aspect:>=16/9",
+      "oracle": [
+        {
+          "field": "aspect",
+          "operator": "gte",
+          "value": {
+            "numerator": 16,
+            "denominator": 9
+          }
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-004",
+        "asset-005",
+        "asset-008",
+        "asset-009",
+        "asset-012",
+        "asset-013",
+        "asset-016",
+        "asset-017",
+        "asset-020",
+        "asset-024",
+        "asset-025",
+        "asset-029",
+        "asset-032",
+        "asset-033",
+        "asset-036",
+        "asset-037",
+        "asset-040",
+        "asset-041",
+        "asset-044",
+        "asset-045",
+        "asset-048",
+        "asset-052",
+        "asset-053",
+        "asset-057",
+        "asset-060",
+        "asset-061"
+      ]
+    },
+    {
+      "id": "aspect-four-three",
+      "expression": "aspect:4/3",
+      "oracle": [
+        {
+          "field": "aspect",
+          "operator": "eq",
+          "value": {
+            "numerator": 4,
+            "denominator": 3
+          }
+        }
+      ],
+      "expectedKeys": []
+    },
+    {
+      "id": "orientation-unknown",
+      "expression": "orientation:unknown",
+      "oracle": [
+        {
+          "field": "orientation",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-007",
+        "asset-014",
+        "asset-021",
+        "asset-028",
+        "asset-035",
+        "asset-042",
+        "asset-049",
+        "asset-056",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "orientation-landscape",
+      "expression": "orientation:landscape",
+      "oracle": [
+        {
+          "field": "orientation",
+          "operator": "any",
+          "value": [
+            "landscape"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-004",
+        "asset-005",
+        "asset-008",
+        "asset-009",
+        "asset-012",
+        "asset-013",
+        "asset-016",
+        "asset-017",
+        "asset-020",
+        "asset-024",
+        "asset-025",
+        "asset-029",
+        "asset-032",
+        "asset-033",
+        "asset-036",
+        "asset-037",
+        "asset-040",
+        "asset-041",
+        "asset-044",
+        "asset-045",
+        "asset-048",
+        "asset-052",
+        "asset-053",
+        "asset-057",
+        "asset-060",
+        "asset-061"
+      ]
+    },
+    {
+      "id": "orientation-portrait-square",
+      "expression": "orientation:portrait\\|square",
+      "oracle": [
+        {
+          "field": "orientation",
+          "operator": "any",
+          "value": [
+            "portrait",
+            "square"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-002",
+        "asset-003",
+        "asset-006",
+        "asset-010",
+        "asset-011",
+        "asset-015",
+        "asset-018",
+        "asset-019",
+        "asset-022",
+        "asset-023",
+        "asset-026",
+        "asset-027",
+        "asset-030",
+        "asset-031",
+        "asset-034",
+        "asset-038",
+        "asset-039",
+        "asset-043",
+        "asset-046",
+        "asset-047",
+        "asset-050",
+        "asset-051",
+        "asset-054",
+        "asset-055",
+        "asset-058",
+        "asset-059",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "created-unknown",
+      "expression": "created:unknown",
+      "oracle": [
+        {
+          "field": "created",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-013",
+        "asset-026",
+        "asset-039",
+        "asset-052"
+      ]
+    },
+    {
+      "id": "created-after",
+      "expression": "created:>=2026-01-20T00:00:00Z",
+      "oracle": [
+        {
+          "field": "created",
+          "operator": "gte",
+          "value": 1768867200000
+        }
+      ],
+      "expectedKeys": [
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-032",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-037",
+        "asset-038",
+        "asset-040",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-048",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-056",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-060",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "created-offset",
+      "expression": "created:>=2026-01-20T08:00:00+08:00",
+      "oracle": [
+        {
+          "field": "created",
+          "operator": "gte",
+          "value": 1768867200000
+        }
+      ],
+      "expectedKeys": [
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-032",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-037",
+        "asset-038",
+        "asset-040",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-048",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-056",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-060",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "modified-unknown",
+      "expression": "modified:unknown",
+      "oracle": [
+        {
+          "field": "modified",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-017",
+        "asset-034",
+        "asset-051"
+      ]
+    },
+    {
+      "id": "modified-before",
+      "expression": "modified:<2026-01-02T00:00:00Z",
+      "oracle": [
+        {
+          "field": "modified",
+          "operator": "lt",
+          "value": 1767312000000
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-002",
+        "asset-003",
+        "asset-004",
+        "asset-005",
+        "asset-006",
+        "asset-007",
+        "asset-008",
+        "asset-009",
+        "asset-010",
+        "asset-011",
+        "asset-012",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-016",
+        "asset-018",
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-023"
+      ]
+    },
+    {
+      "id": "duration-unknown",
+      "expression": "duration:unknown",
+      "oracle": [
+        {
+          "field": "duration",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-003",
+        "asset-004",
+        "asset-005",
+        "asset-008",
+        "asset-009",
+        "asset-010",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-018",
+        "asset-019",
+        "asset-020",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-038",
+        "asset-039",
+        "asset-040",
+        "asset-043",
+        "asset-044",
+        "asset-045",
+        "asset-048",
+        "asset-049",
+        "asset-050",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-058",
+        "asset-059",
+        "asset-060",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "duration-zero",
+      "expression": "duration:0",
+      "oracle": [
+        {
+          "field": "duration",
+          "operator": "eq",
+          "value": 0
+        }
+      ],
+      "expectedKeys": []
+    },
+    {
+      "id": "duration-thirty-seconds",
+      "expression": "duration:>=30s",
+      "oracle": [
+        {
+          "field": "duration",
+          "operator": "gte",
+          "value": 30000
+        }
+      ],
+      "expectedKeys": [
+        "asset-031",
+        "asset-032",
+        "asset-037",
+        "asset-041",
+        "asset-042",
+        "asset-046",
+        "asset-047",
+        "asset-051",
+        "asset-052",
+        "asset-056",
+        "asset-057",
+        "asset-061",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "duration-one-minute",
+      "expression": "duration:>=1min",
+      "oracle": [
+        {
+          "field": "duration",
+          "operator": "gte",
+          "value": 60000
+        }
+      ],
+      "expectedKeys": [
+        "asset-061",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "pages-unknown",
+      "expression": "pages:unknown",
+      "oracle": [
+        {
+          "field": "pages",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-001",
+        "asset-002",
+        "asset-003",
+        "asset-004",
+        "asset-005",
+        "asset-006",
+        "asset-007",
+        "asset-009",
+        "asset-010",
+        "asset-011",
+        "asset-012",
+        "asset-014",
+        "asset-015",
+        "asset-016",
+        "asset-017",
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-024",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-032",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-037",
+        "asset-039",
+        "asset-040",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-052",
+        "asset-054",
+        "asset-055",
+        "asset-056",
+        "asset-057",
+        "asset-059",
+        "asset-060",
+        "asset-061",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "pages-two",
+      "expression": "pages:>=2",
+      "oracle": [
+        {
+          "field": "pages",
+          "operator": "gte",
+          "value": 2
+        }
+      ],
+      "expectedKeys": [
+        "asset-008",
+        "asset-013",
+        "asset-018",
+        "asset-023",
+        "asset-028",
+        "asset-033",
+        "asset-038",
+        "asset-048",
+        "asset-053",
+        "asset-058",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "root-unknown",
+      "expression": "root:unknown",
+      "oracle": [
+        {
+          "field": "root",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-004",
+        "asset-008",
+        "asset-012",
+        "asset-016",
+        "asset-020",
+        "asset-024",
+        "asset-028",
+        "asset-032",
+        "asset-036",
+        "asset-040",
+        "asset-044",
+        "asset-048",
+        "asset-052",
+        "asset-056",
+        "asset-060"
+      ]
+    },
+    {
+      "id": "root-a",
+      "expression": "root:019b76c0-0000-7000-8000-000000000001",
+      "oracle": [
+        {
+          "field": "root",
+          "operator": "any",
+          "value": [
+            "019b76c0-0000-7000-8000-000000000001"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-002",
+        "asset-006",
+        "asset-010",
+        "asset-014",
+        "asset-018",
+        "asset-022",
+        "asset-026",
+        "asset-030",
+        "asset-034",
+        "asset-038",
+        "asset-042",
+        "asset-046",
+        "asset-050",
+        "asset-054",
+        "asset-058",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "root-a-b",
+      "expression": "root:019b76c0-0000-7000-8000-000000000001\\|019b76c0-0000-7000-8000-000000000002",
+      "oracle": [
+        {
+          "field": "root",
+          "operator": "any",
+          "value": [
+            "019b76c0-0000-7000-8000-000000000001",
+            "019b76c0-0000-7000-8000-000000000002"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-002",
+        "asset-003",
+        "asset-005",
+        "asset-006",
+        "asset-007",
+        "asset-009",
+        "asset-010",
+        "asset-011",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-017",
+        "asset-018",
+        "asset-019",
+        "asset-021",
+        "asset-022",
+        "asset-023",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-037",
+        "asset-038",
+        "asset-039",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "root-removed",
+      "expression": "root:019b76c0-0000-7000-8000-000000000003",
+      "oracle": [
+        {
+          "field": "root",
+          "operator": "any",
+          "value": [
+            "019b76c0-0000-7000-8000-000000000003"
+          ]
+        }
+      ],
+      "expectedKeys": []
+    },
+    {
+      "id": "path-brand",
+      "expression": "path:\"Brand Assets\"",
+      "oracle": [
+        {
+          "field": "path",
+          "operator": "contains",
+          "value": "Brand Assets"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-006",
+        "asset-012",
+        "asset-018",
+        "asset-024",
+        "asset-030",
+        "asset-036",
+        "asset-042",
+        "asset-048",
+        "asset-054",
+        "asset-060"
+      ]
+    },
+    {
+      "id": "path-chinese",
+      "expression": "path:品牌",
+      "oracle": [
+        {
+          "field": "path",
+          "operator": "contains",
+          "value": "品牌"
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-007",
+        "asset-013",
+        "asset-019",
+        "asset-025",
+        "asset-031",
+        "asset-037",
+        "asset-043",
+        "asset-049",
+        "asset-055",
+        "asset-061"
+      ]
+    },
+    {
+      "id": "path-japanese",
+      "expression": "path:日本語",
+      "oracle": [
+        {
+          "field": "path",
+          "operator": "contains",
+          "value": "日本語"
+        }
+      ],
+      "expectedKeys": [
+        "asset-002",
+        "asset-008",
+        "asset-014",
+        "asset-020",
+        "asset-026",
+        "asset-032",
+        "asset-038",
+        "asset-044",
+        "asset-050",
+        "asset-056",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "path-emoji",
+      "expression": "path:🦅",
+      "oracle": [
+        {
+          "field": "path",
+          "operator": "contains",
+          "value": "🦅"
+        }
+      ],
+      "expectedKeys": [
+        "asset-003",
+        "asset-009",
+        "asset-015",
+        "asset-021",
+        "asset-027",
+        "asset-033",
+        "asset-039",
+        "asset-045",
+        "asset-051",
+        "asset-057",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "path-case-sensitive",
+      "expression": "path:Case",
+      "oracle": [
+        {
+          "field": "path",
+          "operator": "contains",
+          "value": "Case"
+        }
+      ],
+      "expectedKeys": [
+        "asset-004",
+        "asset-010",
+        "asset-016",
+        "asset-022",
+        "asset-028",
+        "asset-034",
+        "asset-040",
+        "asset-046",
+        "asset-052",
+        "asset-058"
+      ]
+    },
+    {
+      "id": "path-two-fragments",
+      "expression": "path:\"Brand Assets\" path:Hero",
+      "oracle": [
+        {
+          "field": "path",
+          "operator": "contains",
+          "value": "Brand Assets"
+        },
+        {
+          "field": "path",
+          "operator": "contains",
+          "value": "Hero"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-006",
+        "asset-012",
+        "asset-018",
+        "asset-024",
+        "asset-030",
+        "asset-036",
+        "asset-042",
+        "asset-048",
+        "asset-054",
+        "asset-060"
+      ]
+    },
+    {
+      "id": "color-unknown",
+      "expression": "color-space:unknown",
+      "oracle": [
+        {
+          "field": "color-space",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-004",
+        "asset-008",
+        "asset-012",
+        "asset-016",
+        "asset-020",
+        "asset-024",
+        "asset-028",
+        "asset-032",
+        "asset-036",
+        "asset-040",
+        "asset-044",
+        "asset-048",
+        "asset-052",
+        "asset-056",
+        "asset-060"
+      ]
+    },
+    {
+      "id": "color-srgb",
+      "expression": "color-space:srgb",
+      "oracle": [
+        {
+          "field": "color-space",
+          "operator": "any",
+          "value": [
+            "srgb"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-003",
+        "asset-005",
+        "asset-007",
+        "asset-009",
+        "asset-011",
+        "asset-013",
+        "asset-015",
+        "asset-017",
+        "asset-019",
+        "asset-021",
+        "asset-023",
+        "asset-025",
+        "asset-027",
+        "asset-029",
+        "asset-031",
+        "asset-033",
+        "asset-035",
+        "asset-037",
+        "asset-039",
+        "asset-041",
+        "asset-043",
+        "asset-045",
+        "asset-047",
+        "asset-049",
+        "asset-051",
+        "asset-053",
+        "asset-055",
+        "asset-057",
+        "asset-059",
+        "asset-061",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "color-two",
+      "expression": "color-space:display-p3\\|srgb",
+      "oracle": [
+        {
+          "field": "color-space",
+          "operator": "any",
+          "value": [
+            "display-p3",
+            "srgb"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-002",
+        "asset-003",
+        "asset-005",
+        "asset-006",
+        "asset-007",
+        "asset-009",
+        "asset-010",
+        "asset-011",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-017",
+        "asset-018",
+        "asset-019",
+        "asset-021",
+        "asset-022",
+        "asset-023",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-037",
+        "asset-038",
+        "asset-039",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "note-true",
+      "expression": "has-note:true",
+      "oracle": [
+        {
+          "field": "has-note",
+          "operator": "eq",
+          "value": true
+        }
+      ],
+      "expectedKeys": [
+        "asset-002",
+        "asset-003",
+        "asset-006",
+        "asset-007",
+        "asset-010",
+        "asset-011",
+        "asset-014",
+        "asset-015",
+        "asset-018",
+        "asset-019",
+        "asset-022",
+        "asset-023",
+        "asset-026",
+        "asset-027",
+        "asset-030",
+        "asset-031",
+        "asset-034",
+        "asset-035",
+        "asset-038",
+        "asset-039",
+        "asset-042",
+        "asset-043",
+        "asset-046",
+        "asset-047",
+        "asset-050",
+        "asset-051",
+        "asset-054",
+        "asset-055",
+        "asset-058",
+        "asset-059",
+        "asset-062",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "note-false",
+      "expression": "has-note:false",
+      "oracle": [
+        {
+          "field": "has-note",
+          "operator": "eq",
+          "value": false
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-001",
+        "asset-004",
+        "asset-005",
+        "asset-008",
+        "asset-009",
+        "asset-012",
+        "asset-013",
+        "asset-016",
+        "asset-017",
+        "asset-020",
+        "asset-021",
+        "asset-024",
+        "asset-025",
+        "asset-028",
+        "asset-029",
+        "asset-032",
+        "asset-033",
+        "asset-036",
+        "asset-037",
+        "asset-040",
+        "asset-041",
+        "asset-044",
+        "asset-045",
+        "asset-048",
+        "asset-049",
+        "asset-052",
+        "asset-053",
+        "asset-056",
+        "asset-057",
+        "asset-060",
+        "asset-061"
+      ]
+    },
+    {
+      "id": "alpha-unknown",
+      "expression": "has-alpha:unknown",
+      "oracle": [
+        {
+          "field": "has-alpha",
+          "operator": "is-unknown",
+          "value": "unknown"
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-003",
+        "asset-006",
+        "asset-009",
+        "asset-012",
+        "asset-015",
+        "asset-018",
+        "asset-021",
+        "asset-024",
+        "asset-027",
+        "asset-030",
+        "asset-033",
+        "asset-036",
+        "asset-039",
+        "asset-042",
+        "asset-045",
+        "asset-048",
+        "asset-051",
+        "asset-054",
+        "asset-057",
+        "asset-060",
+        "asset-063"
+      ]
+    },
+    {
+      "id": "alpha-true",
+      "expression": "has-alpha:true",
+      "oracle": [
+        {
+          "field": "has-alpha",
+          "operator": "eq",
+          "value": true
+        }
+      ],
+      "expectedKeys": [
+        "asset-002",
+        "asset-004",
+        "asset-008",
+        "asset-010",
+        "asset-014",
+        "asset-016",
+        "asset-020",
+        "asset-022",
+        "asset-026",
+        "asset-028",
+        "asset-032",
+        "asset-034",
+        "asset-038",
+        "asset-040",
+        "asset-044",
+        "asset-046",
+        "asset-050",
+        "asset-052",
+        "asset-056",
+        "asset-058",
+        "asset-062"
+      ]
+    },
+    {
+      "id": "alpha-false",
+      "expression": "has-alpha:false",
+      "oracle": [
+        {
+          "field": "has-alpha",
+          "operator": "eq",
+          "value": false
+        }
+      ],
+      "expectedKeys": [
+        "asset-001",
+        "asset-005",
+        "asset-007",
+        "asset-011",
+        "asset-013",
+        "asset-017",
+        "asset-019",
+        "asset-023",
+        "asset-025",
+        "asset-029",
+        "asset-031",
+        "asset-035",
+        "asset-037",
+        "asset-041",
+        "asset-043",
+        "asset-047",
+        "asset-049",
+        "asset-053",
+        "asset-055",
+        "asset-059",
+        "asset-061"
+      ]
+    },
+    {
+      "id": "combined-basic",
+      "expression": "project/eagle group/* -state/draft type:image\\|video favorite:true",
+      "oracle": [
+        {
+          "field": "tag",
+          "operator": "all",
+          "value": [
+            "group/*",
+            "project/eagle"
+          ]
+        },
+        {
+          "field": "tag",
+          "operator": "none",
+          "value": [
+            "state/draft"
+          ]
+        },
+        {
+          "field": "type",
+          "operator": "any",
+          "value": [
+            "image",
+            "video"
+          ]
+        },
+        {
+          "field": "favorite",
+          "operator": "eq",
+          "value": true
+        }
+      ],
+      "expectedKeys": [
+        "asset-010",
+        "asset-016",
+        "asset-020",
+        "asset-026",
+        "asset-040",
+        "asset-046",
+        "asset-050",
+        "asset-056"
+      ]
+    },
+    {
+      "id": "combined-advanced",
+      "expression": "rating:>=2 size:>=8MiB width:>=1000 orientation:landscape has-note:false",
+      "oracle": [
+        {
+          "field": "rating",
+          "operator": "gte",
+          "value": 2
+        },
+        {
+          "field": "size",
+          "operator": "gte",
+          "value": 8388608
+        },
+        {
+          "field": "width",
+          "operator": "gte",
+          "value": 1000
+        },
+        {
+          "field": "orientation",
+          "operator": "any",
+          "value": [
+            "landscape"
+          ]
+        },
+        {
+          "field": "has-note",
+          "operator": "eq",
+          "value": false
+        }
+      ],
+      "expectedKeys": [
+        "asset-008",
+        "asset-009",
+        "asset-016",
+        "asset-017",
+        "asset-020",
+        "asset-029",
+        "asset-032",
+        "asset-040",
+        "asset-041",
+        "asset-045",
+        "asset-052",
+        "asset-053",
+        "asset-057"
+      ]
+    },
+    {
+      "id": "empty-result",
+      "expression": "root:019b76c0-0000-7000-8000-000000000099",
+      "oracle": [
+        {
+          "field": "root",
+          "operator": "any",
+          "value": [
+            "019b76c0-0000-7000-8000-000000000099"
+          ]
+        }
+      ],
+      "expectedKeys": []
+    },
+    {
+      "id": "large-candidate-set",
+      "expression": "project/eagle",
+      "oracle": [
+        {
+          "field": "tag",
+          "operator": "all",
+          "value": [
+            "project/eagle"
+          ]
+        }
+      ],
+      "expectedKeys": [
+        "asset-000",
+        "asset-001",
+        "asset-002",
+        "asset-003",
+        "asset-004",
+        "asset-005",
+        "asset-006",
+        "asset-007",
+        "asset-008",
+        "asset-009",
+        "asset-010",
+        "asset-011",
+        "asset-012",
+        "asset-013",
+        "asset-014",
+        "asset-015",
+        "asset-016",
+        "asset-017",
+        "asset-018",
+        "asset-019",
+        "asset-020",
+        "asset-021",
+        "asset-022",
+        "asset-023",
+        "asset-024",
+        "asset-025",
+        "asset-026",
+        "asset-027",
+        "asset-028",
+        "asset-029",
+        "asset-030",
+        "asset-031",
+        "asset-032",
+        "asset-033",
+        "asset-034",
+        "asset-035",
+        "asset-036",
+        "asset-037",
+        "asset-038",
+        "asset-039",
+        "asset-040",
+        "asset-041",
+        "asset-042",
+        "asset-043",
+        "asset-044",
+        "asset-045",
+        "asset-046",
+        "asset-047",
+        "asset-048",
+        "asset-049",
+        "asset-050",
+        "asset-051",
+        "asset-052",
+        "asset-053",
+        "asset-054",
+        "asset-055",
+        "asset-056",
+        "asset-057",
+        "asset-058",
+        "asset-059",
+        "asset-060",
+        "asset-061",
+        "asset-062",
+        "asset-063"
+      ]
+    }
+  ],
+  "invalidCases": [
+    {
+      "id": "invalid-operator",
+      "expression": "size:!10",
+      "errorKind": "invalid-operator",
+      "offset": 0
+    },
+    {
+      "id": "invalid-integer",
+      "expression": "width:1.5",
+      "errorKind": "invalid-integer",
+      "offset": 0
+    },
+    {
+      "id": "invalid-unit",
+      "expression": "size:10MB",
+      "errorKind": "invalid-unit",
+      "offset": 0
+    },
+    {
+      "id": "numeric-overflow",
+      "expression": "size:18446744073709551616",
+      "errorKind": "numeric-overflow",
+      "offset": 0
+    },
+    {
+      "id": "invalid-ratio",
+      "expression": "aspect:16/0",
+      "errorKind": "invalid-ratio",
+      "offset": 0
+    },
+    {
+      "id": "invalid-date",
+      "expression": "modified:2026-08-19",
+      "errorKind": "invalid-date",
+      "offset": 0
+    },
+    {
+      "id": "invalid-enum",
+      "expression": "orientation:wide",
+      "errorKind": "invalid-enum",
+      "offset": 0
+    },
+    {
+      "id": "invalid-root-id",
+      "expression": "root:NOT-A-UUID",
+      "errorKind": "invalid-root-id",
+      "offset": 0
+    },
+    {
+      "id": "invalid-path-parent",
+      "expression": "path:\"../escape\"",
+      "errorKind": "invalid-path",
+      "offset": 0
+    },
+    {
+      "id": "invalid-path-windows",
+      "expression": "path:\"Brand\\\\escape\"",
+      "errorKind": "invalid-path",
+      "offset": 0
+    },
+    {
+      "id": "unsupported-unknown",
+      "expression": "rating:unknown",
+      "errorKind": "unsupported-unknown",
+      "offset": 0
+    },
+    {
+      "id": "conflicting-range",
+      "expression": "width:>=10 width:<10",
+      "errorKind": "conflicting-range",
+      "offset": 11
+    },
+    {
+      "id": "conflicting-value",
+      "expression": "has-note:true has-note:false",
+      "errorKind": "conflicting-value",
+      "offset": 14
+    },
+    {
+      "id": "unclosed-quote",
+      "expression": "path:\"unclosed",
+      "errorKind": "unclosed-quote",
+      "offset": 0
+    },
+    {
+      "id": "trailing-escape",
+      "expression": "tag\\",
+      "errorKind": "trailing-escape",
+      "offset": 3
+    },
+    {
+      "id": "empty-tag",
+      "expression": "tag:",
+      "errorKind": "empty-tag",
+      "offset": 0
+    },
+    {
+      "id": "tag-too-long",
+      "expression": "tag:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "errorKind": "tag-too-long",
+      "offset": 0
+    },
+    {
+      "id": "invalid-wildcard",
+      "expression": "ui*",
+      "errorKind": "invalid-wildcard",
+      "offset": 0
+    },
+    {
+      "id": "invalid-or-group",
+      "expression": "any:(only)",
+      "errorKind": "invalid-or-group",
+      "offset": 0
+    },
+    {
+      "id": "unknown-filter",
+      "expression": "kind:image",
+      "errorKind": "unknown-filter",
+      "offset": 0
+    },
+    {
+      "id": "invalid-type",
+      "expression": "type:document",
+      "errorKind": "invalid-type",
+      "offset": 0
+    },
+    {
+      "id": "invalid-extension",
+      "expression": "ext:png.exe",
+      "errorKind": "invalid-extension",
+      "offset": 0
+    },
+    {
+      "id": "invalid-favorite",
+      "expression": "favorite:yes",
+      "errorKind": "invalid-favorite",
+      "offset": 0
+    },
+    {
+      "id": "conflicting-favorite",
+      "expression": "favorite:true favorite:false",
+      "errorKind": "conflicting-favorite",
+      "offset": 14
+    },
+    {
+      "id": "second-invalid-operator",
+      "expression": "pages:==2",
+      "errorKind": "invalid-operator",
+      "offset": 0
+    }
+  ]
+}
