@@ -55,6 +55,10 @@ jobs:
           MATERIAL_EAGLE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
         run: node tools/verify-platform-paths.mjs --output "${{ runner.temp }}/p2-a12-platform-paths.json"
 
+      - name: Report P2-A12 rejection details
+        if: failure()
+        run: node tools/report-platform-path-failure.mjs --input "${{ runner.temp }}/p2-a12-platform-paths.json"
+
       - name: Archive P2-A12 machine-readable evidence
         if: always()
         uses: actions/upload-artifact@v7
