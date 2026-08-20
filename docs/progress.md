@@ -9,7 +9,7 @@
 | 阶段 0：技术验证与架构定案 | Accepted | P0-A01 至 P0-A08 全部通过 |
 | 阶段 1：端到端 MVP | Accepted locally | P1-01 至 P1-09、P1-A01 至 P1-A12 全部通过；见阶段 1 验收报告 |
 | 阶段 2：可靠性与恢复 | Accepted | P2-A01 至 P2-A12、外部/本地/数据安全门禁和最终历史重放全部通过；最终收据 SHA-256 `76b135b…` |
-| 阶段 3：完整素材能力 | In progress | P3-01A/B/D/E 已本地完成，P3-01C 已通过三平台成品重放，视频帧 worker 已按发行边界暂缓；下一动作 P3-01F |
+| 阶段 3：完整素材能力 | In progress | P3-01A/B/D/E/F 已本地完成，P3-01C 已通过三平台成品重放，视频帧/PDFium worker 已按发行边界暂缓；下一动作 P3-A01/A02 |
 | 阶段 4：Obsidian 深度集成 | Not started | 等待阶段 3 退出；P4-01 至 P4-08 的完整实施准备已收敛 |
 
 ## 阶段 0 工作项
@@ -61,7 +61,7 @@
 
 | 准备项 | 状态 | 证据 |
 |---|---|---|
-| P3-01 扩展格式能力管线 | In progress | P3-01A/B/D/E Completed locally；P3-01C 已通过三平台固定 libheif backend 与成品重放；MP4/MOV/WebM 具有有界属性，MP3/WAV/FLAC 具有有界属性且 MP3/FLAC 封面已接入，视频帧 worker 按 decoder allowlist/LGPL/专利门禁暂缓；P3-A01/A02 未判定，下一动作 P3-01F，见 `reports/p3-01a-acceptance.md` 至 `reports/p3-01e-acceptance.md` |
+| P3-01 扩展格式能力管线 | In progress | P3-01A/B/D/E/F Completed locally；P3-01C 已通过三平台固定 libheif backend 与成品重放；PDF 页数/首页面尺寸/主动内容隔离已接入，视频帧与 PDFium worker 按发行门禁暂缓；P3-A01/A02 未判定，下一动作是统一执行器和资源证据，见 `reports/p3-01a-acceptance.md` 至 `reports/p3-01f-acceptance.md` |
 | P3-02 智能属性与高级过滤 | Design ready | 已固定定型谓词、整数单位、RFC 3339、精确宽高比、未知属性、混合索引和独立三方查询语料；阶段 2 退出前不计作 P3 开始，见 `reports/p3-02-readiness.md` |
 | P3-03 保存过滤器 | Design ready | 已固定用户级 YAML、条目隔离、未知字段保留、完整版本、精确 Tag AST 重写和跨文件协调恢复；阶段 2 退出前不计作 P3 开始，见 `reports/p3-03-readiness.md` |
 | P3-04 批量工作流 | Design ready | 已固定精确全选快照、catalog revision、只读预检、协作取消、事务续传与剪贴板单次提交；阶段 2 退出前不计作 P3 开始，见 `reports/p3-04-readiness.md` |

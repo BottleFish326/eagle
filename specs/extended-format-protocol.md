@@ -181,6 +181,15 @@ provider 验证后只写派生缓存；无封面、未知 WAV codec、损坏/超
 - 页数与首页面尺寸；Pdfium worker/缺失两条路径；
 - 动作、脚本、附件和网络引用不执行。
 
+实施状态（2026-08-21）：基础格式 **Completed locally**。精确锁定且关闭默认 feature 的
+lopdf 0.42.0 只处理最大 32 MiB 的 strict classic xref；对象、页数、页面尺寸、页面树和
+递归深度均有硬上限。加密、对象流和 xref stream 在主 parser 前降级；动作、脚本、附件
+和外部引用只标记，不执行或访问。10 个正常/恶意/伪装/超限夹具已进入三平台
+`core-only` 清单并证明源字节不变。PDFium worker 在三平台二进制/动态库摘要、许可材料、
+进程资源边界和最终安装产物重放完成前保持 `unsupported-feature`；详情见
+`docs/reports/p3-01f-acceptance.md` 与 `docs/reports/p3-01f-pdfium-decision.md`。完整
+P3-A01/P3-A02 仍未通过。
+
 每片通过后更新格式矩阵，但 P3-A01 只有所有正式格式的期望清单一致才通过；P3-A02 还必须在固定超大/损坏/恶意集合上证明单文件隔离、取消和内存边界。
 
 ## 9. 依据
