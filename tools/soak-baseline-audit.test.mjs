@@ -11,6 +11,10 @@ import {
 const currentCommit = "a".repeat(40);
 
 test("accepts an unchanged descendant and emits the fixed audit scope", () => {
+  assert.equal(
+    FORMAL_SOAK_BASELINE_COMMIT,
+    "c0508c66ec6905decc1e70cc328e585a887fb6c5",
+  );
   const report = buildSoakBaselineAudit({
     baselineCommit: FORMAL_SOAK_BASELINE_COMMIT,
     currentCommit,

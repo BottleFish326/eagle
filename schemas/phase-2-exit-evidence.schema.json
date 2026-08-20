@@ -63,7 +63,7 @@
       "properties": {
         "verified": { "const": true },
         "baselineCommit": {
-          "const": "c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21"
+          "const": "c0508c66ec6905decc1e70cc328e585a887fb6c5"
         },
         "loadedChangedPaths": { "$ref": "#/$defs/emptyPaths" },
         "productChangedPaths": { "$ref": "#/$defs/emptyPaths" }

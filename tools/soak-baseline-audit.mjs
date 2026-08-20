@@ -1,5 +1,5 @@
 export const FORMAL_SOAK_BASELINE_COMMIT =
-  "c18e1cae6a2ca40805dfd39fdc8406f1f95ffd21";
+  "c0508c66ec6905decc1e70cc328e585a887fb6c5";
 
 export const FORMAL_SOAK_LOADED_PATHS = Object.freeze([
   "tools/resource-stability-analysis.mjs",
