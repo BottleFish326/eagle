@@ -7,6 +7,7 @@ version.workspace = true
 
 [dependencies]
 asset-core = { path = "../asset-core" }
+asset-svg = { path = "../svg" }
 image.workspace = true
 resource-control = { path = "../resource-control" }
 serde.workspace = true

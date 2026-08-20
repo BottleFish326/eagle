@@ -1,0 +1,15 @@
+[package]
+name = "asset-svg"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+resvg.workspace = true
+roxmltree.workspace = true
+thiserror.workspace = true
+usvg.workspace = true
+
+[lints]
+workspace = true

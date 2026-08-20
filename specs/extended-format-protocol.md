@@ -129,6 +129,8 @@ worker 请求只包含请求 ID、provider ID/version、已授权 canonical path
 - 有界属性解析、静态 PNG、外部引用/脚本隔离；
 - 正常、损坏、超大和恶意 SVG 夹具通过。
 
+实施状态（2026-08-20）：Completed locally。`asset-svg` 精确固定 `resvg/usvg 0.48.1` 并关闭默认 feature；不加载系统字体、外部文件、URL、data image 或 DTD。16 MiB、100,000 节点和 65,535 单边边界已实现，正常/脚本/外部引用/截断固定夹具与正常参考 PNG 已进入清单；超大输入由运行时构造测试覆盖，完整 P3-A02 资源证据仍待阶段门禁。
+
 ### P3-01C：AVIF/HEIC
 
 - ISO BMFF brand 识别与通用卡片先通过；

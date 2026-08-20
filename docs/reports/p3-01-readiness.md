@@ -1,6 +1,6 @@
 # P3-01 扩展格式支持实施准备报告
 
-- 状态：Implementation in progress；P3-01A Completed locally
+- 状态：Implementation in progress；P3-01A/P3-01B Completed locally
 - 日期：2026-08-19
 - 对应：P3-01、P3-A01、P3-A02
 - 决策：[ADR-026](../../specs/adr/026-capability-based-extended-format-pipeline.md)
@@ -11,11 +11,11 @@
 | 层 | 当前能力 | P3-01 缺口 |
 |---|---|---|
 | 素材模型 | 已有 image/video/audio/pdf/other 类型；只有图片宽高和 EXIF 结构 | 缺少可选媒体时长、页数、采样率、声道、codec、颜色空间 |
-| 扫描器 | 15 格式静态注册；64 KiB 内容签名优先、扩展候选；注册格式均保留记录和 Sidecar | preview/provider 能力与缓存描述仍待接入 |
-| 缩略图 | PNG/JPEG/GIF/WebP 使用 `builtin-raster`；codec、provider、损坏、超限、超时和源变化具有独立稳定原因 | SVG 与后续原生/复杂 provider 尚未实现 |
+| 扫描器 | 15 格式静态注册；64 KiB 内容签名优先、扩展候选；注册格式均保留记录和 Sidecar；SVG 有界提取宽高 | AVIF/HEIC 与媒体/PDF 属性仍待接入 |
+| 缩略图 | PNG/JPEG/GIF/WebP 使用 `builtin-raster`；SVG 使用 `safe-static-svg`；codec、provider、损坏、超限、超时和源变化具有独立稳定原因 | AVIF/HEIC 与后续原生/复杂 provider 尚未实现 |
 | 缓存 | provider ID/version 已进入每项 key 与 Schema 2 descriptor；layout 3 自动失效旧项 | 后续每个新增 provider 必须登记当前版本并增加失效测试 |
-| 查询/UI | `scan_root → AssetCatalog → type:` 四类测试已贯通；codec/provider 缺失显示中性类型卡片，文件故障显示错误卡片 | P3-01B 至 F 仍需逐格式扩展属性和真实预览 |
-| 夹具 | 已有真实 SVG 源文件与清单语义验证器，并继续保留大规模 PNG、损坏 PNG、Sidecar 异常和安全清理 marker | 仍需补齐其余格式及损坏/伪装/超限/恶意固定夹具与参考预览 |
+| 查询/UI | `scan_root → AssetCatalog → type:` 四类测试已贯通；codec/provider 缺失显示中性类型卡片，文件故障显示错误卡片 | P3-01C 至 F 仍需逐格式扩展属性和真实预览 |
+| 夹具 | 已有正常、脚本、外部引用、截断 SVG 与确定性 PNG 参考；清单语义验证器继续约束完整性 | 仍需补齐 SVG 超大正式资源证据及其余格式的损坏/伪装/超限/恶意夹具与参考预览 |
 
 核心结论：P3-01 第一片必须先取消“只有可解码图片才是素材”的假设，而不是先给 UI 增加扩展名图标。
 
@@ -32,7 +32,7 @@
 
 ## 3. 门禁状态
 
-本报告不表示 P3-01 已完成。阶段 2 最终退出收据已接受，P3-01A 六项本地门禁已经关闭；P3-01B 至 F、全格式期望矩阵和恶意夹具资源证据尚未完成。
+本报告不表示 P3-01 已完成。阶段 2 最终退出收据已接受，P3-01A 与 P3-01B 本地门禁已经关闭；P3-01C 至 F、全格式期望矩阵和完整恶意夹具资源证据尚未完成。
 
 阶段门禁已结束，但设计文档、交叉编译或 codec 库能力说明仍不得计作 P3-A01/P3-A02 通过；必须由后续代码、夹具和机器证据验收。
 
@@ -69,4 +69,12 @@ npm --prefix apps/desktop test
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-P3-01A 判定为 **Completed locally**，下一实施片是 P3-01B。这里只关闭“注册表与通用卡片”范围；在 P3-01B 至 F、所有正式格式的真实期望清单和恶意/超限资源证据完成前，不得判定 P3-A01、P3-A02 或 P3-01 通过。
+P3-01A 判定为 **Completed locally**，只关闭“注册表与通用卡片”范围；随后实施结果见第 6 节。在 P3-01C 至 F、所有正式格式的真实期望清单和恶意/超限资源证据完成前，不得判定 P3-A01、P3-A02 或 P3-01 通过。
+
+## 6. P3-01B 实施结果
+
+P3-01B 已按独立验收报告判为 **Completed locally**：精确锁定 `resvg/usvg 0.48.1` 且关闭默认字体、系统字体、SVGZ 与 raster image feature；共享 `asset-svg` 核心在扫描和 preview 中执行 16 MiB、100,000 XML 节点、65,535 单边限制，禁用 DTD、resolver、外部/数据引用、脚本、事件、动画和 `foreignObject`。当前固定 provider 不加载字体，含 `<text>` 的安全 SVG 明确降级为 `preview-unavailable`，不会静默产生缺字缩略图。
+
+正常 SVG 的宽高写入可重建 `dimensions`，静态输出由 `safe-static-svg` provider 生成透明 PNG；provider 版本进入既有缓存身份。仓库真实清单现含正常、脚本、外部引用和截断四个 SVG，以及与 provider 字节完全一致的 16 × 16 PNG 参考。
+
+下一片固定为 P3-01C；本报告仍不判定 P3-A01、P3-A02 或 P3-01 通过。

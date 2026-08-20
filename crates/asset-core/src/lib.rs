@@ -40,6 +40,7 @@ pub enum AssetIssue {
     InvalidImageMetadata(String),
     InvalidNativeMetadata(String),
     MimeMismatch(String),
+    UnsafeEmbeddedContent(String),
     ResourceLimited(String),
     MissingAsset,
     UnsupportedFormat,

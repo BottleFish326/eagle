@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use asset_core::{AssetKind, AssetRecord};
+use asset_svg::{SVG_PROVIDER_ID, SVG_PROVIDER_VERSION};
 use resource_control::{ResourceController, ResourceError, ResourceLimits, WorkKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -105,6 +106,10 @@ pub struct PreviewProviderIdentity {
 const BUILTIN_RASTER_PROVIDER: PreviewProviderIdentity = PreviewProviderIdentity {
     id: BUILTIN_RASTER_PROVIDER_ID,
     version: THUMBNAIL_DECODER_VERSION,
+};
+const SAFE_SVG_PROVIDER: PreviewProviderIdentity = PreviewProviderIdentity {
+    id: SVG_PROVIDER_ID,
+    version: SVG_PROVIDER_VERSION,
 };
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -356,7 +361,7 @@ impl ThumbnailService {
             ));
         }
 
-        let decoded = match decode_thumbnail(&record.path, max_edge) {
+        let decoded = match decode_thumbnail(&record.path, max_edge, provider) {
             Ok(decoded) => decoded,
             Err(failure) => return Ok(placeholder(record, failure.reason, failure.message)),
         };
@@ -543,8 +548,9 @@ fn preview_provider(
             ThumbnailPlaceholderReason::CodecUnavailable,
             "the optional image codec is not installed in this build",
         )),
-        "image/svg+xml" | "video/mp4" | "video/quicktime" | "video/webm" | "audio/mpeg"
-        | "audio/wav" | "audio/flac" | "application/pdf" => Err((
+        "image/svg+xml" => Ok(SAFE_SVG_PROVIDER),
+        "video/mp4" | "video/quicktime" | "video/webm" | "audio/mpeg" | "audio/wav"
+        | "audio/flac" | "application/pdf" => Err((
             ThumbnailPlaceholderReason::PreviewUnavailable,
             "this registered format does not yet have a preview provider",
         )),
@@ -560,7 +566,8 @@ fn preview_provider(
 }
 
 pub(crate) fn is_current_preview_provider(id: &str, version: &str) -> bool {
-    id == BUILTIN_RASTER_PROVIDER.id && version == BUILTIN_RASTER_PROVIDER.version
+    (id == BUILTIN_RASTER_PROVIDER.id && version == BUILTIN_RASTER_PROVIDER.version)
+        || (id == SAFE_SVG_PROVIDER.id && version == SAFE_SVG_PROVIDER.version)
 }
 
 fn placeholder(
@@ -1051,11 +1058,6 @@ mod tests {
                 ThumbnailPlaceholderReason::CodecUnavailable,
             ),
             (
-                "asset.svg",
-                "image/svg+xml",
-                ThumbnailPlaceholderReason::PreviewUnavailable,
-            ),
-            (
                 "asset.mp4",
                 "video/mp4",
                 ThumbnailPlaceholderReason::PreviewUnavailable,
@@ -1082,6 +1084,63 @@ mod tests {
                 ThumbnailOutcome::Placeholder { reason, .. } if reason == expected
             ));
         }
+        assert_eq!(png_files(service.cache.root()), 0);
+    }
+
+    #[test]
+    fn safe_svg_provider_generates_a_bounded_png() {
+        let directory = tempdir().expect("tempdir");
+        let asset = directory.path().join("asset.svg");
+        fs::write(
+            &asset,
+            b"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 40 20\"><rect width=\"40\" height=\"20\"/></svg>",
+        )
+        .expect("SVG fixture");
+        let metadata = fs::metadata(&asset).expect("metadata");
+        let record = AssetRecord::untagged(
+            asset.to_string_lossy().into_owned(),
+            asset,
+            "image/svg+xml".into(),
+            metadata.len(),
+            0,
+        );
+        let service = ThumbnailService::open(&directory.path().join("cache"), 1).expect("service");
+
+        let thumbnail = expect_ready(service.request(&record, 16).expect("SVG thumbnail"));
+        assert_eq!((thumbnail.width, thumbnail.height), (16, 8));
+        assert_eq!(thumbnail.provider_id, "safe-static-svg");
+        assert_eq!(thumbnail.provider_version, asset_svg::SVG_PROVIDER_VERSION);
+        let bytes = service.read(&thumbnail.cache_key).expect("SVG PNG bytes");
+        assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+    }
+
+    #[test]
+    fn unsafe_svg_is_an_invalid_content_placeholder_without_cache_output() {
+        let directory = tempdir().expect("tempdir");
+        let asset = directory.path().join("script.svg");
+        fs::write(
+            &asset,
+            b"<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>",
+        )
+        .expect("unsafe SVG fixture");
+        let metadata = fs::metadata(&asset).expect("metadata");
+        let record = AssetRecord::untagged(
+            asset.to_string_lossy().into_owned(),
+            asset,
+            "image/svg+xml".into(),
+            metadata.len(),
+            0,
+        );
+        let service = ThumbnailService::open(&directory.path().join("cache"), 1).expect("service");
+
+        assert!(matches!(
+            service.request(&record, 32).expect("unsafe SVG outcome"),
+            ThumbnailOutcome::Placeholder {
+                reason: ThumbnailPlaceholderReason::InvalidContent,
+                message,
+                ..
+            } if message.contains("forbidden")
+        ));
         assert_eq!(png_files(service.cache.root()), 0);
     }
 

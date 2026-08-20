@@ -7,6 +7,7 @@ version.workspace = true
 
 [dependencies]
 asset-core = { path = "../asset-core" }
+asset-svg = { path = "../svg" }
 metadata = { path = "../metadata" }
 globset.workspace = true
 imagesize.workspace = true

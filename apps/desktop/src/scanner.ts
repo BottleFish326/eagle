@@ -9,6 +9,7 @@ export type AssetIssue =
   | { type: "invalid-image-metadata"; message: string }
   | { type: "invalid-native-metadata"; message: string }
   | { type: "mime-mismatch"; message: string }
+  | { type: "unsafe-embedded-content"; message: string }
   | { type: "resource-limited"; message: string }
   | { type: "missing-asset" }
   | { type: "unsupported-format" };

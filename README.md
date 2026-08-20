@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段 0、阶段 1 与阶段 2 已通过验收。阶段 2 的 P2-01 至 P2-08、P2-A11 100,000 素材连续 8 小时正式验收、P2-A12 GitHub-hosted macOS/Linux/Windows 原生矩阵、统一外部门禁、本地故障、数据安全和最终退出重放全部通过。阶段 3 的 P3-01A 已在本地完成：注册格式不会因 codec/provider 缺失而消失，通用类型卡片与后端类型查询已贯通；下一动作是 P3-01B SVG。SSH origin、`main` 与托管 CI 已就绪。开发阶段、交付物和验收规范见：
+阶段 0、阶段 1 与阶段 2 已通过验收。阶段 2 的 P2-01 至 P2-08、P2-A11 100,000 素材连续 8 小时正式验收、P2-A12 GitHub-hosted macOS/Linux/Windows 原生矩阵、统一外部门禁、本地故障、数据安全和最终退出重放全部通过。阶段 3 的 P3-01A 与 P3-01B 已在本地完成：注册格式不会因 codec/provider 缺失而消失，通用类型卡片与后端类型查询已贯通；SVG 具有有界、无外部资源的确定性静态 PNG provider，活动内容和外部引用被隔离。下一动作是 P3-01C AVIF/HEIC。SSH origin、`main` 与托管 CI 已就绪。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)
@@ -22,6 +22,7 @@
 - [阶段 2 验收报告](docs/reports/phase-2-acceptance.md)
 - [P3-01 扩展格式实施准备](docs/reports/p3-01-readiness.md)
 - [P3-01A 注册表与通用卡片验收](docs/reports/p3-01a-acceptance.md)
+- [P3-01B SVG 验收](docs/reports/p3-01b-acceptance.md)
 - [P1-01 验收报告](docs/reports/p1-01-acceptance.md)
 - [P1-02 验收报告](docs/reports/p1-02-acceptance.md)
 - [P1-03 验收报告](docs/reports/p1-03-acceptance.md)

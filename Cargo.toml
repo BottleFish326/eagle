@@ -10,6 +10,7 @@ members = [
   "crates/metadata",
   "crates/preview",
   "crates/resource-control",
+  "crates/svg",
   "crates/transactions",
   "tools/eagle-p0",
   "tools/cache-fault",
@@ -35,12 +36,15 @@ imagesize = { version = "0.15.0", default-features = false, features = ["gif", "
 image = { version = "=0.25.9", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 kamadak-exif = "0.6.1"
 notify = "8"
+resvg = { version = "=0.48.1", default-features = false }
+roxmltree = { version = "=0.21.1", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml_ng = "0.10"
 sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"
+usvg = { version = "=0.48.1", default-features = false }
 tauri = "2.11.5"
 tauri-build = "2.6.3"
 uuid = { version = "1", features = ["serde", "v7"] }

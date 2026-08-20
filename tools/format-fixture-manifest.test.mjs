@@ -20,8 +20,9 @@ test("accepts the tracked format fixture manifest with real integrity metadata",
     manifestPath: trackedManifest,
   });
   assert.equal(report.accepted, true, report.failures.join("; "));
-  assert.equal(report.fixtureCount, 1);
-  assert.equal(report.sourceBytes, 116);
+  assert.equal(report.fixtureCount, 4);
+  assert.equal(report.sourceBytes, 507);
+  assert.equal(report.referenceBytes, 95);
 });
 
 test("rejects placeholder hashes, digest changes, and incomplete provider coverage", async (context) => {

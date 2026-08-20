@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use asset_core::{AssetDimensions, AssetIssue, AssetRecord, NativeImageMetadata, SidecarState};
+use asset_svg::{SvgError, inspect_svg_file};
 use exif::{In, Tag, Value};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use metadata::{quick_fingerprint_file, read_sidecar_versioned, sidecar_path_for};
@@ -473,6 +474,30 @@ fn parse_asset(
                 .issues
                 .push(AssetIssue::InvalidImageMetadata(error.to_string())),
         }
+    } else if asset.mime == "image/svg+xml" {
+        match inspect_svg_file(&canonical) {
+            Ok(inspection) => {
+                asset.dimensions = Some(AssetDimensions {
+                    width: inspection.width,
+                    height: inspection.height,
+                });
+            }
+            Err(SvgError::ResourceLimited) => asset.issues.push(AssetIssue::ResourceLimited(
+                SvgError::ResourceLimited.to_string(),
+            )),
+            Err(SvgError::UnsafeFeature(feature)) => asset
+                .issues
+                .push(AssetIssue::UnsafeEmbeddedContent(feature.into())),
+            Err(SvgError::UnsupportedFeature(_)) => {
+                asset.issues.push(AssetIssue::UnsupportedFormat);
+            }
+            Err(SvgError::Unreadable { .. }) => asset.issues.push(AssetIssue::UnreadableFile(
+                "SVG enrichment could not reread the source".into(),
+            )),
+            Err(error) => asset
+                .issues
+                .push(AssetIssue::InvalidImageMetadata(error.to_string())),
+        }
     }
 
     if parse_deadline_exceeded(&mut asset, started, options.file_parse_timeout) {
@@ -718,7 +743,7 @@ mod tests {
     use std::io::Cursor;
     use std::time::Duration;
 
-    use asset_core::{AssetIssue, AssetKind};
+    use asset_core::{AssetDimensions, AssetIssue, AssetKind};
     use exif::{Field, In, Tag, Value as ExifValue};
     use metadata::{AssetSidecar, ExpectedVersion, sidecar_path_for, write_sidecar_atomic};
     use resource_control::{ResourceController, ResourceLimits};
@@ -815,9 +840,9 @@ mod tests {
         let directory = tempdir().expect("tempdir");
         let fixtures: [(&str, &[u8], &str, AssetKind); 4] = [
             (
-                "vector.svg",
-                b"<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
-                "image/svg+xml",
+                "photo.avif",
+                b"\x00\x00\x00\x18ftypavif\x00\x00\x00\x00avif",
+                "image/avif",
                 AssetKind::Image,
             ),
             (
@@ -862,6 +887,46 @@ mod tests {
             assert!(asset.dimensions.is_none());
             assert!(asset.issues.is_empty());
         }
+    }
+
+    #[test]
+    fn extracts_safe_svg_dimensions_and_isolates_active_content() {
+        let directory = tempdir().expect("tempdir");
+        fs::write(
+            directory.path().join("safe.svg"),
+            b"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 18\"><rect width=\"32\" height=\"18\"/></svg>",
+        )
+        .expect("safe svg");
+        fs::write(
+            directory.path().join("script.svg"),
+            b"<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>",
+        )
+        .expect("active svg");
+
+        let report = scan_root(directory.path(), &ScanOptions::default()).expect("scan SVGs");
+        let safe = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "safe.svg")
+            .expect("safe asset");
+        assert_eq!(
+            safe.dimensions,
+            Some(AssetDimensions {
+                width: 32,
+                height: 18
+            })
+        );
+        assert!(safe.issues.is_empty());
+        let active = report
+            .assets
+            .iter()
+            .find(|asset| asset.file_name == "script.svg")
+            .expect("active asset remains visible");
+        assert!(active.dimensions.is_none());
+        assert!(active.issues.iter().any(|issue| matches!(
+            issue,
+            AssetIssue::UnsafeEmbeddedContent(feature) if feature == "script"
+        )));
     }
 
     #[test]

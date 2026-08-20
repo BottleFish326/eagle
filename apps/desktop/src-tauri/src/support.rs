@@ -450,6 +450,11 @@ fn issue_finding(issue: &AssetIssue) -> (SupportSeverity, &'static str, &'static
             "mime-mismatch",
             "content signature overrides the file extension",
         ),
+        AssetIssue::UnsafeEmbeddedContent(_) => (
+            SupportSeverity::Warning,
+            "unsafe-embedded-content",
+            "active or external embedded content was isolated",
+        ),
         AssetIssue::ResourceLimited(_) => (
             SupportSeverity::Warning,
             "resource-limited",
