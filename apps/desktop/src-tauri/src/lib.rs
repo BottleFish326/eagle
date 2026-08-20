@@ -11,6 +11,10 @@ use app_config::{
     DiagnosticPerformanceSummary, DiagnosticRuntime, DiagnosticService, DiagnosticSnapshot,
     UpdateUiPreferences,
 };
+use asset_batch_workflows::{
+    BatchPreflightError, BatchPreflightStore, BatchPreflightSummary, BatchRootAuthorization,
+    MetadataPreflightInput, RootRuntimeState,
+};
 use asset_catalog::{
     AssetCatalog, BatchMetadataEdit, BatchMetadataEditResult, CatalogRootReconciliation,
     EditFailureKind, MetadataEditFailure, QueryAssetsInput, QueryAssetsResult,
@@ -312,6 +316,74 @@ impl From<SelectionError> for SelectionCommandError {
             SelectionError::StateUnavailable => Self::simple(
                 SelectionCommandErrorKind::Internal,
                 "selection session state is unavailable",
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum BatchCommandErrorKind {
+    SnapshotNotFound,
+    SnapshotExpired,
+    InvalidOperation,
+    OutputTooLarge,
+    PreflightNotFound,
+    PreflightExpired,
+    PreflightStale,
+    Internal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchCommandError {
+    kind: BatchCommandErrorKind,
+    message: String,
+}
+
+impl BatchCommandError {
+    fn new(kind: BatchCommandErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+}
+
+impl From<BatchPreflightError> for BatchCommandError {
+    fn from(error: BatchPreflightError) -> Self {
+        match error {
+            BatchPreflightError::Selection(SelectionError::SnapshotNotFound) => Self::new(
+                BatchCommandErrorKind::SnapshotNotFound,
+                "selection snapshot was not found",
+            ),
+            BatchPreflightError::Selection(SelectionError::SnapshotExpired) => Self::new(
+                BatchCommandErrorKind::SnapshotExpired,
+                "selection snapshot expired",
+            ),
+            BatchPreflightError::Selection(_) | BatchPreflightError::InvalidOperation => Self::new(
+                BatchCommandErrorKind::InvalidOperation,
+                "batch operation is invalid",
+            ),
+            BatchPreflightError::SessionBudgetExceeded => Self::new(
+                BatchCommandErrorKind::OutputTooLarge,
+                "batch preflight exceeds the bounded runtime budget",
+            ),
+            BatchPreflightError::OperationNotFound => Self::new(
+                BatchCommandErrorKind::PreflightNotFound,
+                "batch preflight was not found",
+            ),
+            BatchPreflightError::OperationExpired => Self::new(
+                BatchCommandErrorKind::PreflightExpired,
+                "batch preflight expired",
+            ),
+            BatchPreflightError::PreflightStale => Self::new(
+                BatchCommandErrorKind::PreflightStale,
+                "batch confirmation does not match the prepared operation",
+            ),
+            BatchPreflightError::StateUnavailable => Self::new(
+                BatchCommandErrorKind::Internal,
+                "batch preflight state is unavailable",
             ),
         }
     }
@@ -2669,6 +2741,74 @@ fn selection_session_stats(
     selections.stats().map_err(Into::into)
 }
 
+fn batch_root_authorizations(statuses: &[LibraryRootStatus]) -> Vec<BatchRootAuthorization> {
+    statuses
+        .iter()
+        .map(|status| BatchRootAuthorization {
+            id: status.root.id,
+            path: status.root.path.clone(),
+            state: if !status.root.enabled {
+                RootRuntimeState::Disabled
+            } else if status.access_status == RootAccessStatus::Available {
+                RootRuntimeState::Available
+            } else {
+                RootRuntimeState::Offline
+            },
+        })
+        .collect()
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+async fn prepare_metadata_batch(
+    input: MetadataPreflightInput,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    selections: State<'_, Arc<SelectionSessionStore>>,
+    preflights: State<'_, Arc<BatchPreflightStore>>,
+) -> Result<BatchPreflightSummary, BatchCommandError> {
+    let statuses = roots
+        .lock()
+        .map_err(|_| {
+            BatchCommandError::new(
+                BatchCommandErrorKind::Internal,
+                "library root state is unavailable",
+            )
+        })?
+        .roots();
+    let authorizations = batch_root_authorizations(&statuses);
+    let catalog = Arc::clone(catalog.inner());
+    let selections = Arc::clone(selections.inner());
+    let preflights = Arc::clone(preflights.inner());
+    tauri::async_runtime::spawn_blocking(move || {
+        let catalog = catalog.lock().map_err(|_| {
+            BatchCommandError::new(
+                BatchCommandErrorKind::Internal,
+                "asset catalog state is unavailable",
+            )
+        })?;
+        preflights
+            .prepare_metadata(&selections, &catalog, &authorizations, &input)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|_| {
+        BatchCommandError::new(
+            BatchCommandErrorKind::Internal,
+            "batch preflight task did not complete",
+        )
+    })?
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn release_batch_preflight(
+    operation_id: Uuid,
+    preflights: State<'_, Arc<BatchPreflightStore>>,
+) -> Result<bool, BatchCommandError> {
+    preflights.release(operation_id).map_err(Into::into)
+}
+
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 async fn request_thumbnail(
@@ -3053,6 +3193,7 @@ pub fn run() {
             app.manage(Arc::new(ReconciliationCoordinator::default()));
             app.manage(Arc::new(Mutex::new(AssetCatalog::default())));
             app.manage(Arc::new(SelectionSessionStore::default()));
+            app.manage(Arc::new(BatchPreflightStore::default()));
             app.manage(Arc::new(MetadataTransactionStore::open(
                 config_directory.join("metadata-transactions-v1"),
             )?));
@@ -3169,6 +3310,8 @@ pub fn run() {
             create_explicit_selection_snapshot,
             release_selection_snapshot,
             selection_session_stats,
+            prepare_metadata_batch,
+            release_batch_preflight,
             request_thumbnail,
             read_thumbnail,
             clear_thumbnail_cache,

@@ -47,10 +47,12 @@ export function createDemoDesktopApi(
   let assetsByKey = new Map(assets.map((asset) => [asset.key, asset]));
   let catalogRevision = 1;
   let selectionSequence = 5_000;
+  let preflightSequence = 6_000;
   const selectionSnapshots = new Map<
     string,
     { summary: SelectionSnapshotSummary; keys: string[]; expiresUnixMs: number }
   >();
+  const batchPreflights = new Map<string, { expiresUnixMs: number }>();
   let vaults: ObsidianVaultStatus[] = [demoVault()];
   let applicationConfig: ApplicationConfig = {
     schema: 1,
@@ -522,6 +524,38 @@ export function createDemoDesktopApi(
         maximumItemCount: 100_000,
         maximumTotalItemCount: 200_000,
       };
+    },
+    async prepareMetadataBatch(input) {
+      pruneSelectionSnapshots();
+      const snapshot = selectionSnapshots.get(input.snapshotId);
+      if (snapshot === undefined) {
+        throw { kind: "snapshot-not-found", message: "演示选择快照不存在" };
+      }
+      const now = Date.now();
+      const operationId = demoUuid(preflightSequence++);
+      const summary = {
+        operationId,
+        snapshotId: input.snapshotId,
+        catalogRevision,
+        requestedCount: snapshot.keys.length,
+        executableCount: snapshot.keys.length,
+        requiresStableIdCount: 0,
+        unavailableCount: 0,
+        conflictCount: 0,
+        failureCount: 0,
+        failuresTruncated: false,
+        failures: [],
+        confirmationDigest: demoFingerprint(
+          `${operationId}:${input.snapshotId}:${String(catalogRevision)}`,
+        ),
+        createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + 15 * 60_000).toISOString(),
+      };
+      batchPreflights.set(operationId, { expiresUnixMs: now + 15 * 60_000 });
+      return summary;
+    },
+    async releaseBatchPreflight(operationId) {
+      return batchPreflights.delete(operationId);
     },
     async listSavedFilters() {
       return demoSavedFilterCatalog(savedFilters, savedFilterVersion, roots);

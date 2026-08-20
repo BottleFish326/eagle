@@ -156,6 +156,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
+name = "asset-batch-workflows"
+version = "0.1.0"
+dependencies = [
+ "asset-catalog",
+ "asset-core",
+ "asset-selection",
+ "chrono",
+ "metadata",
+ "serde",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "asset-catalog"
 version = "0.1.0"
 dependencies = [
@@ -2527,6 +2543,7 @@ name = "material-eagle-desktop"
 version = "0.1.0"
 dependencies = [
  "app-config",
+ "asset-batch-workflows",
  "asset-catalog",
  "asset-core",
  "asset-filesystem",

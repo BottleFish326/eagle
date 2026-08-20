@@ -25,7 +25,7 @@ pub use conflict::{
 pub use edit::{
     MetadataEdit, MetadataPatch, PreparedMetadataEdit, commit_prepared_metadata_edit,
     edit_asset_metadata, edit_asset_metadata_versioned, prepare_asset_metadata_edit,
-    prepare_asset_metadata_edit_versioned,
+    prepare_asset_metadata_edit_versioned, validate_metadata_patch,
 };
 
 pub const SIDECAR_SCHEMA_VERSION: u32 = 1;

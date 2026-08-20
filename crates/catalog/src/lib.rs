@@ -240,6 +240,15 @@ impl AssetCatalog {
         self.index.get(key)
     }
 
+    /// Resolves every current derived record carrying one stable Sidecar ID.
+    #[must_use]
+    pub fn records_with_id(&self, id: Uuid) -> Vec<AssetRecord> {
+        self.records()
+            .into_iter()
+            .filter(|record| record.id == Some(id))
+            .collect()
+    }
+
     #[must_use]
     pub fn query(&self, query: &AssetQuery) -> BTreeSet<String> {
         self.index.query(query)

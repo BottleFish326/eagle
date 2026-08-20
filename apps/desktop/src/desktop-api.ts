@@ -1,6 +1,14 @@
 import type { QueryAssetsInput, QueryAssetsResult } from "./asset-query";
 import { queryAssets } from "./asset-query";
 import type {
+  BatchPreflightSummary,
+  MetadataPreflightInput,
+} from "./batch-workflows";
+import {
+  prepareMetadataBatch,
+  releaseBatchPreflight,
+} from "./batch-workflows";
+import type {
   ApplicationConfig,
   DerivedStateResetReport,
   DiagnosticExportReport,
@@ -156,6 +164,8 @@ export interface DesktopApi {
   ): Promise<SelectionSnapshotSummary>;
   releaseSelectionSnapshot(snapshotId: string): Promise<boolean>;
   getSelectionSessionStats(): Promise<SelectionSessionStats>;
+  prepareMetadataBatch(input: MetadataPreflightInput): Promise<BatchPreflightSummary>;
+  releaseBatchPreflight(operationId: string): Promise<boolean>;
   listSavedFilters(): Promise<SavedFilterCatalog>;
   createSavedFilter(
     expectedVersion: SavedFilterFileVersion,
@@ -230,6 +240,8 @@ export const tauriDesktopApi: DesktopApi = {
   createExplicitSelectionSnapshot,
   releaseSelectionSnapshot,
   getSelectionSessionStats,
+  prepareMetadataBatch,
+  releaseBatchPreflight,
   listSavedFilters,
   createSavedFilter,
   updateSavedFilter,

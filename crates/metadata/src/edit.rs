@@ -256,6 +256,15 @@ fn validate_patch(patch: &MetadataPatch) -> Result<(), SidecarError> {
     Ok(())
 }
 
+/// Validates a metadata patch without reading or writing an asset or Sidecar.
+///
+/// # Errors
+///
+/// Returns the same stable input errors used by metadata preparation.
+pub fn validate_metadata_patch(patch: &MetadataPatch) -> Result<(), SidecarError> {
+    validate_patch(patch)
+}
+
 fn validate_values<'a>(
     values: impl Iterator<Item = &'a String>,
     maximum: usize,

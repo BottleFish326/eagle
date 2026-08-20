@@ -2,6 +2,7 @@
 members = [
   "apps/desktop/src-tauri",
   "crates/asset-core",
+  "crates/batch-workflows",
   "crates/app-config",
   "crates/catalog",
   "crates/filesystem",
