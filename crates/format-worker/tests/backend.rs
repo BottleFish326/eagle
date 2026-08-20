@@ -14,28 +14,30 @@ use uuid::Uuid;
 
 #[test]
 fn fixed_libheif_reads_metadata_and_generates_bounded_pngs() {
-    for (relative, expected_dimensions) in [
+    for (relative, expected_dimensions, expected_image_count) in [
         (
             "fixtures/formats/sources/avif/libheif-example.avif",
             (800, 533),
+            1,
         ),
         (
             "fixtures/formats/sources/heic/libheif-example.heic",
             (1_280, 854),
+            2,
         ),
     ] {
         let path = workspace_root().join(relative);
         let metadata_request = request(&path, WorkerOperation::Metadata);
         let (properties, payload, png) =
             process_libheif_request(&metadata_request).expect("metadata");
-        assert_properties(&properties, expected_dimensions);
+        assert_properties(&properties, expected_dimensions, expected_image_count);
         assert!(payload.is_none());
         assert!(png.is_empty());
 
         let thumbnail_request = request(&path, WorkerOperation::Thumbnail);
         let (properties, payload, png) =
             process_libheif_request(&thumbnail_request).expect("thumbnail");
-        assert_properties(&properties, expected_dimensions);
+        assert_properties(&properties, expected_dimensions, expected_image_count);
         let payload = payload.expect("PNG payload");
         assert!(!png.is_empty());
         assert!(payload.width <= 64 && payload.height <= 64);
@@ -67,10 +69,14 @@ fn request(path: &Path, operation: WorkerOperation) -> WorkerRequest {
     }
 }
 
-fn assert_properties(properties: &HeifProperties, dimensions: (u32, u32)) {
+fn assert_properties(
+    properties: &HeifProperties,
+    dimensions: (u32, u32),
+    expected_image_count: u32,
+) {
     assert_eq!((properties.width, properties.height), dimensions);
     assert_eq!(properties.orientation, Some(1));
-    assert_eq!(properties.image_count, 1);
+    assert_eq!(properties.image_count, expected_image_count);
     assert!(properties.has_alpha.is_some());
 }
 
