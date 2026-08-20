@@ -1,0 +1,221 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "failures": [],
+  "evidenceAt": "2026-08-20T12:37:33.000Z",
+  "candidateCommit": "11db4c178b824684de6616976c61d4590f5139df",
+  "candidateCommittedAt": "2026-08-20T12:39:43.000Z",
+  "repositoryClean": true,
+  "commitOrderVerified": true,
+  "inputsCommitted": true,
+  "defectRegister": {
+    "fileName": "docs/defects.json",
+    "sha256": "031e8943b42192cef57bbe73dd766a0a8b3d4b5fbc44acdf68f01701b1bc25f6",
+    "status": "reviewed",
+    "reviewedAt": "2026-08-20T12:37:33.000Z",
+    "counts": {
+      "open": {
+        "P0": 0,
+        "P1": 0,
+        "P2": 0,
+        "P3": 0
+      },
+      "resolved": {
+        "P0": 0,
+        "P1": 2,
+        "P2": 1,
+        "P3": 1
+      }
+    },
+    "findings": [
+      {
+        "id": "DEF-0001",
+        "severity": "P1",
+        "status": "resolved",
+        "summary": "Windows 传统长路径上的 Sidecar 原子替换使用非 verbatim 临时路径，导致 NamedTempFile.persist 失败。",
+        "evidence": [
+          "crates/metadata/src/lib.rs::p2_platform_windows_long_paths_and_sidecar_replacement",
+          "commit ebd50ee49b15cc5b0bf891c144da6cfb4c477190 canonicalizes the parent and persists through the Windows verbatim path",
+          "GitHub Actions run 32332405466 attempt 1 passed the Windows hosted path suite"
+        ],
+        "workaround": null,
+        "targetVersion": null,
+        "resolvedAt": "2026-08-20T04:08:30.000Z"
+      },
+      {
+        "id": "DEF-0002",
+        "severity": "P3",
+        "status": "resolved",
+        "summary": "Windows 长路径扫描测试把 canonical verbatim 路径与临时目录的 8.3 拼写直接比较，产生错误失败。",
+        "evidence": [
+          "crates/filesystem/src/scanner.rs::p2_platform_windows_long_path_scan_and_symlink_loop",
+          "commit c0508c66ec6905decc1e70cc328e585a887fb6c5 compares canonical paths and separately asserts the Unicode relative path",
+          "GitHub Actions run 32332405466 attempt 1 passed the Windows hosted path suite"
+        ],
+        "workaround": null,
+        "targetVersion": null,
+        "resolvedAt": "2026-08-20T04:12:42.000Z"
+      },
+      {
+        "id": "DEF-0003",
+        "severity": "P2",
+        "status": "resolved",
+        "summary": "P2-A12 采集器未规范化 gh 返回的 attempt-qualified 运行 URL，导致已成功的指定运行在下载前被拒绝。",
+        "evidence": [
+          "GitHub Actions run 32331609079 attempt 1 completed all five required jobs successfully before collection was rejected",
+          "tools/p2-hosted-evidence.test.mjs covers canonical URLs, matching attempt suffixes, and wrong-attempt rejection",
+          "commit 9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751 normalizes only the exact requested attempt URL"
+        ],
+        "workaround": null,
+        "targetVersion": null,
+        "resolvedAt": "2026-08-20T04:34:16.000Z"
+      },
+      {
+        "id": "DEF-0004",
+        "severity": "P1",
+        "status": "resolved",
+        "summary": "P2 外部门禁生成器保留正式资源调度器明细与 GitHub 秒精度时间戳，但独立检查器及 JSON Schema 仍限定旧的精简调度器字段和毫秒精度时间戳，导致合法收据无法离线验收。",
+        "evidence": [
+          "tools/phase-2-external-gates.test.mjs covers the production ResourceSnapshot shape",
+          "tools/p2-acceptance-test-fixtures.mjs covers GitHub seconds-precision timestamps",
+          "schemas/phase-2-external-gates.schema.json and the independent inspector now enforce the same complete scheduler contract"
+        ],
+        "workaround": null,
+        "targetVersion": null,
+        "resolvedAt": "2026-08-20T12:24:00.000Z"
+      }
+    ]
+  },
+  "p2External": {
+    "fileName": "docs/reports/evidence/p2-external-gates.json",
+    "sha256": "ed900239c14d1dde425eeb29e85c6b43d1d43d24ee64b246e7f99e55fa0257ed",
+    "evidenceAt": "2026-08-20T12:16:18.337Z",
+    "p2A11Commit": "c0508c66ec6905decc1e70cc328e585a887fb6c5",
+    "p2A12Commit": "9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751"
+  },
+  "p2LocalFaults": {
+    "fileName": "docs/reports/evidence/p2-local-fault-gates.json",
+    "sha256": "abb7269a15e3c54f615e3ba998248fca4cefd4354cd965e47758634a718de646",
+    "gitCommit": "581a6615c06e7f94d0771647e87d523f52c2b2ff",
+    "executedAt": "2026-08-20T12:30:39.885Z"
+  },
+  "reports": [
+    {
+      "fileName": "docs/reports/phase-1-acceptance.md",
+      "sha256": "531f2c9415fc2586452167decff84476d9a98daceb21e0c818484ff162be6e87"
+    },
+    {
+      "fileName": "docs/reports/p2-01-acceptance.md",
+      "sha256": "74c4c8be67020e41cd05a0bd0af0fda61112878e9eddac3c4de84ca907d16a2e"
+    },
+    {
+      "fileName": "docs/reports/p2-02-acceptance.md",
+      "sha256": "77ff16a5ffbd12a1020d50d5aa322820956cd8a07b6cd512208d8d97613e2654"
+    },
+    {
+      "fileName": "docs/reports/p2-03-acceptance.md",
+      "sha256": "5d8dc9b60e558c979f0b11bb74c9307299f1e6edd3422664938d1e65ad38a512"
+    },
+    {
+      "fileName": "docs/reports/p2-04-acceptance.md",
+      "sha256": "25a4d83b7c86ddb5ce7081f32e13af68b09d2b7e64a15fcdb40b11034f6f9272"
+    },
+    {
+      "fileName": "docs/reports/p2-05-acceptance.md",
+      "sha256": "4dc47a676d68bf19f1e7736e4ced28656700546f2cb021791e07f5c0054b6140"
+    },
+    {
+      "fileName": "docs/reports/p2-06-acceptance.md",
+      "sha256": "297b03a313d95f84480c6ffc0f10ab6cabca27b0cb05ce480d8d4e2231ef518a"
+    },
+    {
+      "fileName": "docs/reports/p2-07-acceptance.md",
+      "sha256": "b67e57f43b996a30f9c29174ad7ec740635a5acf7eceb21d8fdfc06e0771d354"
+    },
+    {
+      "fileName": "docs/reports/p2-08-acceptance.md",
+      "sha256": "14d173c85f82390c9dbd9b33fbdbd426bdd0425d42434a896ea2ee8242d13fac"
+    }
+  ],
+  "controls": [
+    {
+      "id": "DS-01",
+      "title": "original asset immutability",
+      "evidenceFiles": [
+        "docs/reports/phase-1-acceptance.md",
+        "docs/reports/p2-02-acceptance.md",
+        "docs/reports/p2-05-acceptance.md"
+      ]
+    },
+    {
+      "id": "DS-02",
+      "title": "atomic sidecar persistence and conflict protection",
+      "evidenceFiles": [
+        "docs/reports/phase-1-acceptance.md",
+        "docs/reports/p2-03-acceptance.md",
+        "docs/reports/p2-04-acceptance.md"
+      ]
+    },
+    {
+      "id": "DS-03",
+      "title": "recoverable batch transactions",
+      "evidenceFiles": [
+        "docs/reports/p2-03-acceptance.md"
+      ]
+    },
+    {
+      "id": "DS-04",
+      "title": "external and synchronization conflict preservation",
+      "evidenceFiles": [
+        "docs/reports/p2-04-acceptance.md"
+      ]
+    },
+    {
+      "id": "DS-05",
+      "title": "derived cache ownership and crash recovery",
+      "evidenceFiles": [
+        "docs/reports/p2-05-acceptance.md"
+      ]
+    },
+    {
+      "id": "DS-06",
+      "title": "filesystem event convergence and offline isolation",
+      "evidenceFiles": [
+        "docs/reports/p2-01-acceptance.md",
+        "docs/reports/p2-08-acceptance.md"
+      ]
+    },
+    {
+      "id": "DS-07",
+      "title": "bounded resource and queue behavior",
+      "evidenceFiles": [
+        "docs/reports/p2-06-acceptance.md"
+      ]
+    },
+    {
+      "id": "DS-08",
+      "title": "read-only and redacted diagnostics",
+      "evidenceFiles": [
+        "docs/reports/p2-07-acceptance.md"
+      ]
+    },
+    {
+      "id": "DS-09",
+      "title": "authorized path and reference boundaries",
+      "evidenceFiles": [
+        "docs/reports/phase-1-acceptance.md",
+        "docs/reports/p2-08-acceptance.md"
+      ]
+    },
+    {
+      "id": "DS-10",
+      "title": "real-process crash and hosted platform evidence",
+      "evidenceFiles": [
+        "docs/reports/p2-03-acceptance.md",
+        "docs/reports/p2-05-acceptance.md",
+        "docs/reports/p2-06-acceptance.md",
+        "docs/reports/p2-08-acceptance.md"
+      ]
+    }
+  ]
+}
