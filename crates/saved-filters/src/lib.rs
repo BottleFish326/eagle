@@ -280,6 +280,25 @@ pub struct SavedFilterTagRewriteMutation {
     pub updated_filters: Vec<SavedFilter>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedFilterTagRewritePlan {
+    pub expected_version: SavedFilterFileVersion,
+    pub original_content: Option<String>,
+    pub original_sha256: Option<String>,
+    pub planned_content: Option<String>,
+    pub planned_sha256: Option<String>,
+    pub updated_filter_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SavedFilterTagRewritePlanState {
+    Original,
+    Planned,
+    External,
+}
+
 /// Re-parses and executes a saved expression against current runtime records.
 ///
 /// The returned keys are an ephemeral view. Neither records nor result keys are
@@ -526,7 +545,8 @@ impl SavedFilterStore {
         ))
     }
 
-    /// Applies explicit update/retain choices as one version-checked YAML write.
+    /// Builds the exact original/planned file pair for explicit update/retain
+    /// choices without writing either version.
     ///
     /// This low-level operation only changes `saved-filters.yml`; the Tag rename
     /// coordinator calls it after Sidecar transaction state has been recorded.
@@ -537,14 +557,15 @@ impl SavedFilterStore {
     ///
     /// Rejects stale versions, incomplete/duplicate choices, rewrite drift, and
     /// any candidate that makes an updated filter invalid.
-    pub fn apply_tag_rewrite(
+    pub fn plan_tag_rewrite(
         &self,
         expected: &SavedFilterFileVersion,
         input: SavedFilterTagRewriteInput,
-    ) -> Result<SavedFilterTagRewriteMutation, SavedFilterStoreError> {
+    ) -> Result<SavedFilterTagRewritePlan, SavedFilterStoreError> {
         rewrite_query_tag("", &input.old_tag, &input.new_tag, input.mode)
             .map_err(SavedFilterStoreError::TagRewrite)?;
-        let (mut document, current) = self.mutable_document(expected)?;
+        let (mut document, current, original_content) =
+            self.mutable_document_with_content(expected)?;
         let preview = analyze_tag_impacts(
             &document,
             current.clone(),
@@ -578,9 +599,15 @@ impl SavedFilterStore {
             })
             .collect::<BTreeSet<_>>();
         if update_ids.is_empty() {
-            return Ok(SavedFilterTagRewriteMutation {
-                file_version: current,
-                updated_filters: Vec::new(),
+            return Ok(SavedFilterTagRewritePlan {
+                expected_version: current,
+                original_sha256: original_content
+                    .as_deref()
+                    .map(|content| digest(content.as_bytes())),
+                original_content,
+                planned_content: None,
+                planned_sha256: None,
+                updated_filter_ids: Vec::new(),
             });
         }
 
@@ -611,22 +638,180 @@ impl SavedFilterStore {
                 SavedFilterEntryIssueKind::InvalidQuery,
             ]));
         }
-        let updated_filters = analysis
+        normalize_document_order(&mut document)?;
+        let planned_content = serde_yaml_ng::to_string(&document)?;
+        if u64::try_from(planned_content.len()).unwrap_or(u64::MAX) > MAX_SAVED_FILTER_FILE_BYTES {
+            return Err(SavedFilterStoreError::InvalidFile(
+                SavedFilterFileIssueKind::FileTooLarge,
+            ));
+        }
+        Ok(SavedFilterTagRewritePlan {
+            expected_version: current,
+            original_sha256: original_content
+                .as_deref()
+                .map(|content| digest(content.as_bytes())),
+            original_content,
+            planned_sha256: Some(digest(planned_content.as_bytes())),
+            planned_content: Some(planned_content),
+            updated_filter_ids: update_ids.into_iter().collect(),
+        })
+    }
+
+    /// Applies explicit update/retain choices as one version-checked YAML write.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale versions, incomplete choices, rewrite drift, or persistence
+    /// failures.
+    pub fn apply_tag_rewrite(
+        &self,
+        expected: &SavedFilterFileVersion,
+        input: SavedFilterTagRewriteInput,
+    ) -> Result<SavedFilterTagRewriteMutation, SavedFilterStoreError> {
+        let plan = self.plan_tag_rewrite(expected, input)?;
+        self.apply_tag_rewrite_plan(&plan)
+    }
+
+    /// Writes an already durable Tag rewrite plan only when its original full
+    /// file version still matches.
+    ///
+    /// # Errors
+    ///
+    /// Rejects plan tampering, external changes, unsafe targets, and persistence
+    /// failures.
+    pub fn apply_tag_rewrite_plan(
+        &self,
+        plan: &SavedFilterTagRewritePlan,
+    ) -> Result<SavedFilterTagRewriteMutation, SavedFilterStoreError> {
+        validate_tag_rewrite_plan(plan)?;
+        let Some(planned_content) = plan.planned_content.as_deref() else {
+            let actual = self.current_version()?;
+            ensure_version(&plan.expected_version, &actual)?;
+            return Ok(SavedFilterTagRewriteMutation {
+                file_version: actual,
+                updated_filters: Vec::new(),
+            });
+        };
+        let file_version = self.write_serialized(planned_content, &plan.expected_version)?;
+        let catalog = self.load(&BTreeSet::new())?;
+        let updated_ids = plan
+            .updated_filter_ids
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let updated_filters = catalog
             .valid_filters
             .into_iter()
             .chain(
-                analysis
+                catalog
                     .unavailable_filters
                     .into_iter()
                     .map(|entry| entry.filter),
             )
-            .filter(|filter| update_ids.contains(&filter.id))
-            .collect::<Vec<_>>();
-        let written = self.write_document(document, &current, None)?;
+            .filter(|filter| updated_ids.contains(&filter.id))
+            .collect();
         Ok(SavedFilterTagRewriteMutation {
-            file_version: written.file_version,
+            file_version,
             updated_filters,
         })
+    }
+
+    /// Conditionally restores the original full file bytes from a retained Tag
+    /// rewrite plan. A file created by the plan is removed only when its current
+    /// bytes still equal the planned bytes.
+    ///
+    /// # Errors
+    ///
+    /// Rejects plan tampering or any external change after the planned write.
+    pub fn restore_tag_rewrite_plan(
+        &self,
+        plan: &SavedFilterTagRewritePlan,
+    ) -> Result<SavedFilterFileVersion, SavedFilterStoreError> {
+        validate_tag_rewrite_plan(plan)?;
+        let Some(planned_content) = plan.planned_content.as_deref() else {
+            return self.current_version();
+        };
+        let (actual, actual_bytes) = match self.read_file()? {
+            ReadSavedFilterFile::Present { version, bytes } => (version, bytes),
+            ReadSavedFilterFile::Missing => {
+                return Err(SavedFilterStoreError::ExternalChange {
+                    expected: Box::new(version_for_content(planned_content)),
+                    actual: Box::new(SavedFilterFileVersion::expected_absent()),
+                });
+            }
+            ReadSavedFilterFile::TooLarge(version) => {
+                return Err(SavedFilterStoreError::ExternalChange {
+                    expected: Box::new(version_for_content(planned_content)),
+                    actual: Box::new(version),
+                });
+            }
+        };
+        if actual_bytes != planned_content.as_bytes() {
+            return Err(SavedFilterStoreError::ExternalChange {
+                expected: Box::new(version_for_content(planned_content)),
+                actual: Box::new(actual),
+            });
+        }
+        if let Some(original_content) = plan.original_content.as_deref() {
+            self.write_serialized(original_content, &actual)
+        } else {
+            let current = self.current_version()?;
+            ensure_version(&actual, &current)?;
+            fs::remove_file(&self.path).map_err(|source| SavedFilterStoreError::Persist {
+                path: self.path.clone(),
+                source,
+            })?;
+            let parent = self
+                .path
+                .parent()
+                .ok_or_else(|| SavedFilterStoreError::Persist {
+                    path: self.path.clone(),
+                    source: io::Error::new(io::ErrorKind::InvalidInput, "missing parent"),
+                })?;
+            sync_directory(parent).map_err(|source| SavedFilterStoreError::Persist {
+                path: self.path.clone(),
+                source,
+            })?;
+            Ok(SavedFilterFileVersion::expected_absent())
+        }
+    }
+
+    /// Classifies the current full file bytes against a durable rewrite plan.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the plan is invalid or the fixed file cannot be
+    /// inspected safely.
+    pub fn tag_rewrite_plan_state(
+        &self,
+        plan: &SavedFilterTagRewritePlan,
+    ) -> Result<SavedFilterTagRewritePlanState, SavedFilterStoreError> {
+        validate_tag_rewrite_plan(plan)?;
+        match self.read_file()? {
+            ReadSavedFilterFile::Missing if plan.original_content.is_none() => {
+                Ok(SavedFilterTagRewritePlanState::Original)
+            }
+            ReadSavedFilterFile::Present { bytes, .. }
+                if plan
+                    .original_content
+                    .as_deref()
+                    .is_some_and(|content| bytes == content.as_bytes()) =>
+            {
+                Ok(SavedFilterTagRewritePlanState::Original)
+            }
+            ReadSavedFilterFile::Present { bytes, .. }
+                if plan
+                    .planned_content
+                    .as_deref()
+                    .is_some_and(|content| bytes == content.as_bytes()) =>
+            {
+                Ok(SavedFilterTagRewritePlanState::Planned)
+            }
+            ReadSavedFilterFile::Missing | ReadSavedFilterFile::TooLarge(_) => {
+                Ok(SavedFilterTagRewritePlanState::External)
+            }
+            ReadSavedFilterFile::Present { .. } => Ok(SavedFilterTagRewritePlanState::External),
+        }
     }
 
     fn create_at(
@@ -711,11 +896,19 @@ impl SavedFilterStore {
         &self,
         expected: &SavedFilterFileVersion,
     ) -> Result<(Value, SavedFilterFileVersion), SavedFilterStoreError> {
+        let (document, version, _) = self.mutable_document_with_content(expected)?;
+        Ok((document, version))
+    }
+
+    fn mutable_document_with_content(
+        &self,
+        expected: &SavedFilterFileVersion,
+    ) -> Result<(Value, SavedFilterFileVersion, Option<String>), SavedFilterStoreError> {
         match self.read_file()? {
             ReadSavedFilterFile::Missing => {
                 let current = SavedFilterFileVersion::expected_absent();
                 ensure_version(expected, &current)?;
-                Ok((default_document(), current))
+                Ok((default_document(), current, None))
             }
             ReadSavedFilterFile::TooLarge(version) => {
                 ensure_version(expected, &version)?;
@@ -727,7 +920,10 @@ impl SavedFilterStore {
                 ensure_version(expected, &version)?;
                 let document =
                     parse_document(&bytes).map_err(SavedFilterStoreError::InvalidFile)?;
-                Ok((document, version))
+                let content = String::from_utf8(bytes).map_err(|_| {
+                    SavedFilterStoreError::InvalidFile(SavedFilterFileIssueKind::InvalidFile)
+                })?;
+                Ok((document, version, Some(content)))
             }
         }
     }
@@ -740,6 +936,31 @@ impl SavedFilterStore {
     ) -> Result<SavedFilterMutation, SavedFilterStoreError> {
         normalize_document_order(&mut document)?;
         let serialized = serde_yaml_ng::to_string(&document)?;
+        let file_version = self.write_serialized(&serialized, expected)?;
+        let analysis = analyze_document(&document, file_version.clone(), &BTreeSet::new());
+        let filter = changed_id.and_then(|id| {
+            analysis
+                .valid_filters
+                .into_iter()
+                .chain(
+                    analysis
+                        .unavailable_filters
+                        .into_iter()
+                        .map(|entry| entry.filter),
+                )
+                .find(|filter| filter.id == id)
+        });
+        Ok(SavedFilterMutation {
+            file_version,
+            filter,
+        })
+    }
+
+    fn write_serialized(
+        &self,
+        serialized: &str,
+        expected: &SavedFilterFileVersion,
+    ) -> Result<SavedFilterFileVersion, SavedFilterStoreError> {
         if u64::try_from(serialized.len()).unwrap_or(u64::MAX) > MAX_SAVED_FILTER_FILE_BYTES {
             return Err(SavedFilterStoreError::InvalidFile(
                 SavedFilterFileIssueKind::FileTooLarge,
@@ -785,31 +1006,25 @@ impl SavedFilterStore {
             source,
         })?;
         let file_version = match self.read_file()? {
-            ReadSavedFilterFile::Present { version, .. } => version,
+            ReadSavedFilterFile::Present { version, bytes }
+                if bytes.as_slice() == serialized.as_bytes() =>
+            {
+                version
+            }
             ReadSavedFilterFile::Missing | ReadSavedFilterFile::TooLarge(_) => {
                 return Err(SavedFilterStoreError::Persist {
                     path: self.path.clone(),
                     source: io::Error::other("persisted saved filter file is unavailable"),
                 });
             }
+            ReadSavedFilterFile::Present { .. } => {
+                return Err(SavedFilterStoreError::Persist {
+                    path: self.path.clone(),
+                    source: io::Error::other("persisted saved filter content does not match"),
+                });
+            }
         };
-        let analysis = analyze_document(&document, file_version.clone(), &BTreeSet::new());
-        let filter = changed_id.and_then(|id| {
-            analysis
-                .valid_filters
-                .into_iter()
-                .chain(
-                    analysis
-                        .unavailable_filters
-                        .into_iter()
-                        .map(|entry| entry.filter),
-                )
-                .find(|filter| filter.id == id)
-        });
-        Ok(SavedFilterMutation {
-            file_version,
-            filter,
-        })
+        Ok(file_version)
     }
 
     fn current_version(&self) -> Result<SavedFilterFileVersion, SavedFilterStoreError> {
@@ -1024,6 +1239,83 @@ fn analyze_tag_impacts(
 
 fn invalid_tag_choice() -> SavedFilterStoreError {
     SavedFilterStoreError::InvalidMutation(vec![SavedFilterEntryIssueKind::InvalidEntry])
+}
+
+fn validate_tag_rewrite_plan(
+    plan: &SavedFilterTagRewritePlan,
+) -> Result<(), SavedFilterStoreError> {
+    let invalid =
+        || SavedFilterStoreError::InvalidMutation(vec![SavedFilterEntryIssueKind::InvalidEntry]);
+    match (&plan.original_content, &plan.original_sha256) {
+        (Some(content), Some(sha256)) if digest(content.as_bytes()) == *sha256 => {
+            parse_document(content.as_bytes()).map_err(SavedFilterStoreError::InvalidFile)?;
+        }
+        (None, None) => {}
+        _ => return Err(invalid()),
+    }
+    if plan.expected_version.exists {
+        let Some(original_content) = plan.original_content.as_deref() else {
+            return Err(invalid());
+        };
+        if u64::try_from(original_content.len()).unwrap_or(u64::MAX) != plan.expected_version.size
+            || plan.expected_version.sha256.as_deref()
+                != Some(digest(original_content.as_bytes()).as_str())
+        {
+            return Err(invalid());
+        }
+    } else if plan.expected_version != SavedFilterFileVersion::expected_absent()
+        || plan.original_content.is_some()
+    {
+        return Err(invalid());
+    }
+
+    match (&plan.planned_content, &plan.planned_sha256) {
+        (Some(content), Some(sha256)) if digest(content.as_bytes()) == *sha256 => {
+            if u64::try_from(content.len()).unwrap_or(u64::MAX) > MAX_SAVED_FILTER_FILE_BYTES {
+                return Err(SavedFilterStoreError::InvalidFile(
+                    SavedFilterFileIssueKind::FileTooLarge,
+                ));
+            }
+            let document =
+                parse_document(content.as_bytes()).map_err(SavedFilterStoreError::InvalidFile)?;
+            let analysis =
+                analyze_document(&document, version_for_content(content), &BTreeSet::new());
+            let valid_ids = analysis
+                .valid_filters
+                .iter()
+                .map(|filter| filter.id)
+                .chain(
+                    analysis
+                        .unavailable_filters
+                        .iter()
+                        .map(|entry| entry.filter.id),
+                )
+                .collect::<BTreeSet<_>>();
+            let updated_ids = plan
+                .updated_filter_ids
+                .iter()
+                .copied()
+                .collect::<BTreeSet<_>>();
+            if plan.updated_filter_ids.is_empty()
+                || updated_ids.len() != plan.updated_filter_ids.len()
+                || !updated_ids.is_subset(&valid_ids)
+            {
+                return Err(invalid());
+            }
+        }
+        (None, None) if plan.updated_filter_ids.is_empty() => {}
+        _ => return Err(invalid()),
+    }
+    Ok(())
+}
+
+fn version_for_content(content: &str) -> SavedFilterFileVersion {
+    SavedFilterFileVersion {
+        exists: true,
+        size: u64::try_from(content.len()).unwrap_or(u64::MAX),
+        modified_unix_ms: None,
+        sha256: Some(digest(content.as_bytes())),
+    }
 }
 
 enum ReadSavedFilterFile {
@@ -2089,6 +2381,120 @@ mod tests {
         assert_eq!(mutation.file_version, created.file_version);
         assert!(mutation.updated_filters.is_empty());
         assert_eq!(fs::read(path).expect("after"), before);
+    }
+
+    #[test]
+    fn tag_rewrite_plan_survives_reopen_and_restores_exact_original_bytes() {
+        let directory = tempdir().expect("temp directory");
+        let path = directory.path().join("saved-filters.yml");
+        let id = Uuid::parse_str(FIRST_ID).expect("ID");
+        let store = SavedFilterStore::new(path.clone());
+        let created = store
+            .create_at(
+                &SavedFilterFileVersion::expected_absent(),
+                all_enabled_input("Recoverable", "old type:image"),
+                id,
+                fixed_time(),
+            )
+            .expect("create");
+        let original = fs::read(&path).expect("original bytes");
+        let plan = store
+            .plan_tag_rewrite(
+                &created.file_version,
+                SavedFilterTagRewriteInput {
+                    old_tag: "old".into(),
+                    new_tag: "new".into(),
+                    mode: TagRenameMode::Exact,
+                    choices: vec![SavedFilterTagChoice {
+                        filter_id: id,
+                        action: SavedFilterTagChoiceAction::Update,
+                    }],
+                },
+            )
+            .expect("plan");
+
+        assert_eq!(fs::read(&path).expect("plan is read-only"), original);
+        assert_eq!(
+            store.tag_rewrite_plan_state(&plan).expect("state"),
+            SavedFilterTagRewritePlanState::Original
+        );
+        let durable = serde_yaml_ng::to_string(&plan).expect("serialize durable plan");
+        let reopened_plan: SavedFilterTagRewritePlan =
+            serde_yaml_ng::from_str(&durable).expect("deserialize durable plan");
+        let reopened = SavedFilterStore::new(path.clone());
+        reopened
+            .apply_tag_rewrite_plan(&reopened_plan)
+            .expect("apply after reopen");
+        assert_eq!(
+            reopened
+                .tag_rewrite_plan_state(&reopened_plan)
+                .expect("planned state"),
+            SavedFilterTagRewritePlanState::Planned
+        );
+        reopened
+            .restore_tag_rewrite_plan(&reopened_plan)
+            .expect("conditional restore");
+        assert_eq!(fs::read(path).expect("restored bytes"), original);
+    }
+
+    #[test]
+    fn tag_rewrite_plan_rejects_tampering_and_external_restore_overwrite() {
+        let directory = tempdir().expect("temp directory");
+        let path = directory.path().join("saved-filters.yml");
+        let id = Uuid::parse_str(FIRST_ID).expect("ID");
+        let store = SavedFilterStore::new(path.clone());
+        let created = store
+            .create_at(
+                &SavedFilterFileVersion::expected_absent(),
+                all_enabled_input("Protected", "old"),
+                id,
+                fixed_time(),
+            )
+            .expect("create");
+        let plan = store
+            .plan_tag_rewrite(
+                &created.file_version,
+                SavedFilterTagRewriteInput {
+                    old_tag: "old".into(),
+                    new_tag: "new".into(),
+                    mode: TagRenameMode::Exact,
+                    choices: vec![SavedFilterTagChoice {
+                        filter_id: id,
+                        action: SavedFilterTagChoiceAction::Update,
+                    }],
+                },
+            )
+            .expect("plan");
+        let mut tampered = plan.clone();
+        tampered
+            .planned_content
+            .as_mut()
+            .expect("planned content")
+            .push_str("external: true\n");
+        assert!(matches!(
+            store.apply_tag_rewrite_plan(&tampered),
+            Err(SavedFilterStoreError::InvalidMutation(_))
+        ));
+
+        store.apply_tag_rewrite_plan(&plan).expect("apply plan");
+        fs::write(
+            &path,
+            fs::read_to_string(&path).expect("read planned") + "external: true\n",
+        )
+        .expect("external edit");
+        assert_eq!(
+            store.tag_rewrite_plan_state(&plan).expect("external state"),
+            SavedFilterTagRewritePlanState::External
+        );
+        assert!(matches!(
+            store.restore_tag_rewrite_plan(&plan),
+            Err(SavedFilterStoreError::ExternalChange { .. })
+        ));
+        assert!(
+            fs::read_to_string(path)
+                .expect("preserved external edit")
+                .contains("external: true")
+        );
     }
 
     #[test]

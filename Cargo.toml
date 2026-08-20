@@ -15,6 +15,7 @@ members = [
   "crates/resource-control",
   "crates/saved-filters",
   "crates/svg",
+  "crates/tag-renames",
   "crates/transactions",
   "tools/eagle-p0",
   "tools/cache-fault",

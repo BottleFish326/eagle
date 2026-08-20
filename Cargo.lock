@@ -291,6 +291,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "asset-tag-renames"
+version = "0.1.0"
+dependencies = [
+ "asset-saved-filters",
+ "asset-transactions",
+ "chrono",
+ "metadata",
+ "serde",
+ "serde_yaml_ng",
+ "tempfile",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "asset-transactions"
 version = "0.1.0"
 dependencies = [

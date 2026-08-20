@@ -137,6 +137,8 @@ pub struct MetadataTransactionStore {
 
 #[derive(Debug, Error)]
 pub enum TransactionError {
+    #[error("metadata transaction requires at least one target")]
+    NoTargets,
     #[error("metadata transaction requires at least two targets")]
     TooFewTargets,
     #[error("metadata transaction was not found: {0}")]
@@ -213,6 +215,47 @@ impl MetadataTransactionStore {
         patch: &MetadataPatch,
     ) -> Result<TransactionExecution, TransactionError> {
         self.execute_with_limit(targets, patch, None)
+    }
+
+    /// Persists a durable Sidecar plan without applying any item.
+    ///
+    /// Plan-only mode accepts one or more targets because a single Sidecar may
+    /// still need coordination with `saved-filters.yml`. The returned journal
+    /// can be applied through [`Self::continue_transaction`] after a separate
+    /// coordinator record is durable.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransactionError`] for an empty target set or when the journal
+    /// cannot be prepared and persisted.
+    pub fn plan(
+        &self,
+        targets: &[TransactionTarget],
+        patch: &MetadataPatch,
+    ) -> Result<TransactionSummary, TransactionError> {
+        if targets.is_empty() {
+            return Err(TransactionError::NoTargets);
+        }
+        let journal = Self::prepare_journal(targets, patch);
+        self.persist(&journal)?;
+        Ok(journal.summary())
+    }
+
+    /// Reconciles one retained journal with current Sidecar bytes and returns
+    /// its latest summary without applying or restoring any item.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransactionError`] when the journal is missing, invalid, or
+    /// cannot persist its reconciled state.
+    pub fn summary(&self, id: Uuid) -> Result<TransactionSummary, TransactionError> {
+        let mut journal = self.load(id)?;
+        if journal.state == TransactionState::Active {
+            reconcile_actual_states(&mut journal);
+            journal.finish_from_items();
+            self.persist(&journal)?;
+        }
+        Ok(journal.summary())
     }
 
     /// Lists every retained transaction journal in deterministic order.
@@ -401,19 +444,7 @@ impl MetadataTransactionStore {
         if targets.len() < 2 {
             return Err(TransactionError::TooFewTargets);
         }
-        let now = now_rfc3339();
-        let mut journal = TransactionJournal {
-            schema: TRANSACTION_SCHEMA,
-            id: Uuid::now_v7(),
-            created_at: now.clone(),
-            updated_at: now,
-            state: TransactionState::Active,
-            patch: patch.clone(),
-            items: targets
-                .iter()
-                .map(|target| prepare_item(target, patch))
-                .collect(),
-        };
+        let mut journal = Self::prepare_journal(targets, patch);
         self.persist(&journal)?;
         let mut committed = Vec::new();
         let mut failures = journal
@@ -472,6 +503,22 @@ impl MetadataTransactionStore {
             committed,
             failures,
         })
+    }
+
+    fn prepare_journal(targets: &[TransactionTarget], patch: &MetadataPatch) -> TransactionJournal {
+        let now = now_rfc3339();
+        TransactionJournal {
+            schema: TRANSACTION_SCHEMA,
+            id: Uuid::now_v7(),
+            created_at: now.clone(),
+            updated_at: now,
+            state: TransactionState::Active,
+            patch: patch.clone(),
+            items: targets
+                .iter()
+                .map(|target| prepare_item(target, patch))
+                .collect(),
+        }
     }
 
     fn load(&self, id: Uuid) -> Result<TransactionJournal, TransactionError> {
@@ -852,6 +899,53 @@ mod tests {
     use super::{
         MetadataTransactionStore, TransactionFailureKind, TransactionState, TransactionTarget,
     };
+
+    #[test]
+    fn plan_only_persists_one_target_before_any_sidecar_is_applied() {
+        let directory = tempdir().expect("tempdir");
+        let journal_directory = directory.path().join("transactions");
+        let store = MetadataTransactionStore::open(&journal_directory).expect("store");
+        let asset_path = directory.path().join("single.png");
+        fs::write(&asset_path, b"asset").expect("asset");
+        let target = TransactionTarget {
+            key: "single".into(),
+            root_id: Uuid::now_v7(),
+            asset_path: asset_path.clone(),
+            expected_sidecar_digest: None,
+            expected_sidecar_size: None,
+            expected_sidecar_modified_unix_ms: None,
+        };
+
+        let planned = store
+            .plan(
+                &[target],
+                &MetadataPatch {
+                    add_tags: BTreeSet::from(["renamed".into()]),
+                    ..MetadataPatch::default()
+                },
+            )
+            .expect("plan");
+
+        assert_eq!(planned.state, TransactionState::Active);
+        assert_eq!(planned.item_count, 1);
+        assert_eq!(planned.applied_count, 0);
+        assert!(!sidecar_path_for(&asset_path).exists());
+        let recovered = store.summary(planned.id).expect("summary");
+        assert_eq!(recovered.id, planned.id);
+        assert_eq!(recovered.state, TransactionState::Active);
+        assert_eq!(recovered.applied_count, 0);
+        let completed = store
+            .continue_transaction(planned.id)
+            .expect("continue plan");
+        assert_eq!(completed.summary.state, TransactionState::Completed);
+        assert!(
+            read_sidecar(&sidecar_path_for(&asset_path))
+                .expect("sidecar")
+                .0
+                .tags
+                .contains("renamed")
+        );
+    }
 
     #[test]
     fn interrupted_thousand_item_transaction_is_discovered_and_continued() {
