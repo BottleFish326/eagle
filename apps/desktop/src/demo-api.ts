@@ -13,6 +13,11 @@ import type {
 } from "./obsidian-vaults";
 import type { AssetRecord, LibraryScanEvent } from "./scanner";
 import type {
+  SavedFilter,
+  SavedFilterCatalog,
+  SavedFilterFileVersion,
+} from "./saved-filters";
+import type {
   AssetTraceReport,
   LibraryConsistencyReport,
 } from "./support-tools";
@@ -39,6 +44,14 @@ export function createDemoDesktopApi(
   let applicationConfig: ApplicationConfig = {
     schema: 1,
     ui: { query: "", tagFilters: {}, activeVaultId: DEMO_VAULT_ID },
+  };
+  let savedFilterRevision = 0;
+  let savedFilters: SavedFilter[] = [];
+  let savedFilterVersion: SavedFilterFileVersion = {
+    exists: false,
+    size: 0,
+    modifiedUnixMs: null,
+    sha256: null,
   };
   const recoveryStatus: RuntimeRecoveryStatus = {
     paths: {
@@ -394,6 +407,126 @@ export function createDemoDesktopApi(
         keys,
         totalAssets: assets.length,
       } satisfies QueryAssetsResult;
+    },
+    async listSavedFilters() {
+      return demoSavedFilterCatalog(savedFilters, savedFilterVersion, roots);
+    },
+    async createSavedFilter(expectedVersion, input) {
+      assertDemoSavedFilterVersion(expectedVersion, savedFilterVersion);
+      const duplicate = savedFilters.some(
+        (filter) =>
+          filter.name.normalize("NFC").toLocaleLowerCase() ===
+          input.name.normalize("NFC").toLocaleLowerCase(),
+      );
+      if (duplicate) throw demoSavedFilterError("duplicate-name");
+      const now = new Date().toISOString();
+      const filter: SavedFilter = {
+        id: demoUuid(savedFilterRevision + 9_000),
+        ...structuredClone(input),
+        createdAt: now,
+        updatedAt: now,
+      };
+      savedFilters = [...savedFilters, filter];
+      savedFilterRevision += 1;
+      savedFilterVersion = nextDemoSavedFilterVersion(
+        savedFilterRevision,
+        savedFilters,
+      );
+      return {
+        fileVersion: structuredClone(savedFilterVersion),
+        filter: structuredClone(filter),
+      };
+    },
+    async updateSavedFilter(expectedVersion, id, input) {
+      assertDemoSavedFilterVersion(expectedVersion, savedFilterVersion);
+      const current = savedFilters.find((filter) => filter.id === id);
+      if (current === undefined) throw demoSavedFilterError("not-found");
+      const updated: SavedFilter = {
+        ...current,
+        ...structuredClone(input),
+        updatedAt: new Date().toISOString(),
+      };
+      savedFilters = savedFilters.map((filter) =>
+        filter.id === id ? updated : filter,
+      );
+      savedFilterRevision += 1;
+      savedFilterVersion = nextDemoSavedFilterVersion(
+        savedFilterRevision,
+        savedFilters,
+      );
+      return {
+        fileVersion: structuredClone(savedFilterVersion),
+        filter: structuredClone(updated),
+      };
+    },
+    async renameSavedFilter(expectedVersion, id, name) {
+      const current = savedFilters.find((filter) => filter.id === id);
+      if (current === undefined) throw demoSavedFilterError("not-found");
+      return this.updateSavedFilter(expectedVersion, id, {
+        name,
+        query: current.query,
+        scope: current.scope,
+        sort: current.sort,
+      });
+    },
+    async deleteSavedFilter(expectedVersion, id) {
+      assertDemoSavedFilterVersion(expectedVersion, savedFilterVersion);
+      if (!savedFilters.some((filter) => filter.id === id)) {
+        throw demoSavedFilterError("not-found");
+      }
+      savedFilters = savedFilters.filter((filter) => filter.id !== id);
+      savedFilterRevision += 1;
+      savedFilterVersion = nextDemoSavedFilterVersion(
+        savedFilterRevision,
+        savedFilters,
+      );
+      return {
+        fileVersion: structuredClone(savedFilterVersion),
+        filter: null,
+      };
+    },
+    async executeSavedFilter(id) {
+      const filter = savedFilters.find((candidate) => candidate.id === id);
+      if (filter === undefined) throw demoSavedFilterError("not-found");
+      const enabledRootIds = new Set(
+        roots.filter((root) => root.enabled).map((root) => root.id),
+      );
+      const availableRootIds = new Set(
+        roots
+          .filter((root) => root.enabled && root.accessStatus === "available")
+          .map((root) => root.id),
+      );
+      const requestedRootIds =
+        filter.scope.kind === "all-enabled-roots"
+          ? [...enabledRootIds]
+          : filter.scope.rootIds;
+      const effectiveRootIds = requestedRootIds
+        .filter((rootId) => availableRootIds.has(rootId))
+        .sort();
+      const missingRootIds = requestedRootIds
+        .filter((rootId) => !availableRootIds.has(rootId))
+        .sort();
+      const scoped = assets.filter(
+        (asset) =>
+          asset.rootId !== null && effectiveRootIds.includes(asset.rootId),
+      );
+      const matched = scoped.filter((asset) =>
+        matchesDemoExpression(asset, filter.query),
+      );
+      matched.sort((left, right) =>
+        demoSavedFilterCompare(left, right, filter),
+      );
+      return {
+        filterId: filter.id,
+        expression: filter.query,
+        orderedKeys: matched.map((asset) => asset.key),
+        totalAssets: assets.length,
+        scopedAssets: scoped.length,
+        matchedAssets: matched.length,
+        effectiveRootIds,
+        missingRootIds,
+        sort: structuredClone(filter.sort),
+      };
     },
     async editAssetMetadata(input) {
       const updated: AssetRecord[] = [];
@@ -919,4 +1052,110 @@ async function renderDemoThumbnail(seed: string): Promise<ArrayBuffer> {
 function demoUuid(value: number): string {
   const suffix = Math.abs(value).toString(16).padStart(12, "0").slice(-12);
   return `0198a9b2-43c0-7cb0-a733-${suffix}`;
+}
+
+function demoSavedFilterCatalog(
+  filters: SavedFilter[],
+  fileVersion: SavedFilterFileVersion,
+  roots: LibraryRootStatus[],
+): SavedFilterCatalog {
+  const availableRootIds = new Set(
+    roots
+      .filter((root) => root.enabled && root.accessStatus === "available")
+      .map((root) => root.id),
+  );
+  const validFilters: SavedFilter[] = [];
+  const unavailableFilters: SavedFilterCatalog["unavailableFilters"] = [];
+  for (const filter of filters) {
+    const requested =
+      filter.scope.kind === "selected-roots" ? filter.scope.rootIds : [];
+    const missingRootIds = requested.filter(
+      (rootId) => !availableRootIds.has(rootId),
+    );
+    if (missingRootIds.length === 0) validFilters.push(filter);
+    else unavailableFilters.push({ filter, missingRootIds });
+  }
+  return structuredClone({
+    fileVersion,
+    validFilters,
+    unavailableFilters,
+    invalidEntries: [],
+    fileIssues: [],
+  });
+}
+
+function assertDemoSavedFilterVersion(
+  expected: SavedFilterFileVersion,
+  actual: SavedFilterFileVersion,
+): void {
+  if (JSON.stringify(expected) === JSON.stringify(actual)) return;
+  throw {
+    kind: "external-change",
+    message: "保存过滤器已被外部修改，请刷新后重试",
+    actualVersion: structuredClone(actual),
+    queryKind: null,
+    queryOffset: null,
+  };
+}
+
+function demoSavedFilterError(kind: "duplicate-name" | "not-found") {
+  return {
+    kind,
+    message: kind === "not-found" ? "保存过滤器不存在" : "名称已经存在",
+    actualVersion: null,
+    queryKind: null,
+    queryOffset: null,
+  };
+}
+
+function nextDemoSavedFilterVersion(
+  revision: number,
+  filters: SavedFilter[],
+): SavedFilterFileVersion {
+  const serialized = JSON.stringify(filters);
+  return {
+    exists: true,
+    size: new TextEncoder().encode(serialized).byteLength,
+    modifiedUnixMs: Date.now(),
+    sha256: demoCacheKey(`${String(revision)}:${serialized}`),
+  };
+}
+
+function demoSavedFilterCompare(
+  left: AssetRecord,
+  right: AssetRecord,
+  filter: SavedFilter,
+): number {
+  const value = (asset: AssetRecord): string | number | null => {
+    switch (filter.sort.field) {
+      case "file-name":
+        return asset.fileName.normalize("NFC");
+      case "modified-at":
+        return asset.modifiedUnixMs;
+      case "created-at":
+        return asset.createdUnixMs;
+      case "file-size":
+        return asset.size;
+      case "rating":
+        return asset.rating;
+      case "asset-kind":
+        return ["image", "video", "audio", "pdf", "other"].indexOf(asset.kind);
+    }
+  };
+  const leftValue = value(left);
+  const rightValue = value(right);
+  let order = 0;
+  if (leftValue === null) order = rightValue === null ? 0 : 1;
+  else if (rightValue === null) order = -1;
+  else if (leftValue < rightValue) order = -1;
+  else if (leftValue > rightValue) order = 1;
+  if (
+    leftValue !== null &&
+    rightValue !== null &&
+    order !== 0 &&
+    filter.sort.direction === "descending"
+  ) {
+    order *= -1;
+  }
+  return order === 0 ? left.key.localeCompare(right.key) : order;
 }

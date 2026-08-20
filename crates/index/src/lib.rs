@@ -1,6 +1,8 @@
+use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use asset_core::{AssetKind, AssetRecord};
+use serde::{Deserialize, Serialize};
 use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 
@@ -12,6 +14,31 @@ pub use advanced::{
     RatioField, UnknownField,
 };
 pub use query::{AssetQuery, QueryParseError, QueryParseErrorKind, parse_query};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AssetSortField {
+    FileName,
+    ModifiedAt,
+    CreatedAt,
+    FileSize,
+    Rating,
+    AssetKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AssetSortDirection {
+    Ascending,
+    Descending,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetSort {
+    pub field: AssetSortField,
+    pub direction: AssetSortDirection,
+}
 
 #[derive(Debug, Default)]
 pub struct AssetIndex {
@@ -180,6 +207,34 @@ impl AssetIndex {
         result.into_iter().collect()
     }
 
+    /// Returns one backend-owned ordered view, restricted to the explicit root scope.
+    ///
+    /// Missing primary values always follow known values in either direction. Equal
+    /// values use the runtime key in ascending order, so UI code never needs to copy
+    /// query or sorting semantics.
+    #[must_use]
+    pub fn query_ordered(
+        &self,
+        query: &AssetQuery,
+        scope_root_ids: &BTreeSet<Uuid>,
+        sort: AssetSort,
+    ) -> Vec<String> {
+        let mut matches = self
+            .query(query)
+            .into_iter()
+            .filter_map(|key| {
+                let record = self.records.get(&key)?;
+                scope_root_ids
+                    .contains(&record.root_id?)
+                    .then(|| (key, SortValue::from_record(record, sort.field)))
+            })
+            .collect::<Vec<_>>();
+        matches.sort_by(|(left_key, left), (right_key, right)| {
+            compare_sort_values(left, right, sort.direction).then_with(|| left_key.cmp(right_key))
+        });
+        matches.into_iter().map(|(key, _)| key).collect()
+    }
+
     fn keys_for_tag_expression(&self, expression: &str) -> HashSet<String> {
         if let Some(namespace) = expression.strip_suffix("/*") {
             let prefix = format!("{namespace}/");
@@ -282,6 +337,75 @@ impl AssetIndex {
             &record.media.as_ref().and_then(|media| media.has_alpha),
             &record.key,
         );
+    }
+}
+
+#[derive(Debug)]
+enum SortValue {
+    Text(String),
+    Signed(Option<i64>),
+    Unsigned(Option<u64>),
+    Rating(u8),
+    Kind(AssetKind),
+}
+
+impl SortValue {
+    fn from_record(record: &AssetRecord, field: AssetSortField) -> Self {
+        match field {
+            AssetSortField::FileName => Self::Text(record.file_name.nfc().collect()),
+            AssetSortField::ModifiedAt => Self::Signed(record.modified_unix_ms),
+            AssetSortField::CreatedAt => Self::Signed(record.created_unix_ms),
+            AssetSortField::FileSize => Self::Unsigned(record.size),
+            AssetSortField::Rating => Self::Rating(record.rating),
+            AssetSortField::AssetKind => Self::Kind(record.kind),
+        }
+    }
+}
+
+fn compare_sort_values(
+    left: &SortValue,
+    right: &SortValue,
+    direction: AssetSortDirection,
+) -> Ordering {
+    let ordering = match (left, right) {
+        (SortValue::Text(left), SortValue::Text(right)) => left.cmp(right),
+        (SortValue::Signed(left), SortValue::Signed(right)) => {
+            compare_optional(left.as_ref(), right.as_ref())
+        }
+        (SortValue::Unsigned(left), SortValue::Unsigned(right)) => {
+            compare_optional(left.as_ref(), right.as_ref())
+        }
+        (SortValue::Rating(left), SortValue::Rating(right)) => left.cmp(right),
+        (SortValue::Kind(left), SortValue::Kind(right)) => left.cmp(right),
+        _ => Ordering::Equal,
+    };
+    match direction {
+        AssetSortDirection::Ascending => ordering,
+        AssetSortDirection::Descending => reverse_known_ordering(left, right, ordering),
+    }
+}
+
+fn compare_optional<T: Ord>(left: Option<&T>, right: Option<&T>) -> Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => left.cmp(right),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    }
+}
+
+fn reverse_known_ordering(left: &SortValue, right: &SortValue, ordering: Ordering) -> Ordering {
+    let has_missing_value = matches!(
+        (left, right),
+        (SortValue::Signed(None), SortValue::Signed(Some(_)))
+            | (SortValue::Signed(Some(_)), SortValue::Signed(None))
+            | (SortValue::Unsigned(None), SortValue::Unsigned(Some(_)))
+            | (SortValue::Unsigned(Some(_)), SortValue::Unsigned(None))
+    );
+    if has_missing_value {
+        ordering
+    } else {
+        ordering.reverse()
     }
 }
 
@@ -490,7 +614,9 @@ mod tests {
     use asset_core::{AssetDimensions, AssetRecord, MediaProperties, NativeImageMetadata};
     use uuid::Uuid;
 
-    use super::{AssetIndex, AssetQuery, parse_query};
+    use super::{
+        AssetIndex, AssetQuery, AssetSort, AssetSortDirection, AssetSortField, parse_query,
+    };
 
     fn record(key: &str, tags: &[&str], favorite: bool) -> AssetRecord {
         typed_record(key, "png", "image/png", tags, favorite)
@@ -673,6 +799,48 @@ mod tests {
         };
 
         assert_eq!(index.query(&query), expected);
+    }
+
+    #[test]
+    fn ordered_query_keeps_scope_null_and_key_tiebreak_semantics() {
+        let root_a = Uuid::parse_str("0198e8c0-7451-7af1-8bca-0123456789ab").expect("root A");
+        let root_b = Uuid::parse_str("0198e8c0-7451-7af1-8bca-abcdef012345").expect("root B");
+        let mut first = advanced_record("key-a", Some(root_a));
+        first.file_name = "e\u{301}.png".into();
+        first.modified_unix_ms = Some(10);
+        let mut second = advanced_record("key-b", Some(root_a));
+        second.file_name = "é.png".into();
+        second.modified_unix_ms = Some(20);
+        let mut missing = advanced_record("key-c", Some(root_a));
+        missing.file_name = "z.png".into();
+        missing.modified_unix_ms = None;
+        let mut outside = advanced_record("key-outside", Some(root_b));
+        outside.modified_unix_ms = Some(30);
+        let index = AssetIndex::from_records([first, second, missing, outside]);
+        let scope = BTreeSet::from([root_a]);
+
+        assert_eq!(
+            index.query_ordered(
+                &AssetQuery::default(),
+                &scope,
+                AssetSort {
+                    field: AssetSortField::FileName,
+                    direction: AssetSortDirection::Ascending,
+                },
+            ),
+            ["key-c", "key-a", "key-b"]
+        );
+        assert_eq!(
+            index.query_ordered(
+                &AssetQuery::default(),
+                &scope,
+                AssetSort {
+                    field: AssetSortField::ModifiedAt,
+                    direction: AssetSortDirection::Descending,
+                },
+            ),
+            ["key-b", "key-a", "key-c"]
+        );
     }
 
     #[test]

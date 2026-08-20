@@ -31,6 +31,12 @@ use asset_preview::{
     CacheClearReport, CacheMaintenanceReport, CacheStartupReport, CacheStats, PreviewError,
     ThumbnailOutcome, ThumbnailRequest, ThumbnailService,
 };
+use asset_saved_filters::{
+    CreateSavedFilter, SavedFilterCatalog, SavedFilterEntryIssueKind, SavedFilterExecution,
+    SavedFilterExecutionError, SavedFilterFileIssueKind, SavedFilterFileVersion,
+    SavedFilterMutation, SavedFilterStore, SavedFilterStoreError, UpdateSavedFilter,
+    execute_saved_filter as execute_saved_filter_view,
+};
 use asset_transactions::{
     MetadataTransactionStore, TransactionFailureKind, TransactionRecoveryResult,
     TransactionScopeItem, TransactionSummary, TransactionTarget,
@@ -201,6 +207,35 @@ enum QueryAssetsError {
     Internal { message: String },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum SavedFilterCommandErrorKind {
+    InvalidFile,
+    FileTooLarge,
+    UnsupportedSchema,
+    InvalidEntry,
+    DuplicateId,
+    DuplicateName,
+    InvalidQuery,
+    UnknownSort,
+    ExternalChange,
+    NotFound,
+    Internal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SavedFilterCommandError {
+    kind: SavedFilterCommandErrorKind,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    actual_version: Option<SavedFilterFileVersion>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    query_kind: Option<asset_index::QueryParseErrorKind>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    query_offset: Option<usize>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case", tag = "kind")]
 enum ThumbnailCommandError {
@@ -294,6 +329,115 @@ impl From<PreviewError> for ThumbnailCommandError {
                 message: error.to_string(),
             },
         }
+    }
+}
+
+impl From<SavedFilterStoreError> for SavedFilterCommandError {
+    fn from(error: SavedFilterStoreError) -> Self {
+        match error {
+            SavedFilterStoreError::InvalidFile(kind) => Self::file_issue(kind),
+            SavedFilterStoreError::ExternalChange { actual, .. } => Self {
+                kind: SavedFilterCommandErrorKind::ExternalChange,
+                message: "saved filters changed outside Material Eagle; reload before saving"
+                    .into(),
+                actual_version: Some(*actual),
+                query_kind: None,
+                query_offset: None,
+            },
+            SavedFilterStoreError::NotFound => Self::simple(
+                SavedFilterCommandErrorKind::NotFound,
+                "saved filter is missing or stale",
+            ),
+            SavedFilterStoreError::AmbiguousId => Self::simple(
+                SavedFilterCommandErrorKind::DuplicateId,
+                "duplicate saved filter IDs must be repaired before editing",
+            ),
+            SavedFilterStoreError::InvalidMutation(issues) => {
+                let kind = issues
+                    .into_iter()
+                    .map(command_kind_for_entry_issue)
+                    .min_by_key(|kind| saved_filter_error_priority(*kind))
+                    .unwrap_or(SavedFilterCommandErrorKind::InvalidEntry);
+                Self::simple(
+                    kind,
+                    "saved filter input is invalid or conflicts with another entry",
+                )
+            }
+            SavedFilterStoreError::TooManyFilters => Self::simple(
+                SavedFilterCommandErrorKind::InvalidEntry,
+                "saved filter limit of 512 entries was reached",
+            ),
+            SavedFilterStoreError::Io { .. }
+            | SavedFilterStoreError::UnsafeTarget
+            | SavedFilterStoreError::Serialize(_)
+            | SavedFilterStoreError::Persist { .. } => Self::simple(
+                SavedFilterCommandErrorKind::Internal,
+                "saved filter storage is unavailable",
+            ),
+        }
+    }
+}
+
+impl From<SavedFilterExecutionError> for SavedFilterCommandError {
+    fn from(error: SavedFilterExecutionError) -> Self {
+        Self {
+            kind: SavedFilterCommandErrorKind::InvalidQuery,
+            message: "saved filter query no longer parses".into(),
+            actual_version: None,
+            query_kind: Some(error.kind),
+            query_offset: Some(error.offset),
+        }
+    }
+}
+
+impl SavedFilterCommandError {
+    fn simple(kind: SavedFilterCommandErrorKind, message: &str) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+            actual_version: None,
+            query_kind: None,
+            query_offset: None,
+        }
+    }
+
+    fn file_issue(kind: SavedFilterFileIssueKind) -> Self {
+        match kind {
+            SavedFilterFileIssueKind::InvalidFile => Self::simple(
+                SavedFilterCommandErrorKind::InvalidFile,
+                "saved filter YAML is invalid and was left unchanged",
+            ),
+            SavedFilterFileIssueKind::FileTooLarge => Self::simple(
+                SavedFilterCommandErrorKind::FileTooLarge,
+                "saved filter YAML exceeds the 1 MiB limit",
+            ),
+            SavedFilterFileIssueKind::UnsupportedSchema => Self::simple(
+                SavedFilterCommandErrorKind::UnsupportedSchema,
+                "saved filter YAML uses an unsupported schema",
+            ),
+        }
+    }
+}
+
+const fn command_kind_for_entry_issue(
+    issue: SavedFilterEntryIssueKind,
+) -> SavedFilterCommandErrorKind {
+    match issue {
+        SavedFilterEntryIssueKind::InvalidEntry => SavedFilterCommandErrorKind::InvalidEntry,
+        SavedFilterEntryIssueKind::DuplicateId => SavedFilterCommandErrorKind::DuplicateId,
+        SavedFilterEntryIssueKind::DuplicateName => SavedFilterCommandErrorKind::DuplicateName,
+        SavedFilterEntryIssueKind::InvalidQuery => SavedFilterCommandErrorKind::InvalidQuery,
+        SavedFilterEntryIssueKind::UnknownSort => SavedFilterCommandErrorKind::UnknownSort,
+    }
+}
+
+const fn saved_filter_error_priority(kind: SavedFilterCommandErrorKind) -> u8 {
+    match kind {
+        SavedFilterCommandErrorKind::DuplicateId => 0,
+        SavedFilterCommandErrorKind::DuplicateName => 1,
+        SavedFilterCommandErrorKind::InvalidQuery => 2,
+        SavedFilterCommandErrorKind::UnknownSort => 3,
+        _ => 4,
     }
 }
 
@@ -664,6 +808,189 @@ fn update_application_config(
         ],
     );
     Ok(config)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn list_saved_filters(
+    store: State<'_, Arc<SavedFilterStore>>,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+) -> Result<SavedFilterCatalog, SavedFilterCommandError> {
+    let statuses = roots
+        .lock()
+        .map_err(|_| {
+            SavedFilterCommandError::simple(
+                SavedFilterCommandErrorKind::Internal,
+                "library root state is unavailable",
+            )
+        })?
+        .roots();
+    let (_, available) = saved_filter_root_sets(&statuses);
+    store.load(&available).map_err(Into::into)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn create_saved_filter(
+    expected_version: SavedFilterFileVersion,
+    input: CreateSavedFilter,
+    store: State<'_, Arc<SavedFilterStore>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+) -> Result<SavedFilterMutation, SavedFilterCommandError> {
+    let mutation = store.create(&expected_version, input)?;
+    record_diagnostic(
+        diagnostics.inner(),
+        DiagnosticLevel::Info,
+        "saved-filters",
+        "filter-created",
+        [("fileBytes", mutation.file_version.size.to_string())],
+    );
+    Ok(mutation)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn update_saved_filter(
+    expected_version: SavedFilterFileVersion,
+    id: Uuid,
+    input: UpdateSavedFilter,
+    store: State<'_, Arc<SavedFilterStore>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+) -> Result<SavedFilterMutation, SavedFilterCommandError> {
+    let mutation = store.update(&expected_version, id, input)?;
+    record_diagnostic(
+        diagnostics.inner(),
+        DiagnosticLevel::Info,
+        "saved-filters",
+        "filter-updated",
+        [("fileBytes", mutation.file_version.size.to_string())],
+    );
+    Ok(mutation)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn rename_saved_filter(
+    expected_version: SavedFilterFileVersion,
+    id: Uuid,
+    name: String,
+    store: State<'_, Arc<SavedFilterStore>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+) -> Result<SavedFilterMutation, SavedFilterCommandError> {
+    let mutation = store.rename(&expected_version, id, name)?;
+    record_diagnostic(
+        diagnostics.inner(),
+        DiagnosticLevel::Info,
+        "saved-filters",
+        "filter-renamed",
+        [("fileBytes", mutation.file_version.size.to_string())],
+    );
+    Ok(mutation)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn delete_saved_filter(
+    expected_version: SavedFilterFileVersion,
+    id: Uuid,
+    store: State<'_, Arc<SavedFilterStore>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+) -> Result<SavedFilterMutation, SavedFilterCommandError> {
+    let mutation = store.delete(&expected_version, id)?;
+    record_diagnostic(
+        diagnostics.inner(),
+        DiagnosticLevel::Info,
+        "saved-filters",
+        "filter-deleted",
+        [("fileBytes", mutation.file_version.size.to_string())],
+    );
+    Ok(mutation)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn execute_saved_filter(
+    id: Uuid,
+    store: State<'_, Arc<SavedFilterStore>>,
+    roots: State<'_, Mutex<LibraryRootManager>>,
+    catalog: State<'_, Arc<Mutex<AssetCatalog>>>,
+    diagnostics: State<'_, Arc<DiagnosticService>>,
+) -> Result<SavedFilterExecution, SavedFilterCommandError> {
+    let statuses = roots
+        .lock()
+        .map_err(|_| {
+            SavedFilterCommandError::simple(
+                SavedFilterCommandErrorKind::Internal,
+                "library root state is unavailable",
+            )
+        })?
+        .roots();
+    let (enabled, available) = saved_filter_root_sets(&statuses);
+    let saved = store.load(&available)?;
+    if let Some(issue) = saved.file_issues.first() {
+        return Err(SavedFilterCommandError::file_issue(issue.kind));
+    }
+    if saved
+        .invalid_entries
+        .iter()
+        .any(|entry| entry.id == Some(id))
+    {
+        return Err(SavedFilterCommandError::simple(
+            SavedFilterCommandErrorKind::InvalidEntry,
+            "saved filter entry is invalid and cannot be executed",
+        ));
+    }
+    let filter = saved
+        .valid_filters
+        .into_iter()
+        .chain(
+            saved
+                .unavailable_filters
+                .into_iter()
+                .map(|entry| entry.filter),
+        )
+        .find(|filter| filter.id == id)
+        .ok_or_else(|| {
+            SavedFilterCommandError::simple(
+                SavedFilterCommandErrorKind::NotFound,
+                "saved filter is missing or stale",
+            )
+        })?;
+    let records = catalog
+        .lock()
+        .map_err(|_| {
+            SavedFilterCommandError::simple(
+                SavedFilterCommandErrorKind::Internal,
+                "asset catalog is unavailable",
+            )
+        })?
+        .records();
+    let execution = execute_saved_filter_view(&filter, &records, &enabled, &available)?;
+    record_diagnostic(
+        diagnostics.inner(),
+        DiagnosticLevel::Info,
+        "saved-filters",
+        "filter-executed",
+        [
+            ("matchedAssets", execution.matched_assets.to_string()),
+            ("missingRoots", execution.missing_root_ids.len().to_string()),
+        ],
+    );
+    Ok(execution)
+}
+
+fn saved_filter_root_sets(statuses: &[LibraryRootStatus]) -> (BTreeSet<Uuid>, BTreeSet<Uuid>) {
+    let enabled = statuses
+        .iter()
+        .filter(|status| status.root.enabled)
+        .map(|status| status.root.id)
+        .collect::<BTreeSet<_>>();
+    let available = statuses
+        .iter()
+        .filter(|status| status.root.enabled && status.access_status == RootAccessStatus::Available)
+        .map(|status| status.root.id)
+        .collect();
+    (enabled, available)
 }
 
 #[tauri::command]
@@ -2454,6 +2781,9 @@ pub fn run() {
             let application_config =
                 ApplicationConfigManager::open(config_directory.join("application.yml"))?;
             app.manage(Mutex::new(application_config));
+            app.manage(Arc::new(SavedFilterStore::new(
+                config_directory.join("saved-filters.yml"),
+            )));
             app.manage(Arc::new(ScanCoordinator::default()));
             app.manage(Arc::new(WatchCoordinator::default()));
             app.manage(Arc::new(ReconciliationCoordinator::default()));
@@ -2535,6 +2865,12 @@ pub fn run() {
             build_info,
             get_application_config,
             update_application_config,
+            list_saved_filters,
+            create_saved_filter,
+            update_saved_filter,
+            rename_saved_filter,
+            delete_saved_filter,
+            execute_saved_filter,
             runtime_recovery_status,
             runtime_resource_status,
             inspect_library_consistency,
@@ -2586,8 +2922,8 @@ mod tests {
     use asset_catalog::{AssetCatalog, AssetEditTarget, BatchMetadataEdit, EditFailureKind};
     use asset_core::{AssetRecord, SidecarState};
     use asset_filesystem::{
-        FsChange, FsChangeBatch, FsChangeKind, FsRescanReason, LibraryRoot, RootScanSettings,
-        ScanBatch,
+        FsChange, FsChangeBatch, FsChangeKind, FsRescanReason, LibraryRoot, LibraryRootStatus,
+        RootAccessStatus, RootScanSettings, ScanBatch,
     };
     use asset_preview::{CacheClearReport, CacheMaintenanceReport, CacheStats};
     use asset_transactions::{TransactionScopeItem, TransactionState, TransactionSummary};
@@ -2600,10 +2936,11 @@ mod tests {
     use super::{
         ApplicationPaths, BatchMetadataEditCommandResult, DerivedStateResetReport,
         LibraryScanEvent, LibraryWatchEvent, MAX_ACTIVE_SCANS, MAX_ACTIVE_WATCHES,
-        QueryAssetsError, RootAccessStatus, SCAN_BATCH_QUEUE_CAPACITY, ScanCancellation,
-        ScanCoordinator, ScanDeliveryWindow, ScanPipelineMessage, ThumbnailCommandError,
-        VaultReferenceFailureKind, WatchCoordinator, build_info,
-        ensure_transaction_item_inside_root, failed_batch_transaction_preflight, path_fingerprint,
+        QueryAssetsError, SCAN_BATCH_QUEUE_CAPACITY, SavedFilterCommandError,
+        SavedFilterCommandErrorKind, SavedFilterFileVersion, ScanCancellation, ScanCoordinator,
+        ScanDeliveryWindow, ScanPipelineMessage, ThumbnailCommandError, VaultReferenceFailureKind,
+        WatchCoordinator, build_info, ensure_transaction_item_inside_root,
+        failed_batch_transaction_preflight, path_fingerprint, saved_filter_root_sets,
         scan_pipeline_channel, transaction_targets, vault_failure_kind,
     };
 
@@ -2827,6 +3164,62 @@ mod tests {
         assert_eq!(value["error"]["kind"], "unknown-filter");
         assert_eq!(value["error"]["offset"], 4);
         assert_eq!(value["error"]["token"], "kind:image");
+    }
+
+    #[test]
+    fn saved_filter_errors_are_structured_and_do_not_expose_paths() {
+        let actual_version = SavedFilterFileVersion {
+            exists: true,
+            size: 128,
+            modified_unix_ms: Some(1_700_000_000_000),
+            sha256: Some("a".repeat(64)),
+        };
+        let value = serde_json::to_value(SavedFilterCommandError {
+            kind: SavedFilterCommandErrorKind::ExternalChange,
+            message: "reload before saving".into(),
+            actual_version: Some(actual_version),
+            query_kind: None,
+            query_offset: None,
+        })
+        .expect("serialize saved filter error");
+
+        assert_eq!(value["kind"], "external-change");
+        assert_eq!(value["actualVersion"]["size"], 128);
+        assert!(value.get("queryKind").is_none());
+        assert!(value.get("queryOffset").is_none());
+        assert!(!value.to_string().contains("path"));
+    }
+
+    #[test]
+    fn saved_filter_root_sets_keep_disabled_and_unavailable_roots_out_of_execution() {
+        let available_id = Uuid::now_v7();
+        let unavailable_id = Uuid::now_v7();
+        let disabled_id = Uuid::now_v7();
+        let statuses = [
+            root_status(available_id, true, RootAccessStatus::Available),
+            root_status(unavailable_id, true, RootAccessStatus::Missing),
+            root_status(disabled_id, false, RootAccessStatus::Available),
+        ];
+
+        let (enabled, available) = saved_filter_root_sets(&statuses);
+
+        assert_eq!(enabled, BTreeSet::from([available_id, unavailable_id]));
+        assert_eq!(available, BTreeSet::from([available_id]));
+    }
+
+    fn root_status(id: Uuid, enabled: bool, access_status: RootAccessStatus) -> LibraryRootStatus {
+        LibraryRootStatus {
+            root: LibraryRoot {
+                id,
+                path: format!("/library/{id}").into(),
+                name: id.to_string(),
+                enabled,
+                scan: RootScanSettings::default(),
+                extra: BTreeMap::new(),
+            },
+            access_status,
+            access_message: None,
+        }
     }
 
     #[test]

@@ -89,6 +89,21 @@ import {
   readThumbnail,
   requestThumbnail,
 } from "./thumbnail";
+import type {
+  SavedFilterCatalog,
+  SavedFilterExecution,
+  SavedFilterFileVersion,
+  SavedFilterInput,
+  SavedFilterMutation,
+} from "./saved-filters";
+import {
+  createSavedFilter,
+  deleteSavedFilter,
+  executeSavedFilter,
+  listSavedFilters,
+  renameSavedFilter,
+  updateSavedFilter,
+} from "./saved-filters";
 
 export interface DesktopApi {
   getApplicationConfig(): Promise<ApplicationConfig>;
@@ -116,6 +131,26 @@ export interface DesktopApi {
   ): Promise<string>;
   stopLibraryWatch(watchId: string): Promise<boolean>;
   queryAssets(input: QueryAssetsInput): Promise<QueryAssetsResult>;
+  listSavedFilters(): Promise<SavedFilterCatalog>;
+  createSavedFilter(
+    expectedVersion: SavedFilterFileVersion,
+    input: SavedFilterInput,
+  ): Promise<SavedFilterMutation>;
+  updateSavedFilter(
+    expectedVersion: SavedFilterFileVersion,
+    id: string,
+    input: SavedFilterInput,
+  ): Promise<SavedFilterMutation>;
+  renameSavedFilter(
+    expectedVersion: SavedFilterFileVersion,
+    id: string,
+    name: string,
+  ): Promise<SavedFilterMutation>;
+  deleteSavedFilter(
+    expectedVersion: SavedFilterFileVersion,
+    id: string,
+  ): Promise<SavedFilterMutation>;
+  executeSavedFilter(id: string): Promise<SavedFilterExecution>;
   editAssetMetadata(input: BatchMetadataEdit): Promise<BatchMetadataEditResult>;
   resolveMetadataConflict(
     conflictId: string,
@@ -165,6 +200,12 @@ export const tauriDesktopApi: DesktopApi = {
   startLibraryWatch,
   stopLibraryWatch,
   queryAssets,
+  listSavedFilters,
+  createSavedFilter,
+  updateSavedFilter,
+  renameSavedFilter,
+  deleteSavedFilter,
+  executeSavedFilter,
   editAssetMetadata,
   resolveMetadataConflict,
   dismissMetadataConflict,

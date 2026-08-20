@@ -4,7 +4,10 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-use asset_index::{QueryParseErrorKind, parse_query};
+use asset_core::AssetRecord;
+use asset_index::{
+    AssetIndex, AssetSort, AssetSortDirection, AssetSortField, QueryParseErrorKind, parse_query,
+};
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
@@ -183,6 +186,101 @@ pub struct UpdateSavedFilter {
 pub struct SavedFilterMutation {
     pub file_version: SavedFilterFileVersion,
     pub filter: Option<SavedFilter>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedFilterExecution {
+    pub filter_id: Uuid,
+    pub expression: String,
+    pub ordered_keys: Vec<String>,
+    pub total_assets: usize,
+    pub scoped_assets: usize,
+    pub matched_assets: usize,
+    pub effective_root_ids: Vec<Uuid>,
+    pub missing_root_ids: Vec<Uuid>,
+    pub sort: SavedFilterSort,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Error)]
+#[serde(rename_all = "camelCase")]
+#[error("saved filter query is invalid at byte offset {offset}")]
+pub struct SavedFilterExecutionError {
+    pub kind: QueryParseErrorKind,
+    pub offset: usize,
+}
+
+/// Re-parses and executes a saved expression against current runtime records.
+///
+/// The returned keys are an ephemeral view. Neither records nor result keys are
+/// written to `saved-filters.yml`, so rebuilding the index always starts from the
+/// current filesystem scan.
+///
+/// # Errors
+///
+/// Returns the current parser's stable kind and UTF-8 byte offset if the saved
+/// expression is no longer valid.
+pub fn execute_saved_filter(
+    filter: &SavedFilter,
+    records: &[AssetRecord],
+    enabled_root_ids: &BTreeSet<Uuid>,
+    available_root_ids: &BTreeSet<Uuid>,
+) -> Result<SavedFilterExecution, SavedFilterExecutionError> {
+    let query = parse_query(&filter.query).map_err(|error| SavedFilterExecutionError {
+        kind: error.kind,
+        offset: error.offset,
+    })?;
+    let requested_root_ids = match &filter.scope {
+        SavedFilterScope::AllEnabledRoots => enabled_root_ids.clone(),
+        SavedFilterScope::SelectedRoots { root_ids } => root_ids.iter().copied().collect(),
+    };
+    let enabled_requested_root_ids = requested_root_ids
+        .intersection(enabled_root_ids)
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let effective_root_ids = enabled_requested_root_ids
+        .intersection(available_root_ids)
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let missing_root_ids = requested_root_ids
+        .difference(&effective_root_ids)
+        .copied()
+        .collect::<Vec<_>>();
+    let sort = AssetSort {
+        field: match filter.sort.field {
+            SavedFilterSortField::FileName => AssetSortField::FileName,
+            SavedFilterSortField::ModifiedAt => AssetSortField::ModifiedAt,
+            SavedFilterSortField::CreatedAt => AssetSortField::CreatedAt,
+            SavedFilterSortField::FileSize => AssetSortField::FileSize,
+            SavedFilterSortField::Rating => AssetSortField::Rating,
+            SavedFilterSortField::AssetKind => AssetSortField::AssetKind,
+        },
+        direction: match filter.sort.direction {
+            SavedFilterSortDirection::Ascending => AssetSortDirection::Ascending,
+            SavedFilterSortDirection::Descending => AssetSortDirection::Descending,
+        },
+    };
+    let scoped_assets = records
+        .iter()
+        .filter(|record| {
+            record
+                .root_id
+                .is_some_and(|root_id| effective_root_ids.contains(&root_id))
+        })
+        .count();
+    let index = AssetIndex::from_records(records.iter().cloned());
+    let ordered_keys = index.query_ordered(&query, &effective_root_ids, sort);
+    Ok(SavedFilterExecution {
+        filter_id: filter.id,
+        expression: filter.query.clone(),
+        matched_assets: ordered_keys.len(),
+        ordered_keys,
+        total_assets: records.len(),
+        scoped_assets,
+        effective_root_ids: effective_root_ids.into_iter().collect(),
+        missing_root_ids,
+        sort: filter.sort,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -1562,6 +1660,54 @@ mod tests {
         let catalog = store.load(&BTreeSet::new()).expect("empty reload");
         assert!(catalog.valid_filters.is_empty());
         assert!(catalog.file_version.exists);
+    }
+
+    #[test]
+    fn execution_rebuilds_current_scoped_and_sorted_results() {
+        let root_a = Uuid::parse_str(ROOT_ID).expect("root A");
+        let root_b = Uuid::parse_str("0198a7c2-9002-7a31-b842-f15d39f33c21").expect("root B");
+        let mut high = AssetRecord::untagged(
+            "high".into(),
+            PathBuf::from("/root/high.png"),
+            "image/png".into(),
+            10,
+            20,
+        );
+        high.root_id = Some(root_a);
+        high.tags.insert("project/eagle".into());
+        high.rating = 5;
+        let mut medium = high.clone();
+        medium.key = "medium".into();
+        medium.file_name = "medium.png".into();
+        medium.rating = 4;
+        let mut offline = high.clone();
+        offline.key = "offline".into();
+        offline.root_id = Some(root_b);
+        let filter = SavedFilter {
+            id: Uuid::parse_str(FIRST_ID).expect("filter ID"),
+            name: "Review".into(),
+            query: "project/eagle rating:>=4".into(),
+            scope: SavedFilterScope::SelectedRoots {
+                root_ids: vec![root_a, root_b],
+            },
+            sort: SavedFilterSort {
+                field: SavedFilterSortField::Rating,
+                direction: SavedFilterSortDirection::Descending,
+            },
+            created_at: "2026-08-20T00:00:00.000Z".into(),
+            updated_at: "2026-08-20T00:00:00.000Z".into(),
+        };
+        let records = vec![medium, offline, high];
+        let enabled = BTreeSet::from([root_a, root_b]);
+        let available = BTreeSet::from([root_a]);
+        let first =
+            execute_saved_filter(&filter, &records, &enabled, &available).expect("first execution");
+        let rebuilt = execute_saved_filter(&filter, &records.clone(), &enabled, &available)
+            .expect("rebuilt execution");
+        assert_eq!(first.ordered_keys, ["high", "medium"]);
+        assert_eq!(first.missing_root_ids, [root_b]);
+        assert_eq!(first.scoped_assets, 2);
+        assert_eq!(first, rebuilt);
     }
 
     #[cfg(unix)]

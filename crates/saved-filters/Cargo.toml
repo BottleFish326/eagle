@@ -6,6 +6,7 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
+asset-core = { path = "../asset-core" }
 asset-index = { path = "../index" }
 chrono.workspace = true
 serde.workspace = true

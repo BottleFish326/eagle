@@ -267,6 +267,7 @@ dependencies = [
 name = "asset-saved-filters"
 version = "0.1.0"
 dependencies = [
+ "asset-core",
  "asset-index",
  "chrono",
  "serde",
@@ -2504,6 +2505,7 @@ dependencies = [
  "asset-index",
  "asset-link-resolver",
  "asset-preview",
+ "asset-saved-filters",
  "asset-transactions",
  "format-worker",
  "metadata",
