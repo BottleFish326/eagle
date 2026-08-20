@@ -3,5 +3,48 @@
   "scope": "phase-2-exit",
   "status": "draft",
   "reviewedAt": null,
-  "findings": []
+  "findings": [
+    {
+      "id": "DEF-0001",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "Windows 传统长路径上的 Sidecar 原子替换使用非 verbatim 临时路径，导致 NamedTempFile.persist 失败。",
+      "evidence": [
+        "crates/metadata/src/lib.rs::p2_platform_windows_long_paths_and_sidecar_replacement",
+        "commit ebd50ee49b15cc5b0bf891c144da6cfb4c477190 canonicalizes the parent and persists through the Windows verbatim path",
+        "GitHub Actions run 32332405466 attempt 1 passed the Windows hosted path suite"
+      ],
+      "workaround": null,
+      "targetVersion": null,
+      "resolvedAt": "2026-08-20T04:08:30.000Z"
+    },
+    {
+      "id": "DEF-0002",
+      "severity": "P3",
+      "status": "resolved",
+      "summary": "Windows 长路径扫描测试把 canonical verbatim 路径与临时目录的 8.3 拼写直接比较，产生错误失败。",
+      "evidence": [
+        "crates/filesystem/src/scanner.rs::p2_platform_windows_long_path_scan_and_symlink_loop",
+        "commit c0508c66ec6905decc1e70cc328e585a887fb6c5 compares canonical paths and separately asserts the Unicode relative path",
+        "GitHub Actions run 32332405466 attempt 1 passed the Windows hosted path suite"
+      ],
+      "workaround": null,
+      "targetVersion": null,
+      "resolvedAt": "2026-08-20T04:12:42.000Z"
+    },
+    {
+      "id": "DEF-0003",
+      "severity": "P2",
+      "status": "resolved",
+      "summary": "P2-A12 采集器未规范化 gh 返回的 attempt-qualified 运行 URL，导致已成功的指定运行在下载前被拒绝。",
+      "evidence": [
+        "GitHub Actions run 32331609079 attempt 1 completed all five required jobs successfully before collection was rejected",
+        "tools/p2-hosted-evidence.test.mjs covers canonical URLs, matching attempt suffixes, and wrong-attempt rejection",
+        "commit 9ddfa4e8ada9c2268a3d8acf20c66e188bbd0751 normalizes only the exact requested attempt URL"
+      ],
+      "workaround": null,
+      "targetVersion": null,
+      "resolvedAt": "2026-08-20T04:34:16.000Z"
+    }
+  ]
 }
