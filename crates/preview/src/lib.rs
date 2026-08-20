@@ -420,6 +420,7 @@ impl ThumbnailService {
             Ok(provider) => provider,
             Err((reason, message)) => return Ok(placeholder(record, reason, message.into())),
         };
+        let worker = worker.filter(|_| provider_uses_libheif_worker(provider));
         let mut key = thumbnail_key(record, &version, max_edge, provider);
         let mut source_identity = source_token(record, &version);
         if let Some(entry) = self
@@ -696,6 +697,10 @@ fn preview_provider(
     }
 }
 
+fn provider_uses_libheif_worker(provider: PreviewProviderIdentity) -> bool {
+    provider.id == LIBHEIF_PROVIDER_ID
+}
+
 pub(crate) fn is_current_preview_provider(id: &str, version: &str) -> bool {
     (id == BUILTIN_RASTER_PROVIDER.id && version == BUILTIN_RASTER_PROVIDER.version)
         || (id == SAFE_SVG_PROVIDER.id && version == SAFE_SVG_PROVIDER.version)
@@ -786,6 +791,7 @@ mod tests {
         CachePolicy, CacheStartupDisposition, EMBEDDED_AUDIO_COVER_PROVIDER_VERSION,
         EMBEDDED_FLAC_COVER_PROVIDER_ID, EMBEDDED_MP3_COVER_PROVIDER_ID, THUMBNAIL_DECODER_VERSION,
         ThumbnailOutcome, ThumbnailPlaceholderReason, ThumbnailService, apply_heif_properties,
+        preview_provider, provider_uses_libheif_worker,
     };
 
     #[test]
@@ -1272,6 +1278,38 @@ mod tests {
             ));
         }
         assert_eq!(png_files(service.cache.root()), 0);
+    }
+
+    #[test]
+    fn installed_libheif_worker_is_never_selected_for_builtin_providers() {
+        for mime in [
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp",
+            "image/svg+xml",
+            "audio/mpeg",
+            "audio/flac",
+        ] {
+            let asset = AssetRecord::untagged(
+                "fixture".into(),
+                PathBuf::from("fixture"),
+                mime.into(),
+                0,
+                0,
+            );
+            let provider = preview_provider(&asset, true).expect("builtin provider");
+            assert!(!provider_uses_libheif_worker(provider), "{mime}");
+        }
+        let avif = AssetRecord::untagged(
+            "fixture.avif".into(),
+            PathBuf::from("fixture.avif"),
+            "image/avif".into(),
+            0,
+            0,
+        );
+        let provider = preview_provider(&avif, true).expect("libheif provider");
+        assert!(provider_uses_libheif_worker(provider));
     }
 
     #[test]

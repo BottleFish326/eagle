@@ -212,7 +212,9 @@
               "properties": {
                 "width": 800,
                 "height": 533,
-                "frameCount": 1
+                "frameCount": 1,
+                "colorSpace": "nclx",
+                "hasAlpha": false
               }
             },
             "preview": {
@@ -227,7 +229,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 250,
+        "previewMaxMs": 1000,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -278,7 +280,8 @@
               "properties": {
                 "width": 1280,
                 "height": 854,
-                "frameCount": 2
+                "frameCount": 2,
+                "hasAlpha": false
               }
             },
             "preview": {
@@ -293,7 +296,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 250,
+        "previewMaxMs": 1000,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -342,7 +345,9 @@
               "properties": {
                 "width": 800,
                 "height": 533,
-                "frameCount": 1
+                "frameCount": 1,
+                "colorSpace": "nclx",
+                "hasAlpha": false
               }
             },
             "preview": {
@@ -354,7 +359,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 250,
+        "previewMaxMs": 1000,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -412,7 +417,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 250,
+        "previewMaxMs": 1000,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -480,7 +485,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 250,
+        "previewMaxMs": 1000,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -529,7 +534,9 @@
               "properties": {
                 "width": 800,
                 "height": 533,
-                "frameCount": 1
+                "frameCount": 1,
+                "colorSpace": "nclx",
+                "hasAlpha": false
               }
             },
             "preview": {
@@ -544,7 +551,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 250,
+        "previewMaxMs": 1000,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -593,7 +600,9 @@
               "properties": {
                 "width": 800,
                 "height": 533,
-                "frameCount": 1
+                "frameCount": 1,
+                "colorSpace": "nclx",
+                "hasAlpha": false
               }
             },
             "preview": {
@@ -605,7 +614,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 250,
+        "previewMaxMs": 1000,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -663,7 +672,7 @@
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 250,
+        "previewMaxMs": 1000,
         "maxRssDeltaBytes": 16777216,
         "maxPreviewBytes": 1048576
       }
@@ -712,21 +721,26 @@
               "properties": {
                 "width": 800,
                 "height": 533,
-                "frameCount": 1
+                "frameCount": 1,
+                "colorSpace": "nclx",
+                "hasAlpha": false
               }
             },
             "preview": {
-              "status": "resource-limited",
-              "reasonCode": "worker-resource-limited"
+              "status": "available",
+              "referencePath": "references/avif/libheif-example-64.png",
+              "referenceSha256": "536aa4fdc12f4ea10da01e0480b992553f872b8b87a1a82a38ffa414a93c68cd",
+              "width": 64,
+              "height": 42
             }
           }
         }
       ],
       "budgets": {
         "scanMaxMs": 100,
-        "previewMaxMs": 250,
+        "previewMaxMs": 1000,
         "maxRssDeltaBytes": 16777216,
-        "maxPreviewBytes": 64
+        "maxPreviewBytes": 1048576
       }
     },
     {

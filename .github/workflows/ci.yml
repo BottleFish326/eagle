@@ -55,6 +55,13 @@ jobs:
           MATERIAL_EAGLE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
         run: node tools/verify-platform-paths.mjs --output "${{ runner.temp }}/p2-a12-platform-paths.json"
 
+      - name: Run P3-A01 core-only format manifest replay
+        run: >-
+          cargo run --quiet -p format-gate --
+          --manifest fixtures/formats/manifest.json
+          --provider-profile core-only
+          > "${{ runner.temp }}/p3-a01-core-only.json"
+
       - name: Report P2-A12 rejection details
         if: failure()
         run: node tools/report-platform-path-failure.mjs --input "${{ runner.temp }}/p2-a12-platform-paths.json"
@@ -65,6 +72,15 @@ jobs:
         with:
           name: p2-a12-source-${{ runner.os }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/p2-a12-platform-paths.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Archive P3-A01 core-only evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p3-a01-core-only-${{ runner.os }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p3-a01-core-only.json
           if-no-files-found: error
           retention-days: 90
 
@@ -239,6 +255,14 @@ jobs:
             "${{ runner.temp }}/format-worker-bundle" \
             fixtures/formats/sources
 
+      - name: Run P3-A01 bundled-codecs format manifest replay
+        run: >-
+          cargo run --quiet -p format-gate --
+          --manifest fixtures/formats/manifest.json
+          --provider-profile bundled-codecs
+          --worker-bundle "${{ runner.temp }}/format-worker-bundle"
+          > "${{ runner.temp }}/p3-a01-bundled-codecs.json"
+
       - name: Reject unpackaged Unix codec dependencies
         if: runner.os == 'Linux'
         run: |
@@ -260,6 +284,15 @@ jobs:
           path: ${{ runner.temp }}/format-worker-bundle
           if-no-files-found: error
           retention-days: 30
+
+      - name: Archive P3-A01 bundled-codecs evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p3-a01-bundled-codecs-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p3-a01-bundled-codecs.json
+          if-no-files-found: error
+          retention-days: 90
 
   libheif-worker-windows:
     name: Fixed libheif worker backend (windows-2025)
@@ -318,6 +351,15 @@ jobs:
             "$env:RUNNER_TEMP\format-worker-bundle" `
             fixtures/formats/sources
 
+      - name: Run P3-A01 bundled-codecs format manifest replay
+        shell: pwsh
+        run: |
+          cargo run --quiet -p format-gate -- `
+            --manifest fixtures/formats/manifest.json `
+            --provider-profile bundled-codecs `
+            --worker-bundle "$env:RUNNER_TEMP\format-worker-bundle" `
+            | Out-File -FilePath "$env:RUNNER_TEMP\p3-a01-bundled-codecs.json" -Encoding utf8
+
       - name: Archive verified worker bundle
         uses: actions/upload-artifact@v7
         with:
@@ -325,6 +367,15 @@ jobs:
           path: ${{ runner.temp }}/format-worker-bundle
           if-no-files-found: error
           retention-days: 30
+
+      - name: Archive P3-A01 bundled-codecs evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p3-a01-bundled-codecs-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p3-a01-bundled-codecs.json
+          if-no-files-found: error
+          retention-days: 90
 
   packaged-desktop-worker:
     name: Packaged desktop worker (${{ matrix.os }})

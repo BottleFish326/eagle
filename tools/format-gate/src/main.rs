@@ -306,7 +306,7 @@ fn selected_expectation<'a>(
     profile: &str,
     platform: &str,
 ) -> Option<&'a PlatformExpectation> {
-    let matches = fixture
+    let exact = fixture
         .expectations
         .iter()
         .filter(|expectation| {
@@ -317,7 +317,24 @@ fn selected_expectation<'a>(
                     .any(|candidate| candidate == platform)
         })
         .collect::<Vec<_>>();
-    (matches.len() == 1).then_some(matches[0])
+    if exact.len() == 1 {
+        return Some(exact[0]);
+    }
+    if !exact.is_empty() || profile == "core-only" {
+        return None;
+    }
+    let inherited = fixture
+        .expectations
+        .iter()
+        .filter(|expectation| {
+            expectation.provider_profile == "core-only"
+                && expectation
+                    .platforms
+                    .iter()
+                    .any(|candidate| candidate == platform)
+        })
+        .collect::<Vec<_>>();
+    (inherited.len() == 1).then_some(inherited[0])
 }
 
 fn snapshot_sources(
