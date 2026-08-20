@@ -6,7 +6,7 @@
 
 ## 1. 准备结论
 
-Material Bridge 的 desktop-only 声明、两版 Obsidian 冻结矩阵、移动端/Publish/导出源码保留降级、disable/uninstall teardown、隐私披露、插件自检和可复现社区发布路径已经定案。monorepo 仍是唯一源码；社区发布仓库由 clean commit 确定性导出，当前没有 Git remote 时不会猜测或执行外部发布。
+Material Bridge 的 desktop-only 声明、两版 Obsidian 冻结矩阵、移动端/Publish/导出源码保留降级、disable/uninstall teardown、隐私披露、插件自检和可复现社区发布路径已经定案。monorepo 仍是唯一源码；社区发布仓库由 clean commit 确定性导出。当前 monorepo 已配置 SSH `origin`，但尚未配置独立插件 distribution repository；工具不得把源码仓库 remote 猜作发行目标，也不得自行执行外部发布。
 
 ## 2. 官方要求核对
 
@@ -110,7 +110,7 @@ Material Bridge 的 desktop-only 声明、两版 Obsidian 冻结矩阵、移动�
 - 仓库尚无根 LICENSE，插件尚无 versions/PRIVACY/SECURITY/CHANGELOG/styles；
 - production bundle 当前 minify，尚未切换审核友好的 release profile；
 - 未实现 export/version/release scripts 或独立插件 workflow；
-- 未配置 Git remote/distribution repository，也未获得任何 push/tag/release/community submit 授权；
+- monorepo SSH `origin` 已配置并用于当前源码提交，但尚未配置独立 distribution repository；现有源码 push 授权不包含插件 tag/release/community submit；
 - 未执行 P4-A11/A12/A13 或社区目录 review。
 
 以上缺口必须按切片关闭；本报告不表示插件已可发布。

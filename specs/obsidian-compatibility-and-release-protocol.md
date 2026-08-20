@@ -176,7 +176,7 @@ EXPORT-MANIFEST.json       # path, bytes, sha256, mode
 
 同一 clean commit/Node/tool version 连续 export 两次，排除生成时间后 tree hash 必须相同。distribution repository root 完全等于 export tree；业务源码更改只能先回 monorepo，再重新 export。
 
-当前仓库没有 Git remote；工具不得猜测 GitHub owner/repository、创建远程、推送、打 tag 或发布 release。用户完成外部仓库配置后，CI 才允许校验目标 repo 与 `SOURCE_COMMIT`。
+当前 monorepo 已配置源码 SSH `origin`，但没有独立插件 distribution remote。export/release 工具不得把 monorepo origin 当作发行仓库，不得猜测 GitHub owner/repository、创建远程、推送、打 tag 或发布 release。用户显式配置 distribution repository 并授权对应动作后，CI 才允许校验目标 repo 与 `SOURCE_COMMIT`；对 monorepo 的源码 push 授权不自动扩展为插件发布授权。
 
 ## 9. 构建与供应链门禁
 
