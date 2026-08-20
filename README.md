@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段 0、阶段 1 与阶段 2 已通过验收。阶段 2 的 P2-01 至 P2-08、P2-A11 100,000 素材连续 8 小时正式验收、P2-A12 GitHub-hosted macOS/Linux/Windows 原生矩阵、统一外部门禁、本地故障、数据安全和最终退出重放全部通过。阶段 3 的 P3-01A 与 P3-01B 已在本地完成：注册格式不会因 codec/provider 缺失而消失，通用类型卡片与后端类型查询已贯通；SVG 具有有界、无外部资源的确定性静态 PNG provider，活动内容和外部引用被隔离。P3-01C 已通过严格 ISO BMFF brand、AVIF/HEIC 正常/对抗夹具、固定 libheif 1.23.1 worker、Library Root 授权、三平台参考 PNG 以及 DEB/`.app`/NSIS 成品内重放。P3-01D 的 MP4/MOV/WebM 有界容器属性已本地完成：时长、宽高、音视频轨道数、已知 codec、未知 codec 中性降级和 9 个正常/对抗夹具均已接入，扫描仍不修改素材或 Sidecar。P3-A01/P3-A02 仍未关闭，下一动作是可选视频帧 worker。SSH origin、`main` 与托管 CI 已就绪。开发阶段、交付物和验收规范见：
+阶段 0、阶段 1 与阶段 2 已通过验收。阶段 2 的 P2-01 至 P2-08、P2-A11 100,000 素材连续 8 小时正式验收、P2-A12 GitHub-hosted macOS/Linux/Windows 原生矩阵、统一外部门禁、本地故障、数据安全和最终退出重放全部通过。阶段 3 的 P3-01A 与 P3-01B 已在本地完成：注册格式不会因 codec/provider 缺失而消失，通用类型卡片与后端类型查询已贯通；SVG 具有有界、无外部资源的确定性静态 PNG provider，活动内容和外部引用被隔离。P3-01C 已通过严格 ISO BMFF brand、AVIF/HEIC 正常/对抗夹具、固定 libheif 1.23.1 worker、Library Root 授权、三平台参考 PNG 以及 DEB/`.app`/NSIS 成品内重放。P3-01D 的 MP4/MOV/WebM 有界容器属性已本地完成：时长、宽高、音视频轨道数、已知 codec、未知 codec 中性降级和 9 个正常/对抗夹具均已接入，扫描仍不修改素材或 Sidecar。视频帧 worker 已按 decoder allowlist、LGPL 对应源码/动态库与专利门禁正式暂缓，不会调用 `PATH` 中任意 FFmpeg。P3-A01/P3-A02 仍未关闭，下一动作是 P3-01E 音频。SSH origin、`main` 与托管 CI 已就绪。开发阶段、交付物和验收规范见：
 
 - [开发计划与验收规范](docs/development-plan.md)
 - [开发进度](docs/progress.md)

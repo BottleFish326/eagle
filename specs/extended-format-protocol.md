@@ -159,7 +159,9 @@ backend 重放；run `32397240917` 又从 Linux DEB、macOS `.app` 与 Windows N
 Symphonia 0.6.1，关闭默认 feature 且只启用 `isomp4`/`mkv` demuxer；ISO BMFF/EBML
 预检、32 MiB 读取预算、4,096 次 seek/元素、256 轨道、365 天时长、65,535 单边和扫描
 deadline 已接线。9 个正常/截断/伪装/未知 codec/超限夹具进入三平台 `core-only` 清单，
-扫描只写可重建派生属性并证明源字节不变。视频帧 worker 与完整 P3-A01/P3-A02 仍未通过。
+扫描只写可重建派生属性并证明源字节不变。视频帧 worker 经发行边界审计后保持
+`unsupported-feature`：在 decoder allowlist、动态库逐文件摘要、LGPL 对应源码/声明和
+专利评审门禁关闭前不得打包或调用 `PATH` 工具。完整 P3-A01/P3-A02 仍未通过。
 
 ### P3-01E：音频
 
