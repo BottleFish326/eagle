@@ -62,6 +62,13 @@ jobs:
           --provider-profile core-only
           > "${{ runner.temp }}/p3-a01-core-only.json"
 
+      - name: Run P3-A02 core-only adversarial resource gate
+        run: >-
+          node tools/format-resource-gate.mjs
+          --provider-profile core-only
+          --iterations 3
+          --output "${{ runner.temp }}/p3-a02-core-only-resources.json"
+
       - name: Report P2-A12 rejection details
         if: failure()
         run: node tools/report-platform-path-failure.mjs --input "${{ runner.temp }}/p2-a12-platform-paths.json"
@@ -81,6 +88,15 @@ jobs:
         with:
           name: p3-a01-core-only-${{ runner.os }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/p3-a01-core-only.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Archive P3-A02 core-only resource evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p3-a02-core-only-${{ runner.os }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p3-a02-core-only-resources.json
           if-no-files-found: error
           retention-days: 90
 
@@ -263,6 +279,14 @@ jobs:
           --worker-bundle "${{ runner.temp }}/format-worker-bundle"
           > "${{ runner.temp }}/p3-a01-bundled-codecs.json"
 
+      - name: Run P3-A02 bundled-codecs adversarial resource gate
+        run: >-
+          node tools/format-resource-gate.mjs
+          --provider-profile bundled-codecs
+          --worker-bundle "${{ runner.temp }}/format-worker-bundle"
+          --iterations 3
+          --output "${{ runner.temp }}/p3-a02-bundled-codecs-resources.json"
+
       - name: Reject unpackaged Unix codec dependencies
         if: runner.os == 'Linux'
         run: |
@@ -291,6 +315,15 @@ jobs:
         with:
           name: p3-a01-bundled-codecs-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/p3-a01-bundled-codecs.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Archive P3-A02 bundled-codecs resource evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p3-a02-bundled-codecs-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p3-a02-bundled-codecs-resources.json
           if-no-files-found: error
           retention-days: 90
 
@@ -360,6 +393,15 @@ jobs:
             --worker-bundle "$env:RUNNER_TEMP\format-worker-bundle" `
             | Out-File -FilePath "$env:RUNNER_TEMP\p3-a01-bundled-codecs.json" -Encoding utf8
 
+      - name: Run P3-A02 bundled-codecs adversarial resource gate
+        shell: pwsh
+        run: |
+          node tools/format-resource-gate.mjs `
+            --provider-profile bundled-codecs `
+            --worker-bundle "$env:RUNNER_TEMP\format-worker-bundle" `
+            --iterations 3 `
+            --output "$env:RUNNER_TEMP\p3-a02-bundled-codecs-resources.json"
+
       - name: Archive verified worker bundle
         uses: actions/upload-artifact@v7
         with:
@@ -374,6 +416,15 @@ jobs:
         with:
           name: p3-a01-bundled-codecs-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/p3-a01-bundled-codecs.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Archive P3-A02 bundled-codecs resource evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p3-a02-bundled-codecs-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p3-a02-bundled-codecs-resources.json
           if-no-files-found: error
           retention-days: 90
 
