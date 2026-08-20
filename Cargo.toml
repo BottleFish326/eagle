@@ -25,6 +25,7 @@ members = [
   "tools/query-scan-gate",
   "tools/resource-soak",
   "tools/sidecar-fault",
+  "tools/p3-filter-gate",
   "tools/transaction-fault",
 ]
 resolver = "3"

@@ -340,6 +340,7 @@ impl TagRenameCoordinator {
             self.persist(journal)?;
             return Ok(journal.summary());
         }
+        inject_fault("sidecars-completed");
 
         journal.state = TagRenameState::FiltersPending;
         journal.touch();

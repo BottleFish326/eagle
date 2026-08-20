@@ -320,12 +320,17 @@ impl MetadataTransactionStore {
         self.persist(&journal)?;
         let mut failures = Vec::new();
         let mut processed = 0;
+        let mut applied = 0;
         for index in 0..journal.items.len() {
             if journal.items[index].state != TransactionItemState::Planned {
                 continue;
             }
             match apply_planned_item(&journal.items[index]) {
-                Ok(()) => journal.items[index].state = TransactionItemState::Applied,
+                Ok(()) => {
+                    journal.items[index].state = TransactionItemState::Applied;
+                    applied += 1;
+                    inject_fault_after_applied(applied);
+                }
                 Err(message) => {
                     journal.items[index].state = TransactionItemState::Conflict;
                     journal.items[index].failure_kind = Some(message.kind);

@@ -2975,6 +2975,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "p3-filter-gate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "asset-filesystem",
+ "asset-saved-filters",
+ "asset-tag-renames",
+ "asset-transactions",
+ "clap",
+ "metadata",
+ "serde",
+ "serde_json",
+ "sha2",
+ "uuid",
+]
+
+[[package]]
 name = "pango"
 version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

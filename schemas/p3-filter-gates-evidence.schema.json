@@ -1,0 +1,423 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://material-eagle.local/schemas/p3-filter-gates-evidence.schema.json",
+  "title": "P3-A04 and P3-A05 saved-filter gates",
+  "description": "Accepted-only receipt for filesystem-rebuilt saved filters and recoverable exact Tag renames.",
+  "type": "object",
+  "required": [
+    "schema",
+    "accepted",
+    "failures",
+    "gitCommit",
+    "executedAt",
+    "repositoryClean",
+    "environment",
+    "build",
+    "p3A04",
+    "p3A05",
+    "temporaryWorkspacesRemoved"
+  ],
+  "properties": {
+    "schema": { "const": 1 },
+    "accepted": { "const": true },
+    "failures": { "type": "array", "maxItems": 0 },
+    "gitCommit": { "$ref": "#/$defs/gitCommit" },
+    "executedAt": { "type": "string", "format": "date-time" },
+    "repositoryClean": { "const": true },
+    "environment": { "$ref": "#/$defs/environment" },
+    "build": {
+      "type": "object",
+      "required": ["command", "binarySha256"],
+      "properties": {
+        "command": {
+          "const": "cargo build --locked --release -p p3-filter-gate"
+        },
+        "binarySha256": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "p3A04": { "$ref": "#/$defs/p3A04" },
+    "p3A05": { "$ref": "#/$defs/p3A05" },
+    "temporaryWorkspacesRemoved": { "const": true }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuidV7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "environment": {
+      "type": "object",
+      "required": ["platform", "architecture", "nodeVersion", "rustc", "cargo"],
+      "properties": {
+        "platform": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "architecture": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "nodeVersion": { "type": "string", "pattern": "^v24\\." },
+        "rustc": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "cargo": { "type": "string", "minLength": 1, "maxLength": 256 }
+      },
+      "additionalProperties": false
+    },
+    "seed": {
+      "type": "object",
+      "required": [
+        "schema",
+        "activeRootId",
+        "offlineRootId",
+        "assetCount",
+        "savedFilterCount",
+        "cacheCreated"
+      ],
+      "properties": {
+        "schema": { "const": 1 },
+        "activeRootId": { "$ref": "#/$defs/uuidV7" },
+        "offlineRootId": { "$ref": "#/$defs/uuidV7" },
+        "assetCount": { "const": 4 },
+        "savedFilterCount": { "const": 2 },
+        "cacheCreated": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "mutation": {
+      "type": "object",
+      "required": ["schema", "assetCount"],
+      "properties": {
+        "schema": { "const": 1 },
+        "assetCount": { "const": 5 }
+      },
+      "additionalProperties": false
+    },
+    "verify": {
+      "type": "object",
+      "required": [
+        "schema",
+        "accepted",
+        "scannedAssetCount",
+        "scanProblemCount",
+        "allEnabledMatchCount",
+        "selectedRootsMatchCount",
+        "selectedMissingRootCount",
+        "cacheAbsent",
+        "resultSnapshotAbsent",
+        "sourceSha256Unchanged"
+      ],
+      "properties": {
+        "schema": { "const": 1 },
+        "accepted": { "const": true },
+        "scannedAssetCount": { "const": 5 },
+        "scanProblemCount": { "const": 0 },
+        "allEnabledMatchCount": { "const": 4 },
+        "selectedRootsMatchCount": { "const": 5 },
+        "selectedMissingRootCount": { "const": 1 },
+        "cacheAbsent": { "const": true },
+        "resultSnapshotAbsent": { "const": true },
+        "sourceSha256Unchanged": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "adversarial": {
+      "type": "object",
+      "required": [
+        "schema",
+        "accepted",
+        "validCount",
+        "unavailableCount",
+        "invalidCount",
+        "unknownFieldsPreserved",
+        "externalChangeBlocked",
+        "externalBytesPreserved"
+      ],
+      "properties": {
+        "schema": { "const": 1 },
+        "accepted": { "const": true },
+        "validCount": { "const": 1 },
+        "unavailableCount": { "const": 1 },
+        "invalidCount": { "const": 6 },
+        "unknownFieldsPreserved": { "const": true },
+        "externalChangeBlocked": { "const": true },
+        "externalBytesPreserved": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "p3A04": {
+      "type": "object",
+      "required": ["seed", "mutation", "cacheRemoved", "verify", "adversarial"],
+      "properties": {
+        "seed": { "$ref": "#/$defs/seed" },
+        "mutation": { "$ref": "#/$defs/mutation" },
+        "cacheRemoved": { "const": true },
+        "verify": { "$ref": "#/$defs/verify" },
+        "adversarial": { "$ref": "#/$defs/adversarial" }
+      },
+      "additionalProperties": false
+    },
+    "abortedProcess": {
+      "type": "object",
+      "required": ["status", "signal", "stdoutSha256", "stderrSha256"],
+      "properties": {
+        "status": { "type": ["integer", "null"] },
+        "signal": { "type": ["string", "null"] },
+        "stdoutSha256": { "$ref": "#/$defs/sha256" },
+        "stderrSha256": { "$ref": "#/$defs/sha256" }
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": { "const": null },
+            "signal": { "const": "SIGABRT" }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": { "type": "integer", "not": { "const": 0 } },
+            "signal": { "const": null }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "renameReceipt": {
+      "type": "object",
+      "required": [
+        "schema",
+        "operationId",
+        "state",
+        "filterOutcome",
+        "action",
+        "assetCount",
+        "sourceSha256Unchanged",
+        "externalFilterPreserved",
+        "externalSidecarPreserved"
+      ],
+      "properties": {
+        "schema": { "const": 1 },
+        "operationId": { "$ref": "#/$defs/uuidV7" },
+        "state": {
+          "enum": ["completed", "conflict", "restored"]
+        },
+        "filterOutcome": {
+          "enum": ["pending", "updated", "retained", "restored"]
+        },
+        "action": { "enum": ["continue", "retain", "restore"] },
+        "assetCount": { "const": 64 },
+        "sourceSha256Unchanged": { "const": true },
+        "externalFilterPreserved": { "const": true },
+        "externalSidecarPreserved": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "faultCase": {
+      "type": "object",
+      "required": ["point", "action", "abort", "recovery"],
+      "properties": {
+        "point": { "type": "string" },
+        "action": { "type": "string" },
+        "abort": { "$ref": "#/$defs/abortedProcess" },
+        "recovery": { "$ref": "#/$defs/renameReceipt" }
+      },
+      "additionalProperties": false
+    },
+    "externalCase": {
+      "type": "object",
+      "required": ["target", "faultPoint", "abort", "recovery"],
+      "properties": {
+        "target": { "enum": ["filter", "sidecar"] },
+        "faultPoint": {
+          "enum": ["filter-before-replace", "filter-after-replace"]
+        },
+        "abort": { "$ref": "#/$defs/abortedProcess" },
+        "recovery": { "$ref": "#/$defs/renameReceipt" }
+      },
+      "additionalProperties": false
+    },
+    "p3A05": {
+      "type": "object",
+      "required": [
+        "assetCount",
+        "sidecarAbortAfterApplied",
+        "faultCases",
+        "externalCases"
+      ],
+      "properties": {
+        "assetCount": { "const": 64 },
+        "sidecarAbortAfterApplied": { "const": 17 },
+        "faultCases": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "prefixItems": [
+            { "$ref": "#/$defs/coordinatorFault" },
+            { "$ref": "#/$defs/sidecarsMidFault" },
+            { "$ref": "#/$defs/sidecarsCompletedFault" },
+            { "$ref": "#/$defs/filterBeforeFault" },
+            { "$ref": "#/$defs/filterAfterFault" }
+          ],
+          "items": false
+        },
+        "externalCases": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            { "$ref": "#/$defs/externalFilter" },
+            { "$ref": "#/$defs/externalSidecar" }
+          ],
+          "items": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "coordinatorFault": {
+      "allOf": [
+        { "$ref": "#/$defs/faultCase" },
+        {
+          "type": "object",
+          "properties": {
+            "point": { "const": "coordinator-written" },
+            "action": { "const": "restore" },
+            "recovery": { "$ref": "#/$defs/restoredReceipt" }
+          }
+        }
+      ]
+    },
+    "sidecarsMidFault": {
+      "allOf": [
+        { "$ref": "#/$defs/faultCase" },
+        {
+          "type": "object",
+          "properties": {
+            "point": { "const": "sidecars-mid" },
+            "action": { "const": "continue" },
+            "recovery": { "$ref": "#/$defs/updatedReceipt" }
+          }
+        }
+      ]
+    },
+    "sidecarsCompletedFault": {
+      "allOf": [
+        { "$ref": "#/$defs/faultCase" },
+        {
+          "type": "object",
+          "properties": {
+            "point": { "const": "sidecars-completed" },
+            "action": { "const": "restore" },
+            "recovery": { "$ref": "#/$defs/restoredReceipt" }
+          }
+        }
+      ]
+    },
+    "filterBeforeFault": {
+      "allOf": [
+        { "$ref": "#/$defs/faultCase" },
+        {
+          "type": "object",
+          "properties": {
+            "point": { "const": "filter-before-replace" },
+            "action": { "const": "retain" },
+            "recovery": { "$ref": "#/$defs/retainedReceipt" }
+          }
+        }
+      ]
+    },
+    "filterAfterFault": {
+      "allOf": [
+        { "$ref": "#/$defs/faultCase" },
+        {
+          "type": "object",
+          "properties": {
+            "point": { "const": "filter-after-replace" },
+            "action": { "const": "restore" },
+            "recovery": { "$ref": "#/$defs/restoredReceipt" }
+          }
+        }
+      ]
+    },
+    "updatedReceipt": {
+      "allOf": [
+        { "$ref": "#/$defs/renameReceipt" },
+        {
+          "type": "object",
+          "properties": {
+            "state": { "const": "completed" },
+            "filterOutcome": { "const": "updated" },
+            "action": { "const": "continue" }
+          }
+        }
+      ]
+    },
+    "retainedReceipt": {
+      "allOf": [
+        { "$ref": "#/$defs/renameReceipt" },
+        {
+          "type": "object",
+          "properties": {
+            "state": { "const": "completed" },
+            "filterOutcome": { "const": "retained" },
+            "action": { "const": "retain" }
+          }
+        }
+      ]
+    },
+    "restoredReceipt": {
+      "allOf": [
+        { "$ref": "#/$defs/renameReceipt" },
+        {
+          "type": "object",
+          "properties": {
+            "state": { "const": "restored" },
+            "filterOutcome": { "const": "restored" },
+            "action": { "const": "restore" }
+          }
+        }
+      ]
+    },
+    "conflictReceipt": {
+      "allOf": [
+        { "$ref": "#/$defs/renameReceipt" },
+        {
+          "type": "object",
+          "properties": {
+            "state": { "const": "conflict" },
+            "action": { "const": "restore" }
+          }
+        }
+      ]
+    },
+    "externalFilter": {
+      "allOf": [
+        { "$ref": "#/$defs/externalCase" },
+        {
+          "type": "object",
+          "properties": {
+            "target": { "const": "filter" },
+            "faultPoint": { "const": "filter-before-replace" },
+            "recovery": { "$ref": "#/$defs/conflictReceipt" }
+          }
+        }
+      ]
+    },
+    "externalSidecar": {
+      "allOf": [
+        { "$ref": "#/$defs/externalCase" },
+        {
+          "type": "object",
+          "properties": {
+            "target": { "const": "sidecar" },
+            "faultPoint": { "const": "filter-after-replace" },
+            "recovery": { "$ref": "#/$defs/conflictReceipt" }
+          }
+        }
+      ]
+    }
+  }
+}
